@@ -1,0 +1,322 @@
+{
+  "spec_number": 10,
+  "spec_title": "IDO First Review",
+  "feature_name": "ido-review",
+  "description": "The first checkpoint, done by an IDO Officer or the IDO Chairperson. Four mutually exclusive outcomes: recommend it onward, return it to the requestor to fix, reject it outright, or defer it to next year's PPMP. Recommending is also where the final title, the reference and the processor are set.",
+  "depends_on": [1, 6, 8, 9],
+
+  "source_reference": {
+    "pages": ["IRMS-old/src/routes/_authenticated/requests/$requestId/review.tsx"],
+    "files": [
+      "IRMS-old/src/features/ido-review/components/IdoActionButtons.tsx",
+      "IRMS-old/src/features/ido-review/components/IdoApproverForm.tsx",
+      "IRMS-old/src/features/ido-review/validations/schema/ido-approver.schema.ts",
+      "IRMS-old/src/integrations/trpc/routers/request.router.ts (recommend, returnToRequestor, rejectByIdo, deferToNextYearPpmp)"
+    ],
+    "docs": ["IRMS-old/flows/02-ido-first-review.md", "IRMS-old/PDF Flow.md (Stage 3)", "IRMS-old/TASKS.md (final title override, review form design)"]
+  },
+
+  "flow": {
+    "actors": ["IDO_OFFICER", "IDO_CHAIRPERSON"],
+    "happy_path": [
+      { "step": 1, "actor": "IDO", "action": "opens a SUBMITTED request from the queue", "result": "the request read-only, its attachments, its activity feed, the comment thread, and the approver panel" },
+      { "step": 2, "actor": "IDO", "action": "sets the Final Title and optionally a reference and a note", "result": "the values are held in the form until an action is taken" },
+      { "step": 3, "actor": "IDO", "action": "presses Recommend", "result": "idoEvaluationStatus RECOMMENDED_BY_IDO, masterStatus UNDER_DIRECTOR_REVIEW, finalTitle, reference and approverNote written, processor stamped with the reviewer's name, requestStartAt set if it was null, and a RECOMMENDED_BY_IDO audit log" },
+      { "step": 4, "actor": "system", "action": "routes it onward", "result": "directorReviewStatus is UNDER_BUDGET_OFFICER_REVIEW when at least one BUDGET_OFFICER account exists, otherwise UNDER_DIRECTOR_REVIEW" }
+    ],
+    "alternate_paths": [
+      { "name": "Return to requestor", "trigger": "Return, with a required note", "result": "masterStatus RETURNED, idoEvaluationStatus RETURNED_TO_REQUESTOR, audit log carries the note. The requestor can edit and resubmit under the same document number" },
+      { "name": "Reject", "trigger": "Reject, with a required note", "result": "masterStatus and idoEvaluationStatus both REJECTED_BY_IDO. Terminal — no PDF is issued and the requestor must file a new request" },
+      { "name": "Defer to next year PPMP", "trigger": "Defer, note optional", "result": "masterStatus and idoEvaluationStatus both FOR_NEXT_YEAR_PPMP. The request was valid; there is simply no budget allocated this year" },
+      { "name": "Already actioned", "trigger": "the request has left SUBMITTED / UNDER_IDO_REVIEW", "result": "the page opens read-only with no action controls and a line saying which stage it is at — never a control that throws" },
+      { "name": "REVIEW_REQUEST revoked", "trigger": "an admin removed the grant", "result": "the controls are disabled with a reason and every procedure refuses" }
+    ]
+  },
+
+  "database": {
+    "models": [
+      { "name": "Request", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] },
+      { "name": "AuditLog", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] }
+    ]
+  },
+
+  "trpc_procedures": [
+    {
+      "name": "recommend",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "mutation",
+      "procedure": "roleProcedure('IDO_OFFICER','IDO_CHAIRPERSON')",
+      "input_schema": "src/features/ido-review/validations/schema/ido-approver.schema.ts (idoRecommendSchema)",
+      "input": { "id": "string", "finalTitle": "string (1-255)", "reference": "string? (max 255)", "note": "string?" },
+      "output": { "id": "string", "idoEvaluationStatus": "'RECOMMENDED_BY_IDO'" },
+      "guards": ["roleProcedure — IDO roles only", "assertPermission(REVIEW_REQUEST)", "masterStatus must be SUBMITTED or UNDER_IDO_REVIEW"],
+      "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.staffList.queryKey()", "trpc.request.listSubmitted.queryKey()", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()"],
+      "description": "Writes finalTitle, reference, approverNote, processor (the reviewer's name), idoEvaluationStatus RECOMMENDED_BY_IDO, masterStatus UNDER_DIRECTOR_REVIEW, and directorReviewStatus decided by whether a BUDGET_OFFICER account exists. requestStartAt is set only if it was null. All of it plus the audit log in one transaction."
+    },
+    {
+      "name": "returnToRequestor",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "mutation",
+      "procedure": "roleProcedure('IDO_OFFICER','IDO_CHAIRPERSON')",
+      "input_schema": "src/features/ido-review/validations/schema/ido-approver.schema.ts (idoReturnSchema)",
+      "input": { "id": "string", "note": "string (required)" },
+      "output": { "id": "string", "idoEvaluationStatus": "'RETURNED_TO_REQUESTOR'" },
+      "guards": ["IDO roles", "REVIEW_REQUEST", "masterStatus SUBMITTED or UNDER_IDO_REVIEW"],
+      "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.staffList.queryKey()", "trpc.request.listSubmitted.queryKey()", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()"],
+      "description": "masterStatus RETURNED, idoEvaluationStatus RETURNED_TO_REQUESTOR, audit log with the note — which is what the requestor reads on their detail page."
+    },
+    {
+      "name": "rejectByIdo",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "mutation",
+      "procedure": "roleProcedure('IDO_OFFICER','IDO_CHAIRPERSON')",
+      "input_schema": "src/features/ido-review/validations/schema/ido-approver.schema.ts (idoRejectSchema)",
+      "input": { "id": "string", "note": "string (required)" },
+      "output": { "id": "string", "idoEvaluationStatus": "'REJECTED_BY_IDO'" },
+      "guards": ["IDO roles", "REVIEW_REQUEST", "masterStatus SUBMITTED or UNDER_IDO_REVIEW"],
+      "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.staffList.queryKey()", "trpc.request.listSubmitted.queryKey()", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()"],
+      "description": "Terminal rejection at the first checkpoint."
+    },
+    {
+      "name": "deferToNextYearPpmp",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "mutation",
+      "procedure": "roleProcedure('IDO_OFFICER','IDO_CHAIRPERSON')",
+      "input_schema": "src/features/ido-review/validations/schema/ido-approver.schema.ts (idoDeferSchema)",
+      "input": { "id": "string", "note": "string?" },
+      "output": { "id": "string", "idoEvaluationStatus": "'FOR_NEXT_YEAR_PPMP'" },
+      "guards": ["IDO roles", "REVIEW_REQUEST", "masterStatus SUBMITTED or UNDER_IDO_REVIEW"],
+      "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.staffList.queryKey()", "trpc.request.listSubmitted.queryKey()", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()"],
+      "description": "PPMP = Project Procurement Management Plan. The request is valid but unfunded this year, so it is set aside for next year's plan."
+    }
+  ],
+
+  "frontend": {
+    "pages": [
+      {
+        "name": "IdoReviewPage",
+        "route_file": "src/routes/_authenticated/requests/$requestId/review.tsx",
+        "breadcrumb": "IDO Review",
+        "main_width": "wide",
+        "role": "IDO_OFFICER | IDO_CHAIRPERSON",
+        "layout": "AppLayout (frame, from _authenticated.tsx) — page renders AppPageHeader + content only",
+        "page_header": { "title": "IDO Review", "subtitle": "Read the request and take one action.", "action": "AppButton — View PDF, opens /requests/$requestId/pdf in a new tab" },
+        "components": [
+          {
+            "name": "RequestForm",
+            "file": "src/features/request-form/components/RequestForm.tsx",
+            "type": "form",
+            "lab_components": ["AppReadOnlyField", "AppCard", "AppChip", "AppStepper"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md. Reused from spec 005 with forceReadOnly, so a reviewer reads the request in exactly the layout the requestor filled in.",
+            "props": ["mode: 'edit'", "forceReadOnly", "defaultValues", "masterStatus", "idoEvaluationStatus", "processor", "requestId"],
+            "description": "Read-only. Attachments render as a download list."
+          },
+          {
+            "name": "IdoApproverPanel",
+            "file": "src/features/ido-review/components/IdoApproverPanel.tsx",
+            "type": "form",
+            "lab_components": ["AppInputGroup", "AppTextArea", "AppCard", "AppButton", "AppReadOnlyField"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md.",
+            "props": ["requestId: string", "defaultValues: { finalTitle: string; reference: string; note: string }", "isActionable: boolean", "canReview: boolean"],
+            "description": "Final Title (required), Reference (optional) and Note (optional), plus the Recommend button. When the request is past this stage the same panel renders through AppReadOnlyField, showing what was decided rather than disappearing."
+          },
+          {
+            "name": "IdoActionButtons",
+            "file": "src/features/ido-review/components/IdoActionButtons.tsx",
+            "type": "widget",
+            "lab_components": ["AppCard", "AppButton", "AppModal", "AppDialog", "AppTextArea", "AppToast"],
+            "heroui_components": [],
+            "heroui_note": "None. AppModal carries the note forms for Return and Reject; AppDialog carries the Defer confirmation, which needs no note.",
+            "props": ["requestId: string", "currentStatus: string", "canReview: boolean"],
+            "description": "Return to Requestor and Reject each open a modal with a required note. Defer opens a confirmation dialog with an optional note. When the request is not actionable the card says which stage it has reached instead of showing dead buttons."
+          },
+          {
+            "name": "RequestActivityFeed",
+            "file": "src/features/request-detail/components/RequestActivityFeed.tsx",
+            "type": "list",
+            "lab_components": ["AppTimeline"],
+            "heroui_components": [],
+            "heroui_note": "None. Defined in spec 006, mounted here with NO action filter — staff see every entry.",
+            "props": ["auditLogs: AuditLogEntry[]"],
+            "description": "The full history."
+          },
+          {
+            "name": "RequestCommentThread",
+            "file": "src/features/request-comments/components/RequestCommentThread.tsx",
+            "type": "widget",
+            "lab_components": ["AppCommentSection"],
+            "heroui_components": [],
+            "heroui_note": "None. Defined in spec 008.",
+            "props": ["requestId: string"],
+            "description": "Where a reviewer asks a question without returning the request."
+          }
+        ],
+        "actions": [
+          { "name": "recommend", "type": "button", "description": "Requires a final title. Moves the request to the budget officer or straight to the director.", "triggers": "calls tRPC procedure" },
+          { "name": "returnToRequestor", "type": "button", "description": "Opens a modal with a required note", "triggers": "opens modal then calls tRPC procedure" },
+          { "name": "rejectByIdo", "type": "button", "description": "Opens a modal with a required note. Terminal.", "triggers": "opens modal then calls tRPC procedure" },
+          { "name": "deferToNextYearPpmp", "type": "button", "description": "Opens a confirmation dialog, note optional. Terminal.", "triggers": "opens modal then calls tRPC procedure" },
+          { "name": "viewPdf", "type": "link", "description": "Header action, new tab", "triggers": "navigates" }
+        ]
+      }
+    ],
+    "components": [],
+    "forms": [
+      {
+        "name": "IdoApproverPanel",
+        "file": "src/features/ido-review/components/IdoApproverPanel.tsx",
+        "schema_file": "src/features/ido-review/validations/schema/ido-approver.schema.ts",
+        "method": "PATCH",
+        "server_fn": "request.recommend",
+        "success_message": "Recommended. The request has moved to the next approver.",
+        "error_message": "Failed to process the action. Please try again.",
+        "fields": [
+          { "name": "finalTitle", "type": "text", "label": "Title (Final)", "placeholder": "Enter the final title", "required": true, "note": "Replaces the requestor's title everywhere it is displayed and on the PDF. Pre-filled with the requestor's title so the common case is one keystroke.", "zod_rule": "z.string().min(1, 'Final title is required').max(255)" },
+          { "name": "reference", "type": "text", "label": "Reference", "placeholder": "Reference number or document", "required": false, "zod_rule": "z.string().max(255).optional()" },
+          { "name": "note", "type": "textarea", "label": "Note", "placeholder": "Add a note if there is anything to flag", "required": false, "note": "Written to approverNote and printed as the Reason on the PDF's IDO recommendation block.", "zod_rule": "z.string().optional()" }
+        ]
+      },
+      {
+        "name": "IdoNoteModal",
+        "file": "src/features/ido-review/components/IdoActionButtons.tsx",
+        "schema_file": "src/features/ido-review/validations/schema/ido-approver.schema.ts",
+        "method": "PATCH",
+        "server_fn": "request.returnToRequestor | request.rejectByIdo | request.deferToNextYearPpmp",
+        "success_message": "Request returned to the requestor. | Request rejected. | Request deferred to next year's PPMP.",
+        "error_message": "Failed to process the action. Please try again.",
+        "fields": [
+          { "name": "note", "type": "textarea", "label": "Note", "placeholder": "Explain why — the requestor will read this", "required": true, "note": "Required for return and reject, optional for defer. The requestor sees it on their detail page.", "zod_rule": "z.string().min(1, 'Note is required')" }
+        ]
+      }
+    ],
+    "hooks": [
+      { "file": "src/features/ido-review/hooks/use-ido-review-queries.ts", "actor": "ido", "type": "query", "invalidates": [], "note": "Reads request.getById; a thin wrapper so the page does not import the requestor's hook." },
+      { "file": "src/features/ido-review/hooks/use-ido-review-mutations.ts", "actor": "ido", "type": "mutation", "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.staffList.queryKey()", "trpc.request.listSubmitted.queryKey()", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()"], "note": "The four actions plus isAnyPending, so one in-flight action disables the other three." }
+    ],
+    "store": { "needed": false }
+  },
+
+  "requirements": {
+    "functional": [
+      "The four actions are mutually exclusive and each is terminal for this stage — there is no undo.",
+      "Recommend requires a final title. It is the title that appears on the PDF and in every later screen, so it cannot be left blank.",
+      "finalTitle REPLACES the requestor's title in the UI: the detail page shows finalTitle with the original beneath it. title itself is never overwritten (this resolves the IRMS-old open question).",
+      "processor is stamped with the reviewer's name at recommendation time and is what the requestor's side rail shows.",
+      "requestStartAt is set on the first recommendation only; a second write would lose when the work actually started.",
+      "The budget stage is conditional: directorReviewStatus becomes UNDER_BUDGET_OFFICER_REVIEW only when at least one BUDGET_OFFICER account exists. With none, the request goes straight to UNDER_DIRECTOR_REVIEW.",
+      "masterStatus becomes UNDER_DIRECTOR_REVIEW on recommend regardless of the budget branch — the requestor's view does not expose the internal split.",
+      "Notes on return and reject are required; the note on defer is optional.",
+      "When the request has moved past this stage the page still opens, read-only, showing what was decided and by whom. No control is rendered that would throw."
+    ],
+    "authorization": [
+      "Route gate: assertAuthenticatedRoleFn with ['IDO_OFFICER','IDO_CHAIRPERSON'].",
+      "Server gate: every one of the four procedures is a roleProcedure over the same two roles, then assertPermission(REVIEW_REQUEST), then the status check.",
+      "The status check (SUBMITTED or UNDER_IDO_REVIEW) is what stops a second IDO officer acting on a request that has already moved on.",
+      "A DIRECTOR or BUDGET_OFFICER calling any of these gets FORBIDDEN from roleProcedure even though they are staff.",
+      "The requestor cannot call any of them, and cannot edit the request once it leaves DRAFT or RETURNED (spec 005)."
+    ],
+    "ux": [
+      "The page reads like the request, not like a form: same layout as create/edit, read-only, so a reviewer is looking at what the requestor filled in (an explicit IRMS-old fix).",
+      "Destructive actions are grouped and visually secondary to Recommend; Reject and Defer are terminal and must not sit under the thumb.",
+      "Each destructive action asks for its note in a modal before it fires — never a bare confirm.",
+      "While any action is pending all four controls are disabled, so a slow network cannot produce two outcomes.",
+      "When the request is not actionable the panel explains why in a sentence naming the current stage, rather than hiding silently."
+    ]
+  },
+
+  "validations": {
+    "schemas": [
+      {
+        "file": "src/features/ido-review/validations/schema/ido-approver.schema.ts",
+        "used_by": ["IdoApproverPanel", "IdoActionButtons", "the four procedures"],
+        "rules": [
+          { "field": "idoRecommendSchema.finalTitle", "zod_rule": "z.string().min(1, 'Final title is required').max(255)" },
+          { "field": "idoRecommendSchema.reference", "zod_rule": "z.string().max(255).optional()" },
+          { "field": "idoRecommendSchema.note", "zod_rule": "z.string().optional()" },
+          { "field": "idoReturnSchema.note", "zod_rule": "z.string().min(1, 'Note is required')" },
+          { "field": "idoRejectSchema.note", "zod_rule": "z.string().min(1, 'Note is required')" },
+          { "field": "idoDeferSchema.note", "zod_rule": "z.string().optional()" }
+        ]
+      }
+    ],
+    "server_guards": [
+      { "procedure": "all four", "guard": "roleProcedure('IDO_OFFICER','IDO_CHAIRPERSON')", "error": "FORBIDDEN — Insufficient permissions" },
+      { "procedure": "all four", "guard": "assertPermission(REVIEW_REQUEST)", "error": "FORBIDDEN — You don't have permission to perform this action" },
+      { "procedure": "all four", "guard": "the request exists", "error": "NOT_FOUND — Request not found" },
+      { "procedure": "all four", "guard": "masterStatus is SUBMITTED or UNDER_IDO_REVIEW", "error": "FORBIDDEN — This request is not at the IDO review stage" },
+      { "procedure": "request.recommend", "guard": "the budget branch is decided by a server-side count of BUDGET_OFFICER accounts, never by input", "error": "n/a" }
+    ]
+  },
+
+  "test_requirements": [
+    {
+      "file": "src/features/ido-review/validations/schema/ido-approver.schema.test.ts",
+      "type": "unit",
+      "covers": [
+        "recommend without a final title fails",
+        "a 256-character final title fails",
+        "return with an empty note fails",
+        "reject with an empty note fails",
+        "defer with no note passes"
+      ]
+    },
+    {
+      "file": "src/integrations/trpc/routers/request.ido-review.test.ts",
+      "type": "unit",
+      "covers": [
+        "recommend with a budget officer on file sets directorReviewStatus UNDER_BUDGET_OFFICER_REVIEW",
+        "recommend with no budget officer sets directorReviewStatus UNDER_DIRECTOR_REVIEW",
+        "recommend sets masterStatus UNDER_DIRECTOR_REVIEW in both branches",
+        "recommend stamps processor with the reviewer's name and writes finalTitle without touching title",
+        "recommend sets requestStartAt only when it was null",
+        "return sets RETURNED and writes the note to the audit log",
+        "reject sets REJECTED_BY_IDO and is terminal",
+        "defer sets FOR_NEXT_YEAR_PPMP",
+        "a DIRECTOR calling recommend gets FORBIDDEN",
+        "a USER calling recommend gets FORBIDDEN",
+        "an IDO officer without REVIEW_REQUEST gets FORBIDDEN",
+        "acting on a request already at Director review gets FORBIDDEN and changes nothing",
+        "every successful action writes exactly one audit log in the same transaction as the update"
+      ]
+    },
+    {
+      "file": "cypress/e2e/ido-review.cy.ts",
+      "type": "e2e",
+      "covers": [
+        "recommending moves the request out of the SUBMITTED queue",
+        "Return opens a modal and refuses an empty note",
+        "a request already recommended opens read-only with no action controls",
+        "the requestor sees the return note on their detail page afterwards"
+      ]
+    }
+  ],
+
+  "acceptance_criteria": [
+    { "given": "a SUBMITTED request and at least one BUDGET_OFFICER account", "when": "an IDO officer recommends it", "then": "masterStatus is UNDER_DIRECTOR_REVIEW, directorReviewStatus is UNDER_BUDGET_OFFICER_REVIEW, and it appears in the budget officer's queue" },
+    { "given": "a SUBMITTED request and no BUDGET_OFFICER account at all", "when": "an IDO officer recommends it", "then": "directorReviewStatus is UNDER_DIRECTOR_REVIEW and it appears in the director's queue" },
+    { "given": "a request whose title is 'Repair CS lab'", "when": "IDO recommends with final title 'Rehabilitation of CS Laboratory'", "then": "the detail page heading reads the final title with the original beneath it, and title in the database is unchanged" },
+    { "given": "a request being returned", "when": "the officer submits the modal with an empty note", "then": "the modal shows 'Note is required' and no call is made" },
+    { "given": "a request already recommended", "when": "a second IDO officer opens it", "then": "the page is read-only, states the current stage, and offers no action" },
+    { "given": "a signed-in DIRECTOR", "when": "they call request.recommend", "then": "the call fails with FORBIDDEN and nothing changes" }
+  ],
+
+  "edge_cases": [
+    "The budget-officer count is read at recommendation time. Creating a budget officer afterwards does not retro-route requests already sent to the director, and that is correct — do not add a migration that rewrites them.",
+    "requestStartAt must be written only when null, or a re-recommendation (which the status guard should prevent anyway) would move the start date.",
+    "Recommend writes six columns plus an audit log; all of it belongs in one transaction, or a failure halfway leaves a request with a final title and no status change.",
+    "The status guard reads masterStatus, but the budget and director stages read their own columns. Mixing the two is how a request becomes actionable at two desks at once.",
+    "approverNote is a single column reused by later stages in the PDF; a later note overwrites the IDO's. That is the existing behaviour and the PDF prints it in both the Reason and Notes blocks — do not treat the duplication as a bug without deciding what the printed form should say.",
+    "Defer and reject look similar and are both terminal, but they mean opposite things to a requestor. The copy on each control must say which is which."
+  ],
+
+  "out_of_scope": [
+    "The budget officer's stage — spec 011.",
+    "The IDO Chairperson's FINAL review — spec 013; a plain officer can never do that one.",
+    "The PDF — spec 016.",
+    "Re-opening a rejected or deferred request — there is no such action; the requestor files a new one.",
+    "Assigning a specific officer — processor is stamped, not assigned."
+  ]
+}
+

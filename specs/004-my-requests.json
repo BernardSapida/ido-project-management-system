@@ -1,0 +1,241 @@
+{
+  "spec_number": 4,
+  "spec_title": "My Requests",
+  "feature_name": "user-dashboard",
+  "description": "The requestor's landing page: four counters across the top that double as filters, and a server-paginated table of their own requests underneath. It is the only place a USER sees the whole set, and the row click is how every other request page is reached.",
+  "depends_on": [1, 3],
+
+  "source_reference": {
+    "pages": ["IRMS-old/src/routes/_authenticated/requests/index.tsx"],
+    "files": [
+      "IRMS-old/src/features/user-dashboard/components/UserRequestsTable.tsx",
+      "IRMS-old/src/features/user-dashboard/components/UserSummaryCards.tsx",
+      "IRMS-old/src/features/user-dashboard/components/RequestStatusBadge.tsx",
+      "IRMS-old/src/features/user-dashboard/hooks/use-user-dashboard-queries.ts",
+      "IRMS-old/src/integrations/trpc/routers/request.router.ts (myList, mySummary)"
+    ],
+    "docs": ["IRMS-old/flows/01-user-submit-request.md (Step 7)", "IRMS-old/TASKS.md (stale requests on role switch)"]
+  },
+
+  "flow": {
+    "actors": ["USER"],
+    "happy_path": [
+      { "step": 1, "actor": "USER", "action": "signs in", "result": "lands on /requests — getDefaultRoute('USER')" },
+      { "step": 2, "actor": "USER", "action": "reads the four counters", "result": "Total, Pending, Approved, Rejected across every request they have ever filed" },
+      { "step": 3, "actor": "USER", "action": "presses a counter", "result": "the table filters to that status group; pressing the same one again clears it" },
+      { "step": 4, "actor": "USER", "action": "searches or filters by status", "result": "the server re-queries; the page resets to 1 on every filter change" },
+      { "step": 5, "actor": "USER", "action": "clicks a row", "result": "navigates to /requests/$requestId" },
+      { "step": 6, "actor": "USER", "action": "presses New Request", "result": "navigates to /requests/new" }
+    ],
+    "alternate_paths": [
+      { "name": "No requests at all", "trigger": "a brand-new account", "result": "the empty state explains what the page is for and offers New Request as its action" },
+      { "name": "No results for the filter", "trigger": "search or status filter matches nothing", "result": "a different empty state that names the filter and offers to clear it — never the same message as 'no requests yet'" },
+      { "name": "Query fails", "trigger": "network or server error", "result": "AppQueryError with a retry that refetches; the counters and the table fail independently" },
+      { "name": "Account switched", "trigger": "the user signs out and in as another role", "result": "the list refetches on mount rather than serving the previous account's cached page" }
+    ]
+  },
+
+  "database": {
+    "models": [
+      { "name": "Request", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] }
+    ]
+  },
+
+  "trpc_procedures": [
+    {
+      "name": "myList",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "query",
+      "procedure": "protectedProcedure",
+      "input_schema": null,
+      "input": { "masterStatus": "string?", "page": "number (min 1, default 1)", "pageSize": "number (1-100, default 10)", "search": "string?", "sortBy": "'createdAt'?", "sortDir": "'asc' | 'desc'?" },
+      "output": { "items": "Request[]", "total": "number", "page": "number", "pageSize": "number", "totalPages": "number" },
+      "guards": ["where.userId is always ctx.user.id — never an input"],
+      "invalidates": [],
+      "description": "Paginated list of the caller's own requests. masterStatus accepts either a literal status or a GROUP key: PENDING expands to the five in-flight statuses, REJECTED to the five terminal rejections. Search matches title or documentNumber, case-insensitive. Default order is createdAt desc."
+    },
+    {
+      "name": "mySummary",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "query",
+      "procedure": "protectedProcedure",
+      "input_schema": null,
+      "input": {},
+      "output": { "total": "number", "pending": "number", "approved": "number", "rejected": "number" },
+      "guards": ["all four counts are scoped to ctx.user.id"],
+      "invalidates": [],
+      "description": "Four counts in one transaction. pending = the five in-flight statuses, approved = APPROVED only, rejected = the five terminal rejections. DRAFT, RETURNED, FOR_NEXT_YEAR_PPMP and COMPLETED are deliberately in total and in none of the other three."
+    }
+  ],
+
+  "frontend": {
+    "pages": [
+      {
+        "name": "RequestsListPage",
+        "route_file": "src/routes/_authenticated/requests/index.tsx",
+        "breadcrumb": "Requests",
+        "main_width": "wide",
+        "role": "USER",
+        "layout": "AppLayout (frame, from _authenticated.tsx) — page renders AppPageHeader + content only",
+        "page_header": { "title": "My Requests", "subtitle": "Track every request you have filed.", "action": "AppButton — New Request, icon Plus, navigates to /requests/new" },
+        "search_params": { "page": "number, catch 1", "pageSize": "number, catch 10", "search": "string?", "status": "string?" },
+        "components": [
+          {
+            "name": "UserSummaryCards",
+            "file": "src/features/user-dashboard/components/UserSummaryCards.tsx",
+            "type": "widget",
+            "lab_components": ["AppKpi", "AppKpiSkeleton"],
+            "heroui_components": [],
+            "heroui_note": "None — AppKpi covers the tile entirely, including the pressable behaviour and the loading skeleton. This replaces four hand-built Card + gradient blocks.",
+            "props": ["summary: Summary | undefined", "isLoading: boolean", "activeGroup?: string", "onCardClick: (group: string) => void"],
+            "description": "Four AppKpi tiles: Total (icon FileText), Pending (Clock), Approved (CheckCircle), Rejected (XCircle). Each is pressable and sets the status filter; the active one is visibly selected. No delta chip — there is no previous period to compare against, and AppKpi's delta requires a named comparison."
+          },
+          {
+            "name": "UserRequestsTable",
+            "file": "src/features/user-dashboard/components/UserRequestsTable.tsx",
+            "type": "table",
+            "lab_components": ["AppDataTable", "AppFilterBar", "AppChip", "AppTableEmptyState", "AppPagination"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md. AppDataTable in SERVER mode supplies search, filters, sort, pagination and both empty states, replacing the old SearchField + Select + AppTable + AppPagination assembly.",
+            "props": ["rows: RequestRow[]", "columns: ColumnDef<RequestRow>[]", "server: DataTableServer", "isLoading: boolean", "onRowAction: (id) => void", "emptyAction: { label: 'New Request'; onPress }"],
+            "description": "Columns: Doc. # (— when null), Title, Type, Priority, Status (AppChip), Date Filed (sortable, en-PH dd MMM yyyy). storageKey 'user-requests' so a returning user keeps their filter."
+          },
+          {
+            "name": "RequestStatusChip",
+            "file": "src/features/user-dashboard/components/RequestStatusChip.tsx",
+            "type": "widget",
+            "lab_components": ["AppChip"],
+            "heroui_components": [],
+            "heroui_note": "None.",
+            "props": ["masterStatus: string"],
+            "description": "Reads masterStatusMap for label and tone. Shared by every table and detail page in the app — this is the single place a status becomes words and a colour."
+          }
+        ],
+        "actions": [
+          { "name": "newRequest", "type": "button", "description": "Header action", "triggers": "navigates" },
+          { "name": "openRequest", "type": "link", "description": "Row click", "triggers": "navigates" },
+          { "name": "filterByCounter", "type": "button", "description": "A KPI tile toggles its status group", "triggers": "updates search params" },
+          { "name": "clearFilters", "type": "button", "description": "Shown only while a filter or search is active", "triggers": "updates search params" }
+        ]
+      }
+    ],
+    "components": [],
+    "forms": [],
+    "hooks": [
+      {
+        "file": "src/features/user-dashboard/hooks/use-user-dashboard-queries.ts",
+        "actor": "user",
+        "type": "query",
+        "invalidates": [],
+        "note": "Wraps request.myList and request.mySummary. refetchOnMount: 'always' — signing in as a different account previously served the old account's cached page until a manual refresh (IRMS-old TASKS.md)."
+      }
+    ],
+    "store": { "needed": false }
+  },
+
+  "requirements": {
+    "functional": [
+      "Filter, search and page live in the URL as search params, validated with a Zod schema using .catch defaults, so a link to a filtered page is shareable and the back button works.",
+      "Any filter or search change resets page to 1 — page 7 of a filter with two results is an empty table with no explanation.",
+      "The counters are a filter, not decoration: pressing one sets the status group, pressing the active one clears it.",
+      "Status groups: PENDING = SUBMITTED, UNDER_IDO_REVIEW, UNDER_DIRECTOR_REVIEW, UNDER_IDO_FINAL_REVIEW, UNDER_FINAL_DIRECTOR_REVIEW. REJECTED = REJECTED_BY_IDO, BUDGET_OFFICER_REJECTED, DIRECTOR_REJECTED, IDO_FINAL_REJECTED, FINAL_REJECTED.",
+      "The status filter offers the six groups from FILTER_OPTIONS (Draft, Returned by IDO, Under Review, Approved, Rejected, Completed) plus All — not the fifteen raw statuses, which is a requestor's list of jargon.",
+      "Search is debounced 300ms and matches title or documentNumber, case-insensitive.",
+      "Sorting is offered on Date Filed only. The other columns have no meaningful order and offering the control implies one exists.",
+      "The list refetches on mount so a fresh sign-in never renders the previous session's rows."
+    ],
+    "authorization": [
+      "Route gate: assertAuthenticatedRoleFn with allowedRoles ['USER'] — staff have their own dashboard.",
+      "Server gate: myList and mySummary scope every query to ctx.user.id. There is no userId input, so no crafted call can read another requestor's list.",
+      "A staff member who deep-links to /requests is redirected to /unauthorized by the route gate; even if they were not, the queries would return their own (empty) list, never someone else's."
+    ],
+    "ux": [
+      "Two distinct empty states: 'No requests yet' with a New Request action, and 'No requests match your filters' with a clear-filters action. Showing the first while a filter is active tells the user their history is gone.",
+      "A row count line — 'Showing 1-10 of 34 requests' — sits above the table whenever there are results.",
+      "Loading is a skeleton in the table body and in the counters, not a spinner that replaces the page; the filters stay usable while a page loads.",
+      "The table and the counters fail independently — one AppQueryError does not blank the other.",
+      "Doc. # renders '—' for a draft, because a draft genuinely has no number yet."
+    ]
+  },
+
+  "validations": {
+    "schemas": [
+      {
+        "file": "src/routes/_authenticated/requests/index.tsx",
+        "used_by": ["validateSearch"],
+        "rules": [
+          { "field": "page", "zod_rule": "z.number().int().min(1).catch(1)" },
+          { "field": "pageSize", "zod_rule": "z.number().int().min(1).max(100).catch(10)" },
+          { "field": "search", "zod_rule": "z.string().optional()" },
+          { "field": "status", "zod_rule": "z.string().optional()" }
+        ]
+      }
+    ],
+    "server_guards": [
+      { "procedure": "request.myList", "guard": "where.userId = ctx.user.id", "error": "n/a — scoping, not rejection" },
+      { "procedure": "request.myList", "guard": "pageSize is clamped to 100", "error": "BAD_REQUEST — Zod issue on pageSize" },
+      { "procedure": "request.mySummary", "guard": "all four counts scoped to ctx.user.id", "error": "n/a" }
+    ]
+  },
+
+  "test_requirements": [
+    {
+      "file": "src/integrations/trpc/routers/request.my-list.test.ts",
+      "type": "unit",
+      "covers": [
+        "a user sees only their own requests when two users have requests",
+        "masterStatus 'PENDING' expands to the five in-flight statuses",
+        "masterStatus 'REJECTED' expands to the five terminal rejections",
+        "masterStatus 'DRAFT' filters on the literal status",
+        "search matches documentNumber case-insensitively",
+        "pageSize above 100 is rejected",
+        "totalPages is ceil(total / pageSize)"
+      ]
+    },
+    {
+      "file": "src/integrations/trpc/routers/request.my-summary.test.ts",
+      "type": "unit",
+      "covers": [
+        "total counts every request including drafts",
+        "pending excludes DRAFT and RETURNED",
+        "rejected includes all five rejection statuses",
+        "approved counts APPROVED and not COMPLETED"
+      ]
+    },
+    {
+      "file": "cypress/e2e/my-requests.cy.ts",
+      "type": "e2e",
+      "covers": [
+        "a new account sees the no-requests-yet empty state with a New Request action",
+        "a search that matches nothing shows the no-results empty state with clear filters",
+        "pressing the Pending counter filters the table and pressing it again clears the filter",
+        "a filter change resets the page to 1",
+        "a staff role deep-linking to /requests lands on /unauthorized"
+      ]
+    }
+  ],
+
+  "acceptance_criteria": [
+    { "given": "a USER with 34 requests", "when": "they open /requests", "then": "10 rows render, the count line reads 'Showing 1-10 of 34 requests' and pagination offers 4 pages" },
+    { "given": "a USER on page 3 with no filter", "when": "they type a search term", "then": "the URL page resets to 1 and the results match the term" },
+    { "given": "the Pending counter reads 5", "when": "the user presses it", "then": "the table shows exactly those 5 and the tile renders as selected" },
+    { "given": "two users each with requests", "when": "user A calls request.myList", "then": "no row belonging to user B is returned" },
+    { "given": "a signed-in DIRECTOR", "when": "they navigate to /requests", "then": "they are redirected to /unauthorized" },
+    { "given": "a draft with no document number", "when": "the row renders", "then": "the Doc. # cell shows '—' rather than 'null' or an empty cell" }
+  ],
+
+  "edge_cases": [
+    "Filter changes must reset the page or the user lands on an out-of-range page with an empty table and no explanation.",
+    "The counters and the list are two queries; after any mutation elsewhere both must be invalidated or the tiles disagree with the rows.",
+    "Signing out and in as a different role previously served stale rows — refetchOnMount: 'always' on this query is the fix, and it must not be dropped as an optimisation.",
+    "COMPLETED sits in total but in none of pending/approved/rejected. That is intentional; do not 'fix' the arithmetic so the three add up to the total.",
+    "Search on documentNumber must be case-insensitive even though the format is numeric — the year prefix and any future letter suffix make a plain equality match wrong."
+  ],
+
+  "out_of_scope": [
+    "The staff queue — spec 009, a different query with role-shaped scoping.",
+    "Creating a request — spec 005.",
+    "Bulk actions, CSV export and column picking — the old app had none and nothing asks for them.",
+    "Notifications when a request changes status — no notification system exists."
+  ]
+}

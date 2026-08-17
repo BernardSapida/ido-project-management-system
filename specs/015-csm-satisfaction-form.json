@@ -1,0 +1,259 @@
+{
+  "spec_number": 15,
+  "spec_title": "CSM — Customer Satisfaction Measurement",
+  "feature_name": "csm",
+  "description": "The last step of the lifecycle, and the only one the requestor takes after approval. Submitting the satisfaction form marks the request COMPLETED. The old app shipped this as a single acknowledgement button; this spec keeps that as the contract and adds the rating and comment the form is named after.",
+  "depends_on": [1, 6, 14],
+
+  "source_reference": {
+    "pages": ["IRMS-old/src/routes/_authenticated/requests/$requestId/csm.tsx"],
+    "files": [
+      "IRMS-old/src/features/csm/components/CsmForm.tsx",
+      "IRMS-old/src/features/csm/components/CsmCompletedState.tsx",
+      "IRMS-old/src/features/csm/components/CsmPromptBanner.tsx",
+      "IRMS-old/src/integrations/trpc/routers/csm.router.ts"
+    ],
+    "docs": ["IRMS-old/flows/07-user-csm.md"]
+  },
+
+  "flow": {
+    "actors": ["USER"],
+    "happy_path": [
+      { "step": 1, "actor": "USER", "action": "sees the CSM banner on an approved request", "result": "presses it and lands on /requests/$requestId/csm" },
+      { "step": 2, "actor": "USER", "action": "rates the service and optionally comments", "result": "the form validates on blur" },
+      { "step": 3, "actor": "USER", "action": "presses Submit Feedback", "result": "csm.submittedAt is set, completionStatus and masterStatus both become COMPLETED, in one transaction" },
+      { "step": 4, "actor": "USER", "action": "returns to the request", "result": "the status chip reads Completed, the banner is gone, and the signed PDF is available" }
+    ],
+    "alternate_paths": [
+      { "name": "Already submitted", "trigger": "the requestor revisits the page", "result": "a completed state showing when the feedback was submitted, with no form and no way to submit twice" },
+      { "name": "No CSM record", "trigger": "the request was never finally approved", "result": "the page redirects back to the request detail rather than rendering an empty form" },
+      { "name": "Not the owner", "trigger": "anyone but the requestor opens the URL", "result": "getMyCsm returns null and the page redirects; submitCsm refuses with NOT_FOUND" },
+      { "name": "SUBMIT_CSM revoked", "trigger": "an admin removed the grant", "result": "the submit control is disabled with a reason and the procedure refuses" },
+      { "name": "Double submit", "trigger": "two rapid presses", "result": "the second call finds submittedAt already set and returns CONFLICT; the request stays COMPLETED once" }
+    ]
+  },
+
+  "database": {
+    "models": [
+      {
+        "name": "Csm",
+        "action": "extend",
+        "prisma_note": "Adds the two fields that make it a satisfaction form rather than an acknowledgement. Both are nullable so the rows created by spec 014 remain valid",
+        "fields": [
+          { "name": "rating", "type": "Int", "prisma_modifier": "?" },
+          { "name": "comment", "type": "String", "prisma_modifier": "?" }
+        ]
+      },
+      { "name": "Request", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] }
+    ]
+  },
+
+  "trpc_procedures": [
+    {
+      "name": "getMyCsm",
+      "router": "src/integrations/trpc/routers/csm.router.ts",
+      "type": "query",
+      "procedure": "protectedProcedure",
+      "input_schema": null,
+      "input": { "requestId": "string" },
+      "output": { "id": "string", "requestId": "string", "submittedAt": "string | null", "rating": "number | null", "comment": "string | null" },
+      "guards": ["returns null unless the caller owns the request", "returns null when no Csm row exists"],
+      "invalidates": [],
+      "description": "Null rather than an error, because the page's correct response to both cases is the same redirect. Ownership is checked against the session."
+    },
+    {
+      "name": "submitCsm",
+      "router": "src/integrations/trpc/routers/csm.router.ts",
+      "type": "mutation",
+      "procedure": "protectedProcedure",
+      "input_schema": "src/features/csm/validations/schema/submit-csm.schema.ts",
+      "input": { "requestId": "string", "rating": "number (1-5)", "comment": "string? (max 1000)" },
+      "output": { "id": "string", "submittedAt": "string", "requestCompletionStatus": "'COMPLETED'" },
+      "guards": ["request.userId === ctx.user.id", "assertPermission(SUBMIT_CSM)", "request.completionStatus must be CSM_PENDING", "the Csm row must not already have submittedAt"],
+      "invalidates": ["trpc.csm.getMyCsm.queryKey({ requestId })", "trpc.request.getById.queryKey({ id: requestId })", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()"],
+      "description": "Writes rating, comment and submittedAt on the Csm row and sets completionStatus and masterStatus to COMPLETED on the request, in one transaction."
+    }
+  ],
+
+  "frontend": {
+    "pages": [
+      {
+        "name": "CsmPage",
+        "route_file": "src/routes/_authenticated/requests/$requestId/csm.tsx",
+        "breadcrumb": "Feedback",
+        "main_width": "prose",
+        "role": "USER",
+        "layout": "AppLayout (frame, from _authenticated.tsx) — page renders AppPageHeader + content only",
+        "page_header": { "title": "Satisfaction Feedback", "subtitle": "Tell us how your request was handled. This completes the request.", "action": null },
+        "components": [
+          {
+            "name": "CsmForm",
+            "file": "src/features/csm/components/CsmForm.tsx",
+            "type": "form",
+            "lab_components": ["AppCard", "AppRating", "AppTextArea", "AppButton", "AppToast"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md. AppRating is the five-star control — the old form had no rating at all, only a Submit button, which made the name of the form a lie.",
+            "props": ["requestId: string", "onSuccess: () => void", "canSubmit: boolean"],
+            "description": "A required 1-5 rating, an optional comment, and one submit button. The copy states what submitting means: the request is marked complete."
+          },
+          {
+            "name": "CsmCompletedState",
+            "file": "src/features/csm/components/CsmCompletedState.tsx",
+            "type": "card",
+            "lab_components": ["AppCard", "AppRating", "AppChip", "AppButton"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md. AppRating in read-only mode shows what was given.",
+            "props": ["submittedAt: string", "rating: number | null", "comment: string | null"],
+            "description": "Shown instead of the form once feedback exists. States the date, echoes the rating and comment, and links back to the request and to the PDF."
+          },
+          {
+            "name": "CsmPromptBanner",
+            "file": "src/features/csm/components/CsmPromptBanner.tsx",
+            "type": "banner",
+            "lab_components": ["AppAlert", "AppButton"],
+            "heroui_components": [],
+            "heroui_note": "None. Declared in spec 006 and owned here.",
+            "props": ["completionStatus: string | null", "requestId: string"],
+            "description": "The entry point, rendered on the request detail page while completionStatus is CSM_PENDING."
+          }
+        ],
+        "actions": [
+          { "name": "submitCsm", "type": "button", "description": "Submits the feedback and completes the request", "triggers": "calls tRPC procedure" },
+          { "name": "backToRequest", "type": "link", "description": "Returns to the request detail page", "triggers": "navigates" }
+        ]
+      }
+    ],
+    "components": [],
+    "forms": [
+      {
+        "name": "CsmForm",
+        "file": "src/features/csm/components/CsmForm.tsx",
+        "schema_file": "src/features/csm/validations/schema/submit-csm.schema.ts",
+        "method": "POST",
+        "server_fn": "csm.submitCsm",
+        "success_message": "Thank you. Your request is now complete.",
+        "error_message": "Failed to submit your feedback. Please try again.",
+        "fields": [
+          { "name": "rating", "type": "number", "label": "How satisfied are you with how this request was handled?", "placeholder": "", "required": true, "note": "AppRating, 1-5. Required — a satisfaction form with an optional satisfaction measure collects nothing.", "zod_rule": "z.number().int().min(1, 'Please choose a rating').max(5)" },
+          { "name": "comment", "type": "textarea", "label": "Anything you would like to add?", "placeholder": "Optional", "required": false, "zod_rule": "z.string().trim().max(1000, 'Limited to 1000 characters').optional()" }
+        ]
+      }
+    ],
+    "hooks": [
+      { "file": "src/features/csm/hooks/use-user-csm-queries.ts", "actor": "user", "type": "query", "invalidates": [], "note": "csm.getMyCsm." },
+      { "file": "src/features/csm/hooks/use-user-csm-mutations.ts", "actor": "user", "type": "mutation", "invalidates": ["trpc.csm.getMyCsm.queryKey({ requestId })", "trpc.request.getById.queryKey({ id: requestId })", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()"], "note": "csm.submitCsm." }
+    ],
+    "store": { "needed": false }
+  },
+
+  "requirements": {
+    "functional": [
+      "The CSM record is created by the final director approval (spec 014), never by this page. A request that was never finally approved has no CSM and the page redirects.",
+      "Submitting sets submittedAt, rating and comment on the Csm row and completionStatus and masterStatus to COMPLETED on the request, in one transaction.",
+      "COMPLETED is the terminal happy state. Nothing follows it.",
+      "The rating is required and the comment is optional.",
+      "Feedback can be submitted exactly once. The completed state replaces the form afterwards and shows what was given.",
+      "The signed PDF stays available after completion — completing the request does not close it.",
+      "Adding rating and comment as nullable columns keeps the rows created before this spec valid; a CSM submitted under the old contract simply has no rating."
+    ],
+    "authorization": [
+      "Route gate: assertAuthenticatedFn. The real gate is ownership, which the route cannot express.",
+      "Server gate on getMyCsm: returns null for anyone but the owner, so the page redirects rather than confirming the request exists.",
+      "Server gate on submitCsm: ownership, then assertPermission(SUBMIT_CSM), then completionStatus must be CSM_PENDING, then submittedAt must be null.",
+      "No staff role may submit a requestor's feedback — that would make the measure worthless. Staff are refused by the ownership check, not by a role gate.",
+      "The banner being hidden for a non-owner is not a gate; both procedures check independently."
+    ],
+    "ux": [
+      "The page says what submitting does before it is pressed: this completes the request.",
+      "The rating control is the first thing on the page and is large enough to press on a phone.",
+      "The completed state thanks the requestor and shows the date and what they gave, rather than a bare 'already submitted'.",
+      "The submit button shows a pending state and is disabled during the call, so a double press cannot produce a CONFLICT the user has to interpret.",
+      "A redirect away from the page (no CSM record) is silent — landing back on the request is the correct answer and an error toast would only confuse."
+    ]
+  },
+
+  "validations": {
+    "schemas": [
+      {
+        "file": "src/features/csm/validations/schema/submit-csm.schema.ts",
+        "used_by": ["CsmForm", "csm.submitCsm"],
+        "rules": [
+          { "field": "requestId", "zod_rule": "z.string().min(1, 'Request ID is required')" },
+          { "field": "rating", "zod_rule": "z.number().int().min(1, 'Please choose a rating').max(5)" },
+          { "field": "comment", "zod_rule": "z.string().trim().max(1000, 'Limited to 1000 characters').optional()" }
+        ]
+      }
+    ],
+    "server_guards": [
+      { "procedure": "csm.getMyCsm", "guard": "request.userId === ctx.user.id", "error": "returns null — the page redirects" },
+      { "procedure": "csm.submitCsm", "guard": "the request exists and request.userId === ctx.user.id", "error": "NOT_FOUND — Request not found" },
+      { "procedure": "csm.submitCsm", "guard": "assertPermission(SUBMIT_CSM)", "error": "FORBIDDEN — You don't have permission to perform this action" },
+      { "procedure": "csm.submitCsm", "guard": "request.completionStatus === 'CSM_PENDING'", "error": "FORBIDDEN — The feedback form is not available for this request" },
+      { "procedure": "csm.submitCsm", "guard": "the Csm row's submittedAt is null", "error": "CONFLICT — Feedback has already been submitted" }
+    ]
+  },
+
+  "test_requirements": [
+    {
+      "file": "src/features/csm/validations/schema/submit-csm.schema.test.ts",
+      "type": "unit",
+      "covers": [
+        "rating 0 fails",
+        "rating 6 fails",
+        "a non-integer rating fails",
+        "a 1001-character comment fails",
+        "a missing comment passes"
+      ]
+    },
+    {
+      "file": "src/integrations/trpc/routers/csm.router.test.ts",
+      "type": "unit",
+      "covers": [
+        "the owner of a CSM_PENDING request can submit and the request becomes COMPLETED",
+        "submitting writes rating, comment and submittedAt in the same transaction as the request update",
+        "a second submit returns CONFLICT and leaves submittedAt unchanged",
+        "submitting for a request that is not CSM_PENDING is FORBIDDEN",
+        "another USER submitting gets NOT_FOUND",
+        "a DIRECTOR submitting gets NOT_FOUND — ownership, not role",
+        "a user without SUBMIT_CSM gets FORBIDDEN",
+        "getMyCsm returns null for a non-owner",
+        "getMyCsm returns null when no Csm row exists"
+      ]
+    },
+    {
+      "file": "cypress/e2e/csm.cy.ts",
+      "type": "e2e",
+      "covers": [
+        "the CSM banner on an approved request leads to the form",
+        "submitting marks the request Completed and removes the banner",
+        "revisiting the page shows the completed state with the rating given",
+        "opening the CSM URL for a request that was never approved redirects to the request"
+      ]
+    }
+  ],
+
+  "acceptance_criteria": [
+    { "given": "an APPROVED request with completionStatus CSM_PENDING", "when": "the owner submits a rating of 4", "then": "the Csm row has submittedAt and rating 4, and the request's masterStatus and completionStatus are both COMPLETED" },
+    { "given": "feedback already submitted", "when": "the owner revisits the page", "then": "the completed state is shown with the date and the rating, and no form" },
+    { "given": "a request that was never finally approved", "when": "the owner opens /requests/$id/csm", "then": "they are redirected to the request detail page" },
+    { "given": "a DIRECTOR", "when": "they call csm.submitCsm for someone's request", "then": "the call fails with NOT_FOUND" },
+    { "given": "two rapid submissions", "when": "both reach the server", "then": "the first succeeds and the second returns CONFLICT; the request is COMPLETED exactly once" },
+    { "given": "a completed request", "when": "the owner opens the PDF", "then": "the fully signed document still renders" }
+  ],
+
+  "edge_cases": [
+    "The Csm row exists before the form is ever opened, created by the approval. This page updates it; it must never create one, or a request could gain a CSM without being approved.",
+    "rating and comment must be nullable, or the migration breaks every Csm row created by spec 014 before this spec ships.",
+    "getMyCsm returning null for both 'not yours' and 'does not exist' is deliberate — it keeps the endpoint from confirming whether a request id exists.",
+    "COMPLETED must be written to masterStatus as well as completionStatus, or the requestor's list still shows Approved after they have finished.",
+    "The submit is the second half of a two-part contract with spec 014; if the CSM_PENDING check is ever loosened, an unapproved request can be marked complete.",
+    "AppRating must be controlled by RHF through its binding, not by local state, or the required-rating validation never sees a value."
+  ],
+
+  "out_of_scope": [
+    "Reporting or aggregation of satisfaction scores — nothing reads the ratings yet, and the office has not asked for a report.",
+    "Reminders to complete the CSM — there is no notification system.",
+    "Editing feedback after submission — it is submitted once, deliberately.",
+    "A CSM for a rejected request — feedback is only requested when a request was approved."
+  ]
+}

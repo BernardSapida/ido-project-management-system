@@ -1,0 +1,243 @@
+{
+  "spec_number": 6,
+  "spec_title": "Request Detail",
+  "feature_name": "request-detail",
+  "description": "The requestor's view of one request: the form read-only, the stage it has reached, why it was returned or rejected if it was, and the one action available right now — edit, submit, view the PDF, or fill in the satisfaction form. It is the destination of every row click in My Requests.",
+  "depends_on": [1, 4, 5],
+
+  "source_reference": {
+    "pages": ["IRMS-old/src/routes/_authenticated/requests/$requestId/index.tsx"],
+    "files": [
+      "IRMS-old/src/features/ido-review/components/AuditLogList.tsx",
+      "IRMS-old/src/features/csm/components/CsmPromptBanner.tsx",
+      "IRMS-old/src/integrations/trpc/routers/request.router.ts (getById)"
+    ],
+    "docs": ["IRMS-old/flows/01-user-submit-request.md (Steps 6-7, paths A-D)", "IRMS-old/TASKS.md (rejection notes visible to requestor, activity log UI)"]
+  },
+
+  "flow": {
+    "actors": ["USER", "IDO_OFFICER", "IDO_CHAIRPERSON", "BUDGET_OFFICER", "DIRECTOR"],
+    "happy_path": [
+      { "step": 1, "actor": "USER", "action": "clicks a row in My Requests", "result": "the detail page: title, document number, status chip, stepper, read-only form" },
+      { "step": 2, "actor": "USER", "action": "reads the stage", "result": "the stepper shows how far it has travelled and the activity feed shows who did what, when" },
+      { "step": 3, "actor": "USER", "action": "presses Edit Request while it is a draft or returned", "result": "navigates to /requests/$requestId/edit" },
+      { "step": 4, "actor": "USER", "action": "presses Submit Request on a draft", "result": "submits in place without going through the edit page and the status chip updates" },
+      { "step": 5, "actor": "USER", "action": "presses View PDF on a submitted request", "result": "opens /requests/$requestId/pdf in a new tab" },
+      { "step": 6, "actor": "USER", "action": "sees the CSM banner after final approval", "result": "presses it and lands on /requests/$requestId/csm" }
+    ],
+    "alternate_paths": [
+      { "name": "Returned by IDO", "trigger": "masterStatus RETURNED", "result": "the page says so in the subtitle and the reviewer's note is shown in full, above the form — the requestor must not have to open an accordion to find out why" },
+      { "name": "Rejected at any stage", "trigger": "any of the five rejection statuses", "result": "the rejection note from the audit log is shown the same way, and Edit and Submit are both absent" },
+      { "name": "Deferred to next year", "trigger": "FOR_NEXT_YEAR_PPMP", "result": "the status chip and an explanation that the request was valid but has no budget allocated this year" },
+      { "name": "A staff member opens it", "trigger": "any staff role follows a link", "result": "read-only access is allowed by getById, but no requestor action is offered — staff act from their own review pages" },
+      { "name": "Another requestor's id", "trigger": "a USER guesses an id", "result": "FORBIDDEN from getById; the page renders the error state, not a blank form" }
+    ]
+  },
+
+  "database": {
+    "models": [
+      { "name": "Request", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] },
+      { "name": "AuditLog", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] },
+      { "name": "Csm", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] }
+    ]
+  },
+
+  "trpc_procedures": [
+    {
+      "name": "getById",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "query",
+      "procedure": "protectedProcedure",
+      "input_schema": null,
+      "input": { "id": "string" },
+      "output": { "request": "Request & { auditLogs: (AuditLog & { actor: Pick<User,'id'|'firstname'|'lastname'|'role'> })[] }" },
+      "guards": ["the request must exist", "the caller is the owner OR holds a staff role (IDO_OFFICER, IDO_CHAIRPERSON, BUDGET_OFFICER, DIRECTOR)"],
+      "invalidates": [],
+      "description": "One request with its audit logs ordered oldest-first, each joined to its actor. ADMIN is deliberately NOT a staff role here — an admin manages accounts and never reads a request."
+    }
+  ],
+
+  "frontend": {
+    "pages": [
+      {
+        "name": "RequestDetailPage",
+        "route_file": "src/routes/_authenticated/requests/$requestId/index.tsx",
+        "breadcrumb": "Request Detail",
+        "main_width": "wide",
+        "role": "all",
+        "layout": "AppLayout (frame, from _authenticated.tsx) — page renders AppPageHeader + content only",
+        "page_header": { "title": "{finalTitle ?? title}", "subtitle": "Status-dependent — draft, returned, under review, or approved", "action": "AppChip with the master status, plus the document number when one exists" },
+        "components": [
+          {
+            "name": "RequestForm",
+            "file": "src/features/request-form/components/RequestForm.tsx",
+            "type": "form",
+            "lab_components": ["AppReadOnlyField", "AppCard", "AppChip", "AppButton", "AppStepper"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md. Reused from spec 005 with forceReadOnly.",
+            "props": ["mode: 'edit'", "forceReadOnly", "defaultValues", "masterStatus", "idoEvaluationStatus", "processor", "requestId", "onEdit?", "onViewPdf?"],
+            "description": "The same component the create page uses, in read-only mode. The side rail carries the status chip and whichever of Submit / Edit / View PDF applies."
+          },
+          {
+            "name": "RejectionNotice",
+            "file": "src/features/request-detail/components/RejectionNotice.tsx",
+            "type": "banner",
+            "lab_components": ["AppAlert"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md.",
+            "props": ["action: string", "note: string | null", "actorName: string", "occurredAt: Date | string"],
+            "description": "Shows WHY a request was returned, rejected or deferred, using the note from the most recent negative audit log. status 'warning' for a return, 'danger' for a rejection, 'info' for a deferral. This is the IRMS-old open task 'rejection notes visible to requestor'."
+          },
+          {
+            "name": "RequestActivityFeed",
+            "file": "src/features/request-detail/components/RequestActivityFeed.tsx",
+            "type": "list",
+            "lab_components": ["AppTimeline", "AppChip", "AppAvatar"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md. AppTimeline replaces the hand-built ol/rail/dot markup that IRMS-old logged as a UI defect.",
+            "props": ["auditLogs: AuditLogEntry[]", "visibleActions?: Set<string>", "isLoading?: boolean"],
+            "description": "One AppTimeline entry per audit log: actor is the person's name, title is the action in sentence case, summary is the status transition, detail is the note. order 'oldest-first' because this is a process, not a feed. For a requestor the feed is filtered to the actions that concern them; staff pages pass no filter and see everything."
+          },
+          {
+            "name": "CsmPromptBanner",
+            "file": "src/features/csm/components/CsmPromptBanner.tsx",
+            "type": "banner",
+            "lab_components": ["AppAlert", "AppButton"],
+            "heroui_components": [],
+            "heroui_note": "None.",
+            "props": ["completionStatus: string | null", "requestId: string"],
+            "description": "Renders only when completionStatus is CSM_PENDING. 'Your request has been approved — fill out the satisfaction form to complete it', with the action navigating to the CSM page."
+          },
+          {
+            "name": "RequestCommentThread",
+            "file": "src/features/request-comments/components/RequestCommentThread.tsx",
+            "type": "widget",
+            "lab_components": ["AppCommentSection"],
+            "heroui_components": [],
+            "heroui_note": "None. Defined in spec 008 and mounted here.",
+            "props": ["requestId: string"],
+            "description": "The conversation between the requestor and whoever is processing the request."
+          }
+        ],
+        "actions": [
+          { "name": "editRequest", "type": "button", "description": "Only while DRAFT or RETURNED", "triggers": "navigates" },
+          { "name": "submitRequest", "type": "button", "description": "Only while DRAFT or RETURNED — submits without re-opening the form", "triggers": "calls tRPC procedure" },
+          { "name": "viewPdf", "type": "link", "description": "Once the request has been submitted. Available to every role that can read the request, not just the owner.", "triggers": "navigates" },
+          { "name": "openCsm", "type": "button", "description": "Only while completionStatus is CSM_PENDING and the viewer owns the request", "triggers": "navigates" }
+        ]
+      }
+    ],
+    "components": [],
+    "forms": [],
+    "hooks": [
+      { "file": "src/features/request-form/hooks/use-user-request-queries.ts", "actor": "user", "type": "query", "invalidates": [], "note": "useRequestById, shared with specs 005 and 007." }
+    ],
+    "store": { "needed": false }
+  },
+
+  "requirements": {
+    "functional": [
+      "The heading shows finalTitle when IDO has set one, with the requestor's original title beneath it as 'Original title: …' — the requestor must be able to see that it was changed and to what.",
+      "The document number is shown next to the status chip once issued, and nothing is shown in its place before that.",
+      "Edit and Submit appear only for DRAFT and RETURNED, and only for the owner.",
+      "View PDF appears for any submitted request and for every role allowed to read it — a reviewer following a link must be able to open the same document (an explicit IRMS-old fix).",
+      "The rejection or return note is shown above the form, in full, sourced from the newest audit log whose action is a return, rejection or deferral.",
+      "The activity feed for a requestor shows only the actions that concern them: returns, rejections and the deferral. Internal recommendations and stage approvals are staff detail and stay on the staff pages.",
+      "The CSM banner appears only while completionStatus is CSM_PENDING, and only for the owner.",
+      "Attachments are shown as a download list, never as an editable dropzone, on this page."
+    ],
+    "authorization": [
+      "Route gate: assertAuthenticatedFn only — the page itself is not role-gated because five roles may legitimately read a request.",
+      "Server gate: getById allows the owner or a staff role and throws FORBIDDEN otherwise. That is the real gate; the route gate is only about being signed in.",
+      "ADMIN is not a staff role for reading requests. An admin who follows a link gets FORBIDDEN, which is correct — they manage accounts.",
+      "Every requestor action (submit, edit) re-checks ownership on the server; the buttons being hidden is not a gate.",
+      "The CSM route and its procedures check ownership independently (spec 015) — the banner being hidden is not a gate either."
+    ],
+    "ux": [
+      "The subtitle names the state in the requestor's words: 'This request is a draft and has not been submitted yet', 'This request was returned by IDO — update it and resubmit', 'Under review by the Campus Director'.",
+      "Exactly one primary action is offered at a time. A draft offers Submit as primary and Edit as secondary; a submitted request offers View PDF and nothing else.",
+      "The rejection notice is a banner, not a row in the feed — the reason a request stopped must not require reading a timeline.",
+      "Loading is a skeleton of the real layout, not a spinner, because the page is tall and a spinner tells the reader nothing about what is coming.",
+      "The activity feed is oldest-first: it is a process moving forwards, not a news feed."
+    ]
+  },
+
+  "validations": {
+    "schemas": [
+      {
+        "file": "src/routes/_authenticated/requests/$requestId/index.tsx",
+        "used_by": ["route params"],
+        "rules": [
+          { "field": "requestId", "zod_rule": "path param, non-empty; a missing request yields NOT_FOUND from getById" }
+        ]
+      }
+    ],
+    "server_guards": [
+      { "procedure": "request.getById", "guard": "the request exists", "error": "NOT_FOUND — Request not found" },
+      { "procedure": "request.getById", "guard": "caller is the owner OR holds IDO_OFFICER, IDO_CHAIRPERSON, BUDGET_OFFICER or DIRECTOR", "error": "FORBIDDEN — Access denied" },
+      { "procedure": "request.submit", "guard": "ownership and an editable status — as spec 005", "error": "FORBIDDEN — Access denied / Request cannot be submitted in its current status" }
+    ]
+  },
+
+  "test_requirements": [
+    {
+      "file": "src/integrations/trpc/routers/request.get-by-id.test.ts",
+      "type": "unit",
+      "covers": [
+        "the owner can read their own request",
+        "an IDO_OFFICER can read someone else's request",
+        "a DIRECTOR can read someone else's request",
+        "another USER cannot — FORBIDDEN, not NOT_FOUND, so the id is not confirmed either way",
+        "an ADMIN cannot",
+        "a missing id is NOT_FOUND",
+        "audit logs come back oldest-first with their actor joined"
+      ]
+    },
+    {
+      "file": "src/features/request-detail/components/rejection-notice.test.ts",
+      "type": "unit",
+      "covers": [
+        "picks the newest negative audit log when there are several",
+        "renders nothing when the request has never been returned or rejected",
+        "a return renders as warning and a rejection as danger"
+      ]
+    },
+    {
+      "file": "cypress/e2e/request-detail.cy.ts",
+      "type": "e2e",
+      "covers": [
+        "a draft shows Submit and Edit and no View PDF",
+        "a submitted request shows View PDF and neither Submit nor Edit",
+        "a returned request shows the IDO note above the form",
+        "an approved request shows the CSM banner and it navigates to the CSM page",
+        "a USER opening another user's request id sees the error state, not an empty form"
+      ]
+    }
+  ],
+
+  "acceptance_criteria": [
+    { "given": "a DRAFT owned by the viewer", "when": "the page loads", "then": "Submit Request and Edit Request are both offered and View PDF is not" },
+    { "given": "a request returned by IDO with the note 'Attach the floor plan'", "when": "the requestor opens it", "then": "that note is visible above the form without any interaction" },
+    { "given": "a request whose finalTitle differs from title", "when": "the page loads", "then": "the heading shows finalTitle and the original title is shown beneath it" },
+    { "given": "an APPROVED request with completionStatus CSM_PENDING", "when": "the owner opens it", "then": "the CSM banner is shown and leads to /requests/$requestId/csm" },
+    { "given": "a BUDGET_OFFICER following a link to a submitted request", "when": "the page loads", "then": "they can read it and can open the PDF, and no requestor action is offered" },
+    { "given": "a USER requesting another user's request id", "when": "getById runs", "then": "it throws FORBIDDEN and the page shows the error state" }
+  ],
+
+  "edge_cases": [
+    "FORBIDDEN rather than NOT_FOUND on a request that exists but is not yours — but the two must not be distinguishable by timing or by message, or the endpoint becomes an id oracle.",
+    "The rejection notice reads the audit log, not a column on the request; a rejection recorded without a note must render the notice with the status and no body rather than an empty box.",
+    "A request can be both RETURNED (by IDO) and later resubmitted; the notice must show the note only while the request is still in the returned state, or a request under review keeps displaying an old complaint.",
+    "finalTitle may equal title, in which case the 'Original title' line is noise and must be suppressed.",
+    "The CSM banner and the CSM route both gate on ownership independently — hiding the banner for a staff viewer is not enough.",
+    "The activity filter for requestors is a whitelist. A new negative action added later and not added to the list silently disappears from the requestor's view."
+  ],
+
+  "out_of_scope": [
+    "Editing — spec 007.",
+    "The comment thread's own behaviour — spec 008.",
+    "The staff review pages — specs 010-014; a staff member reading this page gets no action controls here.",
+    "The PDF renderer — spec 016.",
+    "The CSM form — spec 015."
+  ]
+}

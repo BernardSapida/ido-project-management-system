@@ -1,0 +1,283 @@
+{
+  "spec_number": 13,
+  "spec_title": "IDO Chairperson Final Review",
+  "feature_name": "ido-final-review",
+  "description": "The IDO Chairperson's own stage, and the only one a plain IDO Officer can never do. They confirm the final title, sign, and pass the request to the Campus Director for the last approval — or reject it. Their signature is one of the two printed on the finished form.",
+  "depends_on": [1, 3, 9, 12],
+
+  "source_reference": {
+    "pages": ["IRMS-old/src/routes/_authenticated/requests/$requestId/final-review.tsx"],
+    "files": [
+      "IRMS-old/src/features/ido-final-review/components/IdoFinalActionButtons.tsx",
+      "IRMS-old/src/features/ido-final-review/components/IdoFinalApproverForm.tsx",
+      "IRMS-old/src/features/ido-final-review/validations/schema/ido-final-approver.schema.ts",
+      "IRMS-old/src/integrations/trpc/routers/request.router.ts (idoFinalApprove, idoFinalReject)"
+    ],
+    "docs": ["IRMS-old/flows/05-ido-chairperson-final-review.md", "IRMS-old/PDF Flow.md (Stage 6)"]
+  },
+
+  "flow": {
+    "actors": ["IDO_CHAIRPERSON"],
+    "happy_path": [
+      { "step": 1, "actor": "IDO_CHAIRPERSON", "action": "opens a request the Director has approved", "result": "the request read-only, the approval trail, the current final title, the activity feed and the thread" },
+      { "step": 2, "actor": "IDO_CHAIRPERSON", "action": "optionally overrides the final title", "result": "the new value is held in the form until the approval is submitted" },
+      { "step": 3, "actor": "IDO_CHAIRPERSON", "action": "presses Approve & Sign", "result": "idoFinalSignatureUrl and idoFinalSignedAt stamped, idoFinalStatus IDO_FINAL_APPROVED, finalDirectorStatus UNDER_FINAL_DIRECTOR_APPROVAL, masterStatus UNDER_FINAL_DIRECTOR_REVIEW, finalTitle overwritten only if a new one was given, and an IDO_FINAL_APPROVED audit log" },
+      { "step": 4, "actor": "system", "action": "moves it on", "result": "the request appears in the Director's final approval queue" }
+    ],
+    "alternate_paths": [
+      { "name": "Reject", "trigger": "Reject with a required note", "result": "idoFinalStatus and masterStatus both IDO_FINAL_REJECTED. Terminal" },
+      { "name": "An IDO Officer opens the page", "trigger": "deep link by a plain officer", "result": "/unauthorized from the route gate, and both procedures refuse with FORBIDDEN — this is the one stage the two IDO roles do not share" },
+      { "name": "No signature on profile", "trigger": "the chairperson has never uploaded one", "result": "Approve & Sign is disabled with the reason, and the procedure refuses" },
+      { "name": "Already actioned", "trigger": "their own earlier approval", "result": "read-only, showing the signature, the date and the title that was signed off" },
+      { "name": "Title left alone", "trigger": "the override field is empty", "result": "finalTitle is untouched — an empty override must never blank the title that IDO set at the first review" }
+    ]
+  },
+
+  "database": {
+    "models": [
+      { "name": "Request", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] },
+      { "name": "AuditLog", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] }
+    ]
+  },
+
+  "trpc_procedures": [
+    {
+      "name": "idoFinalApprove",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "mutation",
+      "procedure": "roleProcedure('IDO_CHAIRPERSON')",
+      "input_schema": "src/features/ido-final-review/validations/schema/ido-final-approver.schema.ts (idoFinalApproveSchema)",
+      "input": { "id": "string", "finalTitle": "string? (max 255)" },
+      "output": { "id": "string", "idoFinalStatus": "'IDO_FINAL_APPROVED'", "finalDirectorStatus": "'UNDER_FINAL_DIRECTOR_APPROVAL'", "idoFinalSignedAt": "string" },
+      "guards": ["roleProcedure('IDO_CHAIRPERSON') — the chairperson only", "assertPermission(REVIEW_REQUEST)", "ctx.user.signatureUrl must be present", "idoFinalStatus must be exactly UNDER_IDO_FINAL_REVIEW"],
+      "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.staffList.queryKey()", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()"],
+      "description": "Stamps the chairperson's signature, closes the IDO final stage, opens the final director stage, and moves masterStatus to UNDER_FINAL_DIRECTOR_REVIEW. finalTitle is written only when a non-empty value is supplied."
+    },
+    {
+      "name": "idoFinalReject",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "mutation",
+      "procedure": "roleProcedure('IDO_CHAIRPERSON')",
+      "input_schema": "src/features/ido-final-review/validations/schema/ido-final-approver.schema.ts (idoFinalRejectSchema)",
+      "input": { "id": "string", "note": "string (required)" },
+      "output": { "id": "string", "idoFinalStatus": "'IDO_FINAL_REJECTED'" },
+      "guards": ["roleProcedure('IDO_CHAIRPERSON')", "assertPermission(REVIEW_REQUEST)", "idoFinalStatus must be UNDER_IDO_FINAL_REVIEW"],
+      "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.staffList.queryKey()", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()"],
+      "description": "Sets idoFinalStatus and masterStatus to IDO_FINAL_REJECTED. No signature required."
+    }
+  ],
+
+  "frontend": {
+    "pages": [
+      {
+        "name": "IdoFinalReviewPage",
+        "route_file": "src/routes/_authenticated/requests/$requestId/final-review.tsx",
+        "breadcrumb": "IDO Final Review",
+        "main_width": "wide",
+        "role": "IDO_CHAIRPERSON",
+        "layout": "AppLayout (frame, from _authenticated.tsx) — page renders AppPageHeader + content only",
+        "page_header": { "title": "IDO Final Review", "subtitle": "Confirm the final title and sign, or reject.", "action": "AppButton — View PDF, new tab" },
+        "components": [
+          {
+            "name": "RequestForm",
+            "file": "src/features/request-form/components/RequestForm.tsx",
+            "type": "form",
+            "lab_components": ["AppReadOnlyField", "AppCard", "AppChip", "AppStepper"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md. Reused from spec 005 with forceReadOnly.",
+            "props": ["mode: 'edit'", "forceReadOnly", "defaultValues", "masterStatus", "idoEvaluationStatus", "processor", "requestId"],
+            "description": "Read-only."
+          },
+          {
+            "name": "IdoFinalApproverForm",
+            "file": "src/features/ido-final-review/components/IdoFinalApproverForm.tsx",
+            "type": "form",
+            "lab_components": ["AppCard", "AppInputGroup", "AppReadOnlyField"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md.",
+            "props": ["currentFinalTitle: string | null", "isReadOnly: boolean", "value: string", "onChange: (v: string) => void"],
+            "description": "Shows the current final title through AppReadOnlyField and offers an optional override field beneath it, with helper text saying that leaving it empty keeps the current title. The value is lifted to the page so the action buttons can send it."
+          },
+          {
+            "name": "IdoFinalActionButtons",
+            "file": "src/features/ido-final-review/components/IdoFinalActionButtons.tsx",
+            "type": "widget",
+            "lab_components": ["AppCard", "AppButton", "AppDialog", "AppModal", "AppTextArea", "AppAlert", "AppToast"],
+            "heroui_components": [],
+            "heroui_note": "None. AppDialog confirms the signing, AppModal carries the rejection note.",
+            "props": ["requestId: string", "idoFinalStatus: string | null", "finalTitle: string", "hasSignature: boolean", "canReview: boolean"],
+            "description": "Approve & Sign, and Reject. The confirmation dialog states the title that will be signed off, so an override typed and forgotten is visible before it is committed."
+          },
+          {
+            "name": "ApprovalTrail",
+            "file": "src/features/director-review/components/ApprovalTrail.tsx",
+            "type": "card",
+            "lab_components": ["AppCard", "AppList", "AppChip"],
+            "heroui_components": [],
+            "heroui_note": "None. Defined in spec 012 and reused.",
+            "props": ["request"],
+            "description": "Who has signed so far — the budget officer, if any, and the Director."
+          },
+          {
+            "name": "RequestActivityFeed",
+            "file": "src/features/request-detail/components/RequestActivityFeed.tsx",
+            "type": "list",
+            "lab_components": ["AppTimeline"],
+            "heroui_components": [],
+            "heroui_note": "None. Spec 006, unfiltered.",
+            "props": ["auditLogs: AuditLogEntry[]"],
+            "description": "The full history."
+          },
+          {
+            "name": "RequestCommentThread",
+            "file": "src/features/request-comments/components/RequestCommentThread.tsx",
+            "type": "widget",
+            "lab_components": ["AppCommentSection"],
+            "heroui_components": [],
+            "heroui_note": "None. Spec 008.",
+            "props": ["requestId: string"],
+            "description": "The conversation."
+          }
+        ],
+        "actions": [
+          { "name": "idoFinalApprove", "type": "button", "description": "Confirms the title, stamps the signature, sends the request to the Director's final approval", "triggers": "opens modal then calls tRPC procedure" },
+          { "name": "idoFinalReject", "type": "button", "description": "Opens a modal with a required note. Terminal.", "triggers": "opens modal then calls tRPC procedure" },
+          { "name": "viewPdf", "type": "link", "description": "Header action, new tab", "triggers": "navigates" }
+        ]
+      }
+    ],
+    "components": [],
+    "forms": [
+      {
+        "name": "IdoFinalApproverForm",
+        "file": "src/features/ido-final-review/components/IdoFinalApproverForm.tsx",
+        "schema_file": "src/features/ido-final-review/validations/schema/ido-final-approver.schema.ts",
+        "method": "PATCH",
+        "server_fn": "request.idoFinalApprove",
+        "success_message": "Approved and signed. The request has moved to the Campus Director.",
+        "error_message": "Failed to process the action. Please try again.",
+        "fields": [
+          { "name": "finalTitle", "type": "text", "label": "Override the final title", "placeholder": "Leave empty to keep the current title", "required": false, "note": "Written only when non-empty. An empty value must never blank the existing finalTitle.", "zod_rule": "z.string().max(255).optional()" }
+        ]
+      },
+      {
+        "name": "IdoFinalRejectModal",
+        "file": "src/features/ido-final-review/components/IdoFinalActionButtons.tsx",
+        "schema_file": "src/features/ido-final-review/validations/schema/ido-final-approver.schema.ts",
+        "method": "PATCH",
+        "server_fn": "request.idoFinalReject",
+        "success_message": "Request rejected.",
+        "error_message": "Failed to process the action. Please try again.",
+        "fields": [
+          { "name": "note", "type": "textarea", "label": "Reason", "placeholder": "Explain the decision — the requestor will read this", "required": true, "zod_rule": "z.string().min(1, 'Note is required')" }
+        ]
+      }
+    ],
+    "hooks": [
+      { "file": "src/features/ido-final-review/hooks/use-ido-final-review-queries.ts", "actor": "ido", "type": "query", "invalidates": [], "note": "Reads request.getById." },
+      { "file": "src/features/ido-final-review/hooks/use-ido-final-review-mutations.ts", "actor": "ido", "type": "mutation", "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.staffList.queryKey()", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()"], "note": "approve and reject, with isAnyPending." }
+    ],
+    "store": { "needed": false }
+  },
+
+  "requirements": {
+    "functional": [
+      "Only the IDO_CHAIRPERSON may act here. An IDO_OFFICER holds REVIEW_REQUEST and can do the first review, but this stage is closed to them — the role check, not the permission, is what separates them.",
+      "The final title override is optional and is applied only when non-empty.",
+      "Approving requires a signature; the URL is copied onto the request.",
+      "Rejecting requires a note and no signature.",
+      "Approving sets five things in one transaction: the signature pair, idoFinalStatus, finalDirectorStatus and masterStatus, plus the audit log.",
+      "The signature stamped here is printed in the RECOMMENDATION BY IDO block of the PDF — but only once the Director's final approval lands (spec 016).",
+      "Once actioned the page opens read-only, showing the signature, the date and the title that was signed."
+    ],
+    "authorization": [
+      "Route gate: assertAuthenticatedRoleFn with ['IDO_CHAIRPERSON'] — the narrowest gate in the app.",
+      "Server gate: roleProcedure('IDO_CHAIRPERSON') on both procedures, then assertPermission(REVIEW_REQUEST), then the stage check on idoFinalStatus, then the signature check on approval.",
+      "An IDO_OFFICER calling idoFinalApprove gets FORBIDDEN from roleProcedure even though they hold REVIEW_REQUEST. This is the test that proves the role gate and the permission gate are doing different jobs.",
+      "The stage check reads idoFinalStatus, not masterStatus."
+    ],
+    "ux": [
+      "The confirmation dialog states the exact title that will be signed off. A chairperson who typed an override and forgot must see it before committing.",
+      "The current title and the override sit next to each other, so the difference is visible without switching pages.",
+      "'Approve & Sign' says what it does — this is the moment a signature is attached, not a routine approval.",
+      "A missing signature is explained on the page with a link to the profile.",
+      "The read-only state after approval shows the signature image and the timestamp, so a returning chairperson sees their own act."
+    ]
+  },
+
+  "validations": {
+    "schemas": [
+      {
+        "file": "src/features/ido-final-review/validations/schema/ido-final-approver.schema.ts",
+        "used_by": ["IdoFinalApproverForm", "IdoFinalActionButtons", "both procedures"],
+        "rules": [
+          { "field": "idoFinalApproveSchema.id", "zod_rule": "z.string().min(1)" },
+          { "field": "idoFinalApproveSchema.finalTitle", "zod_rule": "z.string().max(255).optional()" },
+          { "field": "idoFinalRejectSchema.note", "zod_rule": "z.string().min(1, 'Note is required')" }
+        ]
+      }
+    ],
+    "server_guards": [
+      { "procedure": "request.idoFinalApprove", "guard": "roleProcedure('IDO_CHAIRPERSON')", "error": "FORBIDDEN — Insufficient permissions" },
+      { "procedure": "request.idoFinalApprove", "guard": "assertPermission(REVIEW_REQUEST)", "error": "FORBIDDEN — You don't have permission to perform this action" },
+      { "procedure": "request.idoFinalApprove", "guard": "ctx.user.signatureUrl is present", "error": "FORBIDDEN — Your profile is missing a signature. Please complete your profile before approving." },
+      { "procedure": "request.idoFinalApprove", "guard": "idoFinalStatus === 'UNDER_IDO_FINAL_REVIEW'", "error": "FORBIDDEN — This request is not at the IDO final review stage" },
+      { "procedure": "request.idoFinalApprove", "guard": "finalTitle is written only when the supplied value is non-empty", "error": "n/a — the guard protects the existing title" },
+      { "procedure": "request.idoFinalReject", "guard": "role, permission and the same stage check", "error": "FORBIDDEN — as above" }
+    ]
+  },
+
+  "test_requirements": [
+    {
+      "file": "src/integrations/trpc/routers/request.ido-final-review.test.ts",
+      "type": "unit",
+      "covers": [
+        "an IDO_OFFICER calling idoFinalApprove gets FORBIDDEN — the role gate, not the permission",
+        "an IDO_CHAIRPERSON with a signature approves: signature pair stamped, idoFinalStatus IDO_FINAL_APPROVED, finalDirectorStatus UNDER_FINAL_DIRECTOR_APPROVAL, masterStatus UNDER_FINAL_DIRECTOR_REVIEW",
+        "approving with an empty finalTitle leaves the existing finalTitle unchanged",
+        "approving with a new finalTitle overwrites it and still leaves title untouched",
+        "approving with no signatureUrl is FORBIDDEN and writes nothing",
+        "approving a request still at Director review is FORBIDDEN",
+        "reject sets both idoFinalStatus and masterStatus to IDO_FINAL_REJECTED",
+        "reject with no note fails validation",
+        "a DIRECTOR calling idoFinalApprove gets FORBIDDEN",
+        "each successful action writes exactly one audit log in the same transaction"
+      ]
+    },
+    {
+      "file": "cypress/e2e/ido-final-review.cy.ts",
+      "type": "e2e",
+      "covers": [
+        "an IDO officer deep-linking to /final-review lands on /unauthorized",
+        "the confirmation dialog shows the title that will be signed",
+        "approving moves the request into the director's final approval queue",
+        "the page opens read-only after approval, showing the signature and date"
+      ]
+    }
+  ],
+
+  "acceptance_criteria": [
+    { "given": "a request at idoFinalStatus UNDER_IDO_FINAL_REVIEW and a chairperson with a signature", "when": "they approve and sign", "then": "the signature is stamped, finalDirectorStatus becomes UNDER_FINAL_DIRECTOR_APPROVAL and masterStatus becomes UNDER_FINAL_DIRECTOR_REVIEW" },
+    { "given": "a request whose finalTitle is 'Rehabilitation of CS Laboratory'", "when": "the chairperson approves with the override left empty", "then": "finalTitle is still 'Rehabilitation of CS Laboratory'" },
+    { "given": "the same request", "when": "the chairperson approves with an override of 'Rehabilitation of the Computer Science Laboratory'", "then": "finalTitle takes the new value and title is unchanged" },
+    { "given": "a signed-in IDO_OFFICER holding REVIEW_REQUEST", "when": "they call request.idoFinalApprove", "then": "the call fails with FORBIDDEN" },
+    { "given": "a chairperson with no signature", "when": "they open the page", "then": "Approve & Sign is disabled with a link to the profile" },
+    { "given": "a rejected request", "when": "the requestor opens their detail page", "then": "the status reads IDO Final Rejected and the chairperson's reason is shown" }
+  ],
+
+  "edge_cases": [
+    "An empty override must not blank finalTitle. Spreading the input straight into the update is the failure — the write has to be conditional on a non-empty value.",
+    "This is the only stage where role and permission genuinely diverge: both IDO roles hold REVIEW_REQUEST and only one may act. A refactor that gates on the permission alone silently opens the stage to every officer.",
+    "The signature stamped here does not appear on the PDF until finalDirectorStatus is APPROVED. A chairperson who signs and then checks the PDF will see nothing, and the page should say so rather than let them assume the stamp failed.",
+    "The override field is lifted to the page so the action button can read it; keeping it inside the form component and passing a stale prop is how an override silently fails to send.",
+    "idoFinalStatus is set to UNDER_IDO_FINAL_REVIEW by the DIRECTOR's approval, not here. If that write is ever moved, this stage's guard has nothing to match.",
+    "The chairperson also appears at the first review stage (spec 010); the staff dashboard routes on idoFinalStatus to tell the two apart, so a request that reaches this stage must never route back to /review."
+  ],
+
+  "out_of_scope": [
+    "The first IDO review — spec 010, which an officer may also do.",
+    "The Director's final approval — spec 014.",
+    "The PDF and its signature gate — spec 016.",
+    "Changing anything other than the final title at this stage — the request's content is fixed once it leaves the requestor."
+  ]
+}

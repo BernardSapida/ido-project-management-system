@@ -1,0 +1,236 @@
+{
+  "spec_number": 9,
+  "spec_title": "Staff Dashboard",
+  "feature_name": "staff-dashboard",
+  "description": "One queue for four roles. Each staff role sees the requests its stage owns — nothing earlier, nothing it can never act on — and a row click routes to the correct review page for that role at that stage, which is the only navigation in the app that has to reason about the workflow.",
+  "depends_on": [1, 5],
+
+  "source_reference": {
+    "pages": ["IRMS-old/src/routes/_authenticated/staff/dashboard/index.tsx"],
+    "files": [
+      "IRMS-old/src/features/staff-dashboard/components/StaffRequestsTable.tsx",
+      "IRMS-old/src/features/staff-dashboard/hooks/use-staff-dashboard-queries.ts",
+      "IRMS-old/src/integrations/trpc/routers/request.router.ts (staffList, listSubmitted)"
+    ],
+    "docs": ["IRMS-old/flows/00-overview.md", "IRMS-old/TASKS.md (filter options — add All, rename Final Rejected)"]
+  },
+
+  "flow": {
+    "actors": ["IDO_OFFICER", "IDO_CHAIRPERSON", "BUDGET_OFFICER", "DIRECTOR"],
+    "happy_path": [
+      { "step": 1, "actor": "any staff", "action": "signs in", "result": "lands on /staff/dashboard — getDefaultRoute for all four staff roles" },
+      { "step": 2, "actor": "any staff", "action": "reads the queue", "result": "every request their role has a stake in, newest first, with status and priority visible" },
+      { "step": 3, "actor": "any staff", "action": "filters by status or priority, or searches", "result": "the server re-queries within their role scope; the page resets to 1" },
+      { "step": 4, "actor": "any staff", "action": "clicks a row", "result": "routes to the review page for their role AND that request's stage" }
+    ],
+    "alternate_paths": [
+      { "name": "IDO Chairperson at two stages", "trigger": "a request in idoFinalStatus UNDER_IDO_FINAL_REVIEW", "result": "the row routes to /final-review; a request at the first stage routes to /review — same role, two destinations, decided by the request" },
+      { "name": "Director at two stages", "trigger": "finalDirectorStatus is set", "result": "routes to /final-director-approval instead of /director-review" },
+      { "name": "Already actioned", "trigger": "a request the role has finished with", "result": "it stays in the queue as history, opens read-only, and the review page offers no action" },
+      { "name": "Empty queue", "trigger": "nothing at this role's stage", "result": "an empty state that says the queue is clear, distinct from the no-results-for-this-filter state" },
+      { "name": "USER or ADMIN deep-links", "trigger": "either navigates to /staff/dashboard", "result": "/unauthorized from the route gate, and staffList would throw FORBIDDEN anyway" }
+    ]
+  },
+
+  "database": {
+    "models": [
+      { "name": "Request", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] }
+    ]
+  },
+
+  "trpc_procedures": [
+    {
+      "name": "staffList",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "query",
+      "procedure": "roleProcedure('IDO_OFFICER','IDO_CHAIRPERSON','BUDGET_OFFICER','DIRECTOR')",
+      "input_schema": null,
+      "input": { "page": "number (default 1)", "pageSize": "number (1-100, default 10)", "search": "string?", "status": "string?", "priority": "string?" },
+      "output": { "items": "Request[]", "total": "number", "page": "number", "pageSize": "number", "totalPages": "number" },
+      "guards": ["roleProcedure restricts to the four staff roles", "the WHERE clause is built from ctx.user.role and is not influenced by any input"],
+      "invalidates": [],
+      "description": "Role-shaped scoping. IDO_OFFICER: masterStatus SUBMITTED, or idoEvaluationStatus in (UNDER_IDO_REVIEW, RECOMMENDED_BY_IDO, RETURNED_TO_REQUESTOR, REJECTED_BY_IDO, FOR_NEXT_YEAR_PPMP). IDO_CHAIRPERSON: the same set plus idoFinalStatus in (UNDER_IDO_FINAL_REVIEW, IDO_FINAL_APPROVED, IDO_FINAL_REJECTED). BUDGET_OFFICER: directorReviewStatus in (UNDER_BUDGET_OFFICER_REVIEW, BUDGET_OFFICER_REJECTED) or budgetOfficerSignedAt is not null. DIRECTOR: directorReviewStatus in (UNDER_DIRECTOR_REVIEW, DIRECTOR_APPROVED, DIRECTOR_REJECTED) or finalDirectorStatus in (UNDER_FINAL_DIRECTOR_APPROVAL, APPROVED, FINAL_REJECTED). Filters are ANDed onto that scope, never substituted for it."
+    },
+    {
+      "name": "listSubmitted",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "query",
+      "procedure": "roleProcedure('IDO_OFFICER','IDO_CHAIRPERSON')",
+      "input_schema": null,
+      "input": { "page": "number", "pageSize": "number", "search": "string?", "priority": "string?" },
+      "output": { "items": "Request[]", "total": "number", "page": "number", "pageSize": "number", "totalPages": "number" },
+      "guards": ["IDO roles only"],
+      "invalidates": [],
+      "description": "The narrow IDO inbox — masterStatus in (SUBMITTED, UNDER_IDO_REVIEW) only. Kept as a separate procedure because the IDO 'to action' count is a different question from 'everything I have touched'."
+    }
+  ],
+
+  "frontend": {
+    "pages": [
+      {
+        "name": "StaffDashboardPage",
+        "route_file": "src/routes/_authenticated/staff/dashboard/index.tsx",
+        "breadcrumb": "Dashboard",
+        "main_width": "wide",
+        "role": "IDO_OFFICER | IDO_CHAIRPERSON | BUDGET_OFFICER | DIRECTOR",
+        "layout": "AppLayout (frame, from _authenticated.tsx) — page renders AppPageHeader + content only",
+        "page_header": { "title": "Dashboard", "subtitle": "Requests waiting on you, and the ones you have already handled.", "action": null },
+        "search_params": { "page": "number, catch 1", "pageSize": "number, catch 10", "search": "string?", "status": "string?", "priority": "string?" },
+        "components": [
+          {
+            "name": "StaffQueueSummary",
+            "file": "src/features/staff-dashboard/components/StaffQueueSummary.tsx",
+            "type": "widget",
+            "lab_components": ["AppKpi", "AppKpiSkeleton"],
+            "heroui_components": [],
+            "heroui_note": "None.",
+            "props": ["role: UserRole", "counts: { waiting: number; handled: number }", "isLoading: boolean"],
+            "description": "Two tiles: Waiting on you, and Handled. 'Waiting' is the stage this role can act on RIGHT NOW; 'Handled' is everything else in scope. Pressing a tile filters the table. New in IPMS — the old dashboard had no counters and staff could not tell a queue of 40 from a queue of 2 without counting."
+          },
+          {
+            "name": "StaffRequestsTable",
+            "file": "src/features/staff-dashboard/components/StaffRequestsTable.tsx",
+            "type": "table",
+            "lab_components": ["AppDataTable", "AppFilterBar", "AppChip", "AppTableEmptyState", "AppPagination"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md. AppDataTable in SERVER mode with two FilterDefs (status, priority) replaces the old SearchField + two Selects + AppTable assembly.",
+            "props": ["rows: StaffRequestRow[]", "columns: ColumnDef<StaffRequestRow>[]", "server: DataTableServer", "role: UserRole", "isLoading: boolean", "onRowAction: (id) => void"],
+            "description": "Columns: Doc. #, Title, Type, Priority (chip — High is danger, Medium warning, Low default), Status (AppChip), Date Filed. storageKey 'staff-queue'. Row click delegates to resolveReviewRoute."
+          },
+          {
+            "name": "resolveReviewRoute",
+            "file": "src/features/staff-dashboard/lib/resolve-review-route.ts",
+            "type": "widget",
+            "lab_components": [],
+            "heroui_components": [],
+            "heroui_note": "Not a component — a pure function, extracted so it can be unit-tested without a router. In IRMS-old this logic sat inside the table's click handler and could only be checked by clicking.",
+            "props": ["(role: UserRole, request: StaffRequestRow) => string"],
+            "description": "BUDGET_OFFICER → /budget-review. DIRECTOR → /final-director-approval when finalDirectorStatus is set, else /director-review. IDO_CHAIRPERSON → /final-review when idoFinalStatus is set, else /review. IDO_OFFICER → /review."
+          }
+        ],
+        "actions": [
+          { "name": "openReview", "type": "link", "description": "Row click, routed by resolveReviewRoute", "triggers": "navigates" },
+          { "name": "filterByStage", "type": "button", "description": "A summary tile filters to waiting or handled", "triggers": "updates search params" }
+        ]
+      }
+    ],
+    "components": [],
+    "forms": [],
+    "hooks": [
+      { "file": "src/features/staff-dashboard/hooks/use-staff-dashboard-queries.ts", "actor": "staff", "type": "query", "invalidates": [], "note": "request.staffList. refetchOnMount: 'always' — the same stale-on-role-switch defect that My Requests had (IRMS-old TASKS.md)." }
+    ],
+    "store": { "needed": false }
+  },
+
+  "requirements": {
+    "functional": [
+      "Filter, search, priority and page live in the URL as validated search params so a queue view is shareable and the back button works.",
+      "The status filter offers All plus every masterStatus from MASTER_STATUS_OPTIONS — staff read the raw statuses, unlike requestors, because 'Under Review' hides which desk it is on.",
+      "'Director Final Rejected' is the label for FINAL_REJECTED, distinct from 'IDO Final Rejected' (an explicit IRMS-old fix).",
+      "The priority filter offers All, Low, Medium, High.",
+      "The row click resolves the destination from the role AND the request's stage columns, through resolveReviewRoute — never from masterStatus alone, which cannot distinguish a director's first approval from their final one.",
+      "Requests a role has already handled stay in the queue as history. The review page they open is read-only in that case, which is what stops the 'Request is not available for review' error the old app threw.",
+      "The queue refetches on mount so signing in as a different role never shows the previous role's rows."
+    ],
+    "authorization": [
+      "Route gate: assertAuthenticatedRoleFn with the four staff roles.",
+      "Server gate: staffList is a roleProcedure over the same four roles, and its WHERE clause is built from ctx.user.role. A crafted status filter can narrow the scope but can never widen it.",
+      "A USER or ADMIN reaching the procedure gets FORBIDDEN from roleProcedure — the old implementation fell through to an inline else-throw, which worked but had to be remembered.",
+      "The role scoping is what stops a budget officer browsing requests that never reached their desk."
+    ],
+    "ux": [
+      "Two distinct empty states: 'Your queue is clear' and 'No requests match your filters', the second offering to clear them.",
+      "Priority is a chip, not text — High must be visible while scanning forty rows.",
+      "A count line above the table says how many are in scope and how many are shown.",
+      "Loading is a table skeleton with the filters still usable.",
+      "The subtitle tells the reader that the queue includes what they have already handled, so an unexpectedly long list is not a mystery."
+    ]
+  },
+
+  "validations": {
+    "schemas": [
+      {
+        "file": "src/routes/_authenticated/staff/dashboard/index.tsx",
+        "used_by": ["validateSearch"],
+        "rules": [
+          { "field": "page", "zod_rule": "z.number().int().min(1).catch(1)" },
+          { "field": "pageSize", "zod_rule": "z.number().int().min(1).max(100).catch(10)" },
+          { "field": "search", "zod_rule": "z.string().optional()" },
+          { "field": "status", "zod_rule": "z.string().optional()" },
+          { "field": "priority", "zod_rule": "z.string().optional()" }
+        ]
+      }
+    ],
+    "server_guards": [
+      { "procedure": "request.staffList", "guard": "roleProcedure over the four staff roles", "error": "FORBIDDEN — Insufficient permissions" },
+      { "procedure": "request.staffList", "guard": "the role scope is ANDed with every filter, never replaced by one", "error": "n/a — scoping, not rejection" },
+      { "procedure": "request.listSubmitted", "guard": "roleProcedure('IDO_OFFICER','IDO_CHAIRPERSON')", "error": "FORBIDDEN — Insufficient permissions" }
+    ]
+  },
+
+  "test_requirements": [
+    {
+      "file": "src/integrations/trpc/routers/request.staff-list.test.ts",
+      "type": "unit",
+      "covers": [
+        "an IDO_OFFICER sees a SUBMITTED request and does not see one sitting at Director review",
+        "an IDO_CHAIRPERSON sees both the first-stage set and the IDO-final set",
+        "a BUDGET_OFFICER sees only requests that reached the budget stage",
+        "a DIRECTOR sees both their first-approval set and their final-approval set",
+        "a status filter narrows within the role scope and cannot reach a request outside it",
+        "a USER calling staffList gets FORBIDDEN",
+        "an ADMIN calling staffList gets FORBIDDEN"
+      ]
+    },
+    {
+      "file": "src/features/staff-dashboard/lib/resolve-review-route.test.ts",
+      "type": "unit",
+      "covers": [
+        "BUDGET_OFFICER always routes to /budget-review",
+        "DIRECTOR with finalDirectorStatus set routes to /final-director-approval",
+        "DIRECTOR without it routes to /director-review",
+        "IDO_CHAIRPERSON with idoFinalStatus set routes to /final-review",
+        "IDO_CHAIRPERSON without it routes to /review",
+        "IDO_OFFICER always routes to /review"
+      ]
+    },
+    {
+      "file": "cypress/e2e/staff-dashboard.cy.ts",
+      "type": "e2e",
+      "covers": [
+        "an IDO officer signing in lands on /staff/dashboard",
+        "clicking a submitted request opens the IDO review page",
+        "a chairperson clicking a request at IDO-final opens the final review page",
+        "the empty-queue state differs from the no-results state",
+        "a USER deep-linking to /staff/dashboard lands on /unauthorized"
+      ]
+    }
+  ],
+
+  "acceptance_criteria": [
+    { "given": "a request with masterStatus SUBMITTED", "when": "an IDO_OFFICER opens the dashboard", "then": "the row is listed and clicking it opens /requests/$id/review" },
+    { "given": "the same request after IDO recommended it", "when": "a BUDGET_OFFICER opens the dashboard", "then": "it appears in their queue and clicking it opens /requests/$id/budget-review" },
+    { "given": "a request whose finalDirectorStatus is UNDER_FINAL_DIRECTOR_APPROVAL", "when": "the DIRECTOR clicks it", "then": "they land on /final-director-approval, not /director-review" },
+    { "given": "a BUDGET_OFFICER", "when": "they call staffList with status 'DRAFT'", "then": "the result is empty — the filter narrows their scope and cannot reach a draft" },
+    { "given": "a signed-in USER", "when": "they call request.staffList directly", "then": "the call fails with FORBIDDEN" },
+    { "given": "a queue with no matching rows for the chosen filter", "when": "the table renders", "then": "the no-results empty state is shown with a clear-filters action, not the queue-is-clear state" }
+  ],
+
+  "edge_cases": [
+    "The role scope must be ANDed with the filters. Replacing the scope with a filter — the shape the old code came close to — turns a status dropdown into a way to read every request in the system.",
+    "IDO_CHAIRPERSON and DIRECTOR each appear at two stages; the queue must not show one request twice, so the role clause is a single OR rather than two unioned queries.",
+    "resolveReviewRoute keys on the presence of the stage column, not on masterStatus. A director whose request is at IDO-final still has directorReviewStatus DIRECTOR_APPROVED and must not be routed to a page that will refuse them.",
+    "Requests the role has finished with stay in scope, so the destination page must render read-only rather than throwing — this is the exact defect IRMS-old logged as 'Request is not available for IDO review'.",
+    "A filter change must reset the page, or a staff member lands on an out-of-range page and reads an empty queue as 'nothing to do'.",
+    "budgetOfficerSignedAt is part of the budget officer's scope so an approved-then-moved-on request stays visible; dropping that clause makes their own history vanish the moment the director acts."
+  ],
+
+  "out_of_scope": [
+    "The review actions themselves — specs 010-014.",
+    "Assignment of a specific officer to a request — the system has no assignment model; processor is a name stamped at recommendation time.",
+    "Per-role dashboards at separate routes — one route, four scopes, decided by the session.",
+    "SLA timers, ageing badges or overdue flags — nothing in the old app tracked time-to-action.",
+    "The requestor's list — spec 004."
+  ]
+}
+

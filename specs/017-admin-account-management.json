@@ -1,0 +1,416 @@
+{
+  "spec_number": 17,
+  "spec_title": "Admin Account Management",
+  "feature_name": "admin-accounts",
+  "description": "The administrator's only screen. They create the staff accounts the workflow needs, change a person's role, activate or suspend an account, and grant or revoke individual capabilities. An admin never reads or touches a request — this is the one thing they can do, and everything about the app's authorization is decided here.",
+  "depends_on": [1, 2],
+
+  "source_reference": {
+    "pages": ["IRMS-old/src/routes/_authenticated/admin/index.tsx", "IRMS-old/src/routes/_authenticated/admin.tsx"],
+    "files": [
+      "IRMS-old/src/features/admin-accounts/components/AdminAccountsTable.tsx",
+      "IRMS-old/src/features/admin-accounts/components/CreateStaffAccountModal.tsx",
+      "IRMS-old/src/features/admin-accounts/components/UpdateUserRoleModal.tsx",
+      "IRMS-old/src/features/admin-accounts/components/UpdateUserStatusModal.tsx",
+      "IRMS-old/src/features/admin-accounts/components/UserPermissionsModal.tsx",
+      "IRMS-old/src/integrations/trpc/routers/admin-accounts.router.ts",
+      "IRMS-old/src/integrations/trpc/routers/admin-permissions.router.ts"
+    ],
+    "docs": ["IRMS-old/flows/00-overview.md (Admin — manages accounts and permissions only)", "IRMS-old/TASKS.md (admin account management page)"]
+  },
+
+  "flow": {
+    "actors": ["ADMIN"],
+    "happy_path": [
+      { "step": 1, "actor": "ADMIN", "action": "signs in", "result": "lands on /admin — getDefaultRoute('ADMIN')" },
+      { "step": 2, "actor": "ADMIN", "action": "presses New Staff Account", "result": "a modal for first name, last name, email, role, optional position and a password with confirmation" },
+      { "step": 3, "actor": "ADMIN", "action": "submits", "result": "the account is created active and email-verified, with the role's default permissions granted, and the table refreshes" },
+      { "step": 4, "actor": "ADMIN", "action": "opens the row menu on an existing account", "result": "Change role, Change status and Permissions" },
+      { "step": 5, "actor": "ADMIN", "action": "changes a role", "result": "the role is updated and the permissions are wiped and reseeded from the new role's defaults" },
+      { "step": 6, "actor": "ADMIN", "action": "opens Permissions", "result": "seven switches, one per Action, with a Reset to role defaults control" }
+    ],
+    "alternate_paths": [
+      { "name": "Email already registered", "trigger": "the email exists", "result": "CONFLICT — the message lands on the email field and no account is created" },
+      { "name": "Trying to create a USER or ADMIN", "trigger": "a crafted call with either role", "result": "BAD_REQUEST — this endpoint creates staff only; requestors self-register and admins are seeded" },
+      { "name": "Acting on themselves", "trigger": "an admin changes their own role or status", "result": "FORBIDDEN — an admin who demotes or suspends themselves locks the last door behind them" },
+      { "name": "Suspending an active staff member", "trigger": "status set to inactive or suspended", "result": "their session survives but every protectedProcedure call fails with the account-state message" },
+      { "name": "Revoking a capability", "trigger": "a switch turned off", "result": "the person keeps their role and their queue, and the action they lost fails at assertPermission with the permission message" }
+    ]
+  },
+
+  "database": {
+    "models": [
+      { "name": "User", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] },
+      { "name": "UserPermission", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] },
+      { "name": "Account", "action": "reuse", "prisma_note": "better-auth's credential row — created alongside the user with a hashed password", "fields": [] }
+    ]
+  },
+
+  "trpc_procedures": [
+    {
+      "name": "listAllUsers",
+      "router": "src/integrations/trpc/routers/admin-accounts.router.ts",
+      "type": "query",
+      "procedure": "adminProcedure",
+      "input_schema": null,
+      "input": { "page": "number (default 1)", "pageSize": "number (1-100, default 10)", "role": "string?", "status": "string?", "search": "string?" },
+      "output": { "items": "Pick<User,'id'|'name'|'firstname'|'lastname'|'email'|'role'|'status'|'position'|'profileComplete'|'createdAt'>[]", "total": "number", "page": "number", "pageSize": "number", "totalPages": "number" },
+      "guards": ["adminProcedure", "the select list never includes a password or a session token"],
+      "invalidates": [],
+      "description": "Paginated account list. Search matches name or email, case-insensitive. Newest first."
+    },
+    {
+      "name": "createStaffAccount",
+      "router": "src/integrations/trpc/routers/admin-accounts.router.ts",
+      "type": "mutation",
+      "procedure": "adminProcedure",
+      "input_schema": "src/features/admin-accounts/validations/schema/create-staff-account.schema.ts",
+      "input": { "firstname": "string", "lastname": "string", "email": "string", "role": "'IDO_OFFICER'|'IDO_CHAIRPERSON'|'DIRECTOR'|'BUDGET_OFFICER'", "position": "PositionEnum?", "password": "string" },
+      "output": { "id": "string", "email": "string", "role": "string", "status": "'active'" },
+      "guards": ["adminProcedure", "the role must be one of the four staff roles — USER and ADMIN are rejected", "the email must be unused", "confirmPassword is stripped by a schema .transform before the handler"],
+      "invalidates": ["trpc.adminAccounts.listAllUsers.queryKey()"],
+      "description": "Creates the user and its better-auth credential Account with a hashed password, sets emailVerified true and status active, then seeds the role's default permissions. profileComplete stays false so the new staff member is sent to /profile to add a signature before they can approve anything."
+    },
+    {
+      "name": "updateUserRole",
+      "router": "src/integrations/trpc/routers/admin-accounts.router.ts",
+      "type": "mutation",
+      "procedure": "adminProcedure",
+      "input_schema": "src/features/admin-accounts/validations/schema/update-user-role.schema.ts",
+      "input": { "userId": "string", "role": "'USER'|'IDO_OFFICER'|'IDO_CHAIRPERSON'|'DIRECTOR'|'BUDGET_OFFICER'" },
+      "output": { "id": "string", "role": "string" },
+      "guards": ["adminProcedure", "userId !== ctx.user.id", "ADMIN is not an assignable target role"],
+      "invalidates": ["trpc.adminAccounts.listAllUsers.queryKey()", "trpc.adminPermissions.getUserPermissions.queryKey({ userId })"],
+      "description": "Updates the role, then calls resetAndSeedPermissions so the person holds exactly the new role's defaults and nothing carried over."
+    },
+    {
+      "name": "updateUserStatus",
+      "router": "src/integrations/trpc/routers/admin-accounts.router.ts",
+      "type": "mutation",
+      "procedure": "adminProcedure",
+      "input_schema": "src/features/admin-accounts/validations/schema/update-user-status.schema.ts",
+      "input": { "userId": "string", "status": "'active'|'inactive'|'suspended'" },
+      "output": { "id": "string", "status": "string" },
+      "guards": ["adminProcedure", "userId !== ctx.user.id"],
+      "invalidates": ["trpc.adminAccounts.listAllUsers.queryKey()"],
+      "description": "The account switch. protectedProcedure reads status on every call, so a non-active account can hold a session and still do nothing."
+    },
+    {
+      "name": "getUserPermissions",
+      "router": "src/integrations/trpc/routers/admin-permissions.router.ts",
+      "type": "query",
+      "procedure": "adminProcedure",
+      "input_schema": null,
+      "input": { "userId": "string" },
+      "output": { "grantedActions": "Action[]", "permissions": "{ id: string; action: Action; grantedAt: Date }[]" },
+      "guards": ["adminProcedure"],
+      "invalidates": [],
+      "description": "What one person currently holds."
+    },
+    {
+      "name": "setPermission",
+      "router": "src/integrations/trpc/routers/admin-permissions.router.ts",
+      "type": "mutation",
+      "procedure": "adminProcedure",
+      "input_schema": null,
+      "input": { "userId": "string", "action": "Action", "granted": "boolean" },
+      "output": { "action": "Action", "granted": "boolean" },
+      "guards": ["adminProcedure", "action must be one of the seven enum values"],
+      "invalidates": ["trpc.adminPermissions.getUserPermissions.queryKey({ userId })"],
+      "description": "Upsert on grant, deleteMany on revoke. Idempotent in both directions."
+    },
+    {
+      "name": "resetToRoleDefaults",
+      "router": "src/integrations/trpc/routers/admin-permissions.router.ts",
+      "type": "mutation",
+      "procedure": "adminProcedure",
+      "input_schema": null,
+      "input": { "userId": "string" },
+      "output": { "role": "Role" },
+      "guards": ["adminProcedure", "the user must exist"],
+      "invalidates": ["trpc.adminPermissions.getUserPermissions.queryKey({ userId })"],
+      "description": "Reads the user's current role and reapplies its defaults, wiping anything hand-set."
+    }
+  ],
+
+  "frontend": {
+    "pages": [
+      {
+        "name": "AdminAccountsPage",
+        "route_file": "src/routes/_authenticated/admin/index.tsx",
+        "breadcrumb": "Accounts",
+        "main_width": "wide",
+        "role": "ADMIN",
+        "layout": "AppLayout (frame, from _authenticated.tsx) — page renders AppPageHeader + content only. The /admin layout route (admin.tsx) holds the role gate and renders an Outlet",
+        "page_header": { "title": "Account Management", "subtitle": "Create staff accounts, set roles and control what each person may do.", "action": "AppButton — New Staff Account, icon UserPlus" },
+        "search_params": { "page": "number, catch 1", "pageSize": "number, catch 10", "role": "string?", "status": "string?", "search": "string?" },
+        "components": [
+          {
+            "name": "AdminAccountsTable",
+            "file": "src/features/admin-accounts/components/AdminAccountsTable.tsx",
+            "type": "table",
+            "lab_components": ["AppDataTable", "AppFilterBar", "AppChip", "AppDropdown", "AppTableEmptyState", "AppPagination", "AppAvatar"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md. AppDataTable in SERVER mode with two FilterDefs (role, status); AppDropdown supplies the per-row action menu.",
+            "props": ["rows: AdminUserRow[]", "columns: ColumnDef<AdminUserRow>[]", "server: DataTableServer", "isLoading: boolean", "onUpdateRole", "onUpdateStatus", "onUpdatePermissions"],
+            "description": "Columns: Name (with avatar and email beneath), Role (chip), Status (chip — active success, inactive default, suspended danger), Position, Profile (complete / incomplete), Created, and a row menu. storageKey 'admin-accounts'."
+          },
+          {
+            "name": "CreateStaffAccountModal",
+            "file": "src/features/admin-accounts/components/CreateStaffAccountModal.tsx",
+            "type": "modal",
+            "lab_components": ["AppModal", "AppInputGroup", "AppSelect", "AppPasswordField", "AppButton", "AppAlert", "AppToast"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md.",
+            "props": ["isOpen: boolean", "onClose: () => void"],
+            "description": "The four staff roles only. Position is optional here — staff do not file requests, so it is only used if they ever do. The modal states that the account is created active and that the person must add a signature before they can approve anything."
+          },
+          {
+            "name": "UpdateUserRoleModal",
+            "file": "src/features/admin-accounts/components/UpdateUserRoleModal.tsx",
+            "type": "modal",
+            "lab_components": ["AppModal", "AppSelect", "AppAlert", "AppButton", "AppToast"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md.",
+            "props": ["isOpen", "onClose", "userId: string", "currentRole: string"],
+            "description": "Five target roles (USER plus the four staff). An AppAlert states plainly that changing the role RESETS every permission to the new role's defaults — the most surprising consequence in the whole screen."
+          },
+          {
+            "name": "UpdateUserStatusModal",
+            "file": "src/features/admin-accounts/components/UpdateUserStatusModal.tsx",
+            "type": "modal",
+            "lab_components": ["AppModal", "AppRadioGroup", "AppAlert", "AppButton", "AppToast"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md. AppRadioGroup rather than a select: three options with consequences are a choice to read, not a list to scroll.",
+            "props": ["isOpen", "onClose", "userId: string", "currentStatus: string"],
+            "description": "Active, inactive, suspended, each with a line saying what it means for the person. Suspension is the destructive option and is confirmed."
+          },
+          {
+            "name": "UserPermissionsModal",
+            "file": "src/features/admin-accounts/components/UserPermissionsModal.tsx",
+            "type": "modal",
+            "lab_components": ["AppModal", "AppSwitch", "AppList", "AppButton", "AppChip", "AppToast"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md.",
+            "props": ["isOpen", "onClose", "userId: string", "userName: string"],
+            "description": "Seven switches, one per Action, each with the label and description from ACTION_LABELS. Every toggle saves immediately — there is no Save button, because a permissions dialog with unsaved state is how a revocation gets lost. A Reset to role defaults control sits at the foot."
+          }
+        ],
+        "actions": [
+          { "name": "createStaffAccount", "type": "button", "description": "Header action, opens the create modal", "triggers": "opens modal then calls tRPC procedure" },
+          { "name": "updateRole", "type": "menu", "description": "Row menu", "triggers": "opens modal then calls tRPC procedure" },
+          { "name": "updateStatus", "type": "menu", "description": "Row menu", "triggers": "opens modal then calls tRPC procedure" },
+          { "name": "updatePermissions", "type": "menu", "description": "Row menu", "triggers": "opens modal then calls tRPC procedure" }
+        ]
+      }
+    ],
+    "components": [],
+    "forms": [
+      {
+        "name": "CreateStaffAccountForm",
+        "file": "src/features/admin-accounts/components/CreateStaffAccountModal.tsx",
+        "schema_file": "src/features/admin-accounts/validations/schema/create-staff-account.schema.ts",
+        "method": "POST",
+        "server_fn": "adminAccounts.createStaffAccount",
+        "success_message": "Staff account created.",
+        "error_message": "Account creation failed. Please try again.",
+        "fields": [
+          { "name": "firstname", "type": "text", "label": "First name", "placeholder": "Ida", "required": true, "zod_rule": "z.string().min(1, 'First name is required').min(2, 'At least 2 characters')" },
+          { "name": "lastname", "type": "text", "label": "Last name", "placeholder": "Reyes", "required": true, "zod_rule": "z.string().min(1, 'Last name is required').min(2, 'At least 2 characters')" },
+          { "name": "email", "type": "text", "label": "Email", "placeholder": "name@tup.edu.ph", "required": true, "zod_rule": "z.string().min(1, 'Email is required').email('Enter a valid email')" },
+          { "name": "role", "type": "dropdown", "label": "Role", "placeholder": "Select a role", "required": true, "note": "IDO Officer, IDO Chairperson, Director, Budget Officer. USER and ADMIN are not offered and are rejected server-side.", "zod_rule": "z.enum(['IDO_OFFICER','IDO_CHAIRPERSON','DIRECTOR','BUDGET_OFFICER'], { message: 'Please select a valid role' })" },
+          { "name": "position", "type": "dropdown", "label": "Position", "placeholder": "Optional", "required": false, "zod_rule": "z.enum([...POSITION_VALUES]).optional()" },
+          { "name": "password", "type": "password", "label": "Temporary password", "placeholder": "At least 8 characters", "required": true, "note": "The admin hands this over out of band. There is no email delivery.", "zod_rule": "z.string().min(8, 'At least 8 characters')" },
+          { "name": "confirmPassword", "type": "password", "label": "Confirm password", "placeholder": "Re-enter the password", "required": true, "zod_rule": "z.string().min(1, 'Please confirm your password')" }
+        ]
+      },
+      {
+        "name": "UpdateUserRoleForm",
+        "file": "src/features/admin-accounts/components/UpdateUserRoleModal.tsx",
+        "schema_file": "src/features/admin-accounts/validations/schema/update-user-role.schema.ts",
+        "method": "PATCH",
+        "server_fn": "adminAccounts.updateUserRole",
+        "success_message": "Role updated. Permissions were reset to the new role's defaults.",
+        "error_message": "Failed to update the role. Please try again.",
+        "fields": [
+          { "name": "role", "type": "dropdown", "label": "Role", "placeholder": "Select a role", "required": true, "zod_rule": "z.enum(['USER','IDO_OFFICER','IDO_CHAIRPERSON','DIRECTOR','BUDGET_OFFICER'], { message: 'Please select a valid role' })" }
+        ]
+      },
+      {
+        "name": "UpdateUserStatusForm",
+        "file": "src/features/admin-accounts/components/UpdateUserStatusModal.tsx",
+        "schema_file": "src/features/admin-accounts/validations/schema/update-user-status.schema.ts",
+        "method": "PATCH",
+        "server_fn": "adminAccounts.updateUserStatus",
+        "success_message": "Account status updated.",
+        "error_message": "Failed to update the status. Please try again.",
+        "fields": [
+          { "name": "status", "type": "dropdown", "label": "Status", "placeholder": "Select a status", "required": true, "zod_rule": "z.enum(['active','inactive','suspended'], { message: 'Please select a valid status' })" }
+        ]
+      }
+    ],
+    "hooks": [
+      { "file": "src/features/admin-accounts/hooks/use-admin-accounts-queries.ts", "actor": "admin", "type": "query", "invalidates": [], "note": "adminAccounts.listAllUsers." },
+      { "file": "src/features/admin-accounts/hooks/use-admin-accounts-mutations.ts", "actor": "admin", "type": "mutation", "invalidates": ["trpc.adminAccounts.listAllUsers.queryKey()"], "note": "create, updateRole, updateStatus. updateRole also invalidates the permissions query." },
+      { "file": "src/features/admin-accounts/hooks/use-admin-permissions-queries.ts", "actor": "admin", "type": "query", "invalidates": [], "note": "adminPermissions.getUserPermissions, keyed by userId." },
+      { "file": "src/features/admin-accounts/hooks/use-admin-permissions-mutations.ts", "actor": "admin", "type": "mutation", "invalidates": ["trpc.adminPermissions.getUserPermissions.queryKey({ userId })"], "note": "setPermission and resetToRoleDefaults." }
+    ],
+    "store": { "needed": false }
+  },
+
+  "requirements": {
+    "functional": [
+      "Staff accounts are created here and nowhere else. Requestors self-register (spec 002); admins come from the seed.",
+      "A created staff account is active and email-verified — there is no mail provider, so an unverified staff account would be stuck at /verify-email forever.",
+      "profileComplete starts false, so a new staff member is sent to /profile to add the signature their approvals require.",
+      "The password is set by the admin and handed over out of band. There is no invitation email and no forced rotation.",
+      "Changing a role RESETS permissions to the new role's defaults. Nothing carries over.",
+      "Permission switches save on toggle, with no Save button.",
+      "ACTION_LABELS supplies the label and description for each switch, so the seven capabilities are described in one place (spec 001).",
+      "The table shows whether each account has completed its profile, because an approver without a signature is a queue that will stall.",
+      "Role and status are chips, so an admin scanning forty accounts can see the shape of the org."
+    ],
+    "authorization": [
+      "Route gate: the /admin layout route uses assertAuthenticatedRoleFn with ['ADMIN'].",
+      "Server gate: every procedure here is an adminProcedure. Not one of them falls back to an inline role check.",
+      "An admin may not change their own role or their own status — the self-check is on both procedures, and it is what stops the last administrator locking themselves out.",
+      "createStaffAccount rejects USER and ADMIN as target roles. Self-registration is the only path to USER, and ADMIN accounts are seeded deliberately.",
+      "The user list never selects a password hash, a session token or anything from the account table.",
+      "An ADMIN has no read access to requests at all — request.getById excludes them by design (spec 006). Nothing on this page changes that."
+    ],
+    "ux": [
+      "Every consequence is stated where the action is taken: the role modal says permissions will be reset, the status modal says what each state means for the person, the create modal says the account starts active and needs a signature.",
+      "Suspension is confirmed; activation is not. Confirmation belongs on the destructive direction only.",
+      "Permission toggles show a pending state per switch and revert visibly if the call fails — a switch that silently springs back is how an admin believes they revoked something they did not.",
+      "The empty state offers New Staff Account.",
+      "The self-row's role and status actions are disabled with a tooltip explaining why, rather than failing on press."
+    ]
+  },
+
+  "validations": {
+    "schemas": [
+      {
+        "file": "src/features/admin-accounts/validations/schema/create-staff-account.schema.ts",
+        "used_by": ["CreateStaffAccountModal", "adminAccounts.createStaffAccount"],
+        "rules": [
+          { "field": "firstname", "zod_rule": "z.string().min(1, 'First name is required').min(2, 'At least 2 characters')" },
+          { "field": "lastname", "zod_rule": "z.string().min(1, 'Last name is required').min(2, 'At least 2 characters')" },
+          { "field": "email", "zod_rule": "z.string().min(1, 'Email is required').email('Enter a valid email')" },
+          { "field": "role", "zod_rule": "z.enum(['IDO_OFFICER','IDO_CHAIRPERSON','DIRECTOR','BUDGET_OFFICER'], { message: 'Please select a valid role' })" },
+          { "field": "position", "zod_rule": "z.enum([...POSITION_VALUES]).optional()" },
+          { "field": "password", "zod_rule": "z.string().min(8, 'At least 8 characters')" },
+          { "field": "form", "zod_rule": ".refine((d) => d.password === d.confirmPassword, { message: 'Passwords do not match', path: ['confirmPassword'] }).transform(({ confirmPassword, ...rest }) => rest)" }
+        ]
+      },
+      {
+        "file": "src/features/admin-accounts/validations/schema/update-user-role.schema.ts",
+        "used_by": ["UpdateUserRoleModal", "adminAccounts.updateUserRole"],
+        "rules": [
+          { "field": "userId", "zod_rule": "z.string().min(1, 'User ID is required')" },
+          { "field": "role", "zod_rule": "z.enum(['USER','IDO_OFFICER','IDO_CHAIRPERSON','DIRECTOR','BUDGET_OFFICER'], { message: 'Please select a valid role' })" }
+        ]
+      },
+      {
+        "file": "src/features/admin-accounts/validations/schema/update-user-status.schema.ts",
+        "used_by": ["UpdateUserStatusModal", "adminAccounts.updateUserStatus"],
+        "rules": [
+          { "field": "userId", "zod_rule": "z.string().min(1, 'User ID is required')" },
+          { "field": "status", "zod_rule": "z.enum(['active','inactive','suspended'], { message: 'Please select a valid status' })" }
+        ]
+      }
+    ],
+    "server_guards": [
+      { "procedure": "every procedure in both routers", "guard": "adminProcedure", "error": "FORBIDDEN — Insufficient permissions" },
+      { "procedure": "adminAccounts.createStaffAccount", "guard": "the role is not USER or ADMIN", "error": "BAD_REQUEST — Cannot assign USER or ADMIN through this endpoint" },
+      { "procedure": "adminAccounts.createStaffAccount", "guard": "the lowercased email is unused", "error": "CONFLICT — An account with this email already exists." },
+      { "procedure": "adminAccounts.updateUserRole", "guard": "input.userId !== ctx.user.id", "error": "FORBIDDEN — You cannot change your own role" },
+      { "procedure": "adminAccounts.updateUserStatus", "guard": "input.userId !== ctx.user.id", "error": "FORBIDDEN — You cannot change your own status" },
+      { "procedure": "adminPermissions.setPermission", "guard": "action is one of the seven enum values", "error": "BAD_REQUEST — Zod issue on action" },
+      { "procedure": "adminPermissions.resetToRoleDefaults", "guard": "the user exists", "error": "NOT_FOUND — User not found" }
+    ]
+  },
+
+  "test_requirements": [
+    {
+      "file": "src/features/admin-accounts/validations/schema/create-staff-account.schema.test.ts",
+      "type": "unit",
+      "covers": [
+        "role 'USER' fails the enum",
+        "role 'ADMIN' fails the enum",
+        "mismatched passwords fail on confirmPassword",
+        "a 7-character password fails",
+        "confirmPassword is stripped by the transform"
+      ]
+    },
+    {
+      "file": "src/integrations/trpc/routers/admin-accounts.router.test.ts",
+      "type": "unit",
+      "covers": [
+        "a non-admin calling listAllUsers gets FORBIDDEN",
+        "a DIRECTOR calling createStaffAccount gets FORBIDDEN",
+        "createStaffAccount with role USER gets BAD_REQUEST and creates nothing",
+        "a successful create writes emailVerified true, status active, profileComplete false and a hashed credential Account",
+        "a successful create seeds exactly the new role's default permissions",
+        "a duplicate email returns CONFLICT and creates no user and no account row",
+        "the email is lowercased before the uniqueness check",
+        "updateUserRole on oneself is FORBIDDEN",
+        "updateUserStatus on oneself is FORBIDDEN",
+        "updateUserRole resets permissions — a DIRECTOR demoted to USER no longer holds APPROVE_DIRECTOR",
+        "listAllUsers never returns a password field"
+      ]
+    },
+    {
+      "file": "src/integrations/trpc/routers/admin-permissions.router.test.ts",
+      "type": "unit",
+      "covers": [
+        "a non-admin calling any permissions procedure gets FORBIDDEN",
+        "setPermission granted true is idempotent when the grant already exists",
+        "setPermission granted false removes the grant and is idempotent when it is already absent",
+        "resetToRoleDefaults wipes hand-set grants and reapplies the role's defaults",
+        "resetToRoleDefaults on a missing user is NOT_FOUND",
+        "a revoked grant makes the corresponding request procedure fail at assertPermission"
+      ]
+    },
+    {
+      "file": "cypress/e2e/admin-accounts.cy.ts",
+      "type": "e2e",
+      "covers": [
+        "an admin creates a budget officer and the account appears in the table as active",
+        "the new account can sign in and is sent to /profile",
+        "changing a role shows the reset warning and the permissions modal reflects the new defaults afterwards",
+        "an admin's own row has role and status actions disabled",
+        "a suspended user's next action fails with the account-state message",
+        "a DIRECTOR deep-linking to /admin lands on /unauthorized"
+      ]
+    }
+  ],
+
+  "acceptance_criteria": [
+    { "given": "an admin on /admin", "when": "they create a budget officer with a valid form", "then": "the account exists as active and email-verified, holds ADD_COMMENT and APPROVE_BUDGET, and profileComplete is false" },
+    { "given": "that new budget officer", "when": "they sign in", "then": "they are sent to /profile and cannot approve anything until a signature is on file" },
+    { "given": "a DIRECTOR account", "when": "the admin changes their role to USER", "then": "APPROVE_DIRECTOR is gone and the four USER permissions are present" },
+    { "given": "an admin viewing their own row", "when": "they open the row menu", "then": "Change role and Change status are disabled with an explanation, and crafted calls return FORBIDDEN" },
+    { "given": "an active IDO officer", "when": "the admin suspends them", "then": "their next tRPC call fails with the account-not-active message" },
+    { "given": "a crafted createStaffAccount call with role 'ADMIN'", "when": "it runs", "then": "it fails with BAD_REQUEST and no account is created" },
+    { "given": "an IDO officer whose REVIEW_REQUEST switch is turned off", "when": "they try to recommend a request", "then": "the call fails with the permission message while their queue still lists the request" }
+  ],
+
+  "edge_cases": [
+    "The self-guard is the only thing standing between an admin and a locked system. It belongs on both role and status, and it must compare against ctx.user.id, never against a field in the payload.",
+    "createStaffAccount writes two rows — the user and the better-auth credential Account. If the second fails, the user exists and cannot sign in; wrap both in one transaction.",
+    "Permissions are seeded after creation. A failure there leaves a staff member who can sign in and do nothing; make the failure loud rather than swallowed.",
+    "There is only ever one ADMIN by default and the endpoint refuses to create more. If the seeded admin's password is lost there is no recovery path — say so in the runbook, or add a second seeded admin deliberately.",
+    "Revoking a permission does not remove a request from that person's queue; the row stays and the action fails. The review pages must therefore disable their controls on the permission too, not only on the stage.",
+    "Password hashing must use better-auth's own hashPassword, or the created account cannot sign in and the failure looks like a wrong password.",
+    "User.status defaults to inactive after spec 001, so createStaffAccount setting 'active' explicitly is load-bearing, not decoration."
+  ],
+
+  "out_of_scope": [
+    "Password reset for another user — the admin sets a temporary password at creation; there is no admin-triggered reset. Users use /forgot-password.",
+    "Deleting an account — status is the switch. A deletion would orphan requests, audit logs and signatures.",
+    "Creating a second ADMIN — deliberately not possible through the UI.",
+    "Bulk import or CSV — a handful of staff accounts is the whole scale.",
+    "An admin view of requests — an admin manages accounts and reads no request. This is enforced in spec 006 and is not softened here.",
+    "Audit logging of admin actions — the AuditLog is per request; admin actions are logged only to the application logger."
+  ]
+}

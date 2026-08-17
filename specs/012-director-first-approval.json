@@ -1,0 +1,261 @@
+{
+  "spec_number": 12,
+  "spec_title": "Director First Approval",
+  "feature_name": "director-review",
+  "description": "The Campus Director's first pass. Approving stamps their signature and sends the request to the IDO Chairperson for the final review; rejecting stops it. The Director may approve while the budget stage is still open, which ends that stage without a budget approval.",
+  "depends_on": [1, 3, 9, 10, 11],
+
+  "source_reference": {
+    "pages": ["IRMS-old/src/routes/_authenticated/requests/$requestId/director-review.tsx"],
+    "files": [
+      "IRMS-old/src/features/director-review/components/DirectorActionButtons.tsx",
+      "IRMS-old/src/features/director-review/validations/schema/director-approver.schema.ts",
+      "IRMS-old/src/integrations/trpc/routers/request.router.ts (approveByDirector, rejectByDirector)"
+    ],
+    "docs": ["IRMS-old/flows/04-director-first-approval.md", "IRMS-old/TASKS.md (director + budget concurrent approval)"]
+  },
+
+  "flow": {
+    "actors": ["DIRECTOR"],
+    "happy_path": [
+      { "step": 1, "actor": "DIRECTOR", "action": "opens a request from the queue", "result": "the request read-only, the IDO decision, the budget officer's approval if there is one, the activity feed and the thread" },
+      { "step": 2, "actor": "DIRECTOR", "action": "presses Approve", "result": "directorSignatureUrl and directorSignedAt stamped, directorReviewStatus DIRECTOR_APPROVED, idoFinalStatus UNDER_IDO_FINAL_REVIEW, masterStatus UNDER_IDO_FINAL_REVIEW, and an APPROVED_BY_DIRECTOR audit log" },
+      { "step": 3, "actor": "system", "action": "moves it on", "result": "it leaves the Director's actionable set and appears in the IDO Chairperson's final-review queue" }
+    ],
+    "alternate_paths": [
+      { "name": "Reject", "trigger": "Reject with a required note", "result": "directorReviewStatus and masterStatus both DIRECTOR_REJECTED. Terminal" },
+      { "name": "Approving before the budget officer", "trigger": "directorReviewStatus is still UNDER_BUDGET_OFFICER_REVIEW", "result": "allowed — the approval goes through and the budget stage is over. This is the deliberate two-path rule" },
+      { "name": "Rejecting before the budget officer", "trigger": "the same state", "result": "NOT allowed — rejectByDirector requires exactly UNDER_DIRECTOR_REVIEW, so a request cannot be killed at a stage it has not reached" },
+      { "name": "No signature on profile", "trigger": "the director has never uploaded one", "result": "Approve is disabled with the reason, and the procedure refuses" },
+      { "name": "Already actioned", "trigger": "their own earlier approval", "result": "read-only, showing their signature and the date" }
+    ]
+  },
+
+  "database": {
+    "models": [
+      { "name": "Request", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] },
+      { "name": "AuditLog", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] }
+    ]
+  },
+
+  "trpc_procedures": [
+    {
+      "name": "approveByDirector",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "mutation",
+      "procedure": "roleProcedure('DIRECTOR')",
+      "input_schema": "src/features/director-review/validations/schema/director-approver.schema.ts (directorApproveSchema)",
+      "input": { "id": "string" },
+      "output": { "id": "string", "directorReviewStatus": "'DIRECTOR_APPROVED'", "idoFinalStatus": "'UNDER_IDO_FINAL_REVIEW'", "directorSignedAt": "string" },
+      "guards": ["roleProcedure('DIRECTOR')", "assertPermission(APPROVE_DIRECTOR)", "ctx.user.signatureUrl must be present", "directorReviewStatus must be UNDER_DIRECTOR_REVIEW **or** UNDER_BUDGET_OFFICER_REVIEW"],
+      "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.staffList.queryKey()", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()"],
+      "description": "The one guard in the system that accepts two states on purpose: the Director can approve whether or not the budget officer has. Stamps the signature, sets directorReviewStatus DIRECTOR_APPROVED, opens the IDO final stage, and moves masterStatus to UNDER_IDO_FINAL_REVIEW."
+    },
+    {
+      "name": "rejectByDirector",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "mutation",
+      "procedure": "roleProcedure('DIRECTOR')",
+      "input_schema": "src/features/director-review/validations/schema/director-approver.schema.ts (directorRejectSchema)",
+      "input": { "id": "string", "note": "string (required)" },
+      "output": { "id": "string", "directorReviewStatus": "'DIRECTOR_REJECTED'" },
+      "guards": ["roleProcedure('DIRECTOR')", "assertPermission(APPROVE_DIRECTOR)", "directorReviewStatus must be exactly UNDER_DIRECTOR_REVIEW"],
+      "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.staffList.queryKey()", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()"],
+      "description": "Sets directorReviewStatus and masterStatus to DIRECTOR_REJECTED. Narrower than the approval on purpose — see the flow note."
+    }
+  ],
+
+  "frontend": {
+    "pages": [
+      {
+        "name": "DirectorReviewPage",
+        "route_file": "src/routes/_authenticated/requests/$requestId/director-review.tsx",
+        "breadcrumb": "Director Review",
+        "main_width": "wide",
+        "role": "DIRECTOR",
+        "layout": "AppLayout (frame, from _authenticated.tsx) — page renders AppPageHeader + content only",
+        "page_header": { "title": "Director Review", "subtitle": "Approve the recommended request, or reject it.", "action": "AppButton — View PDF, new tab" },
+        "components": [
+          {
+            "name": "RequestForm",
+            "file": "src/features/request-form/components/RequestForm.tsx",
+            "type": "form",
+            "lab_components": ["AppReadOnlyField", "AppCard", "AppChip", "AppStepper"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md. Reused from spec 005 with forceReadOnly.",
+            "props": ["mode: 'edit'", "forceReadOnly", "defaultValues", "masterStatus", "idoEvaluationStatus", "processor", "requestId"],
+            "description": "Read-only."
+          },
+          {
+            "name": "ApprovalTrail",
+            "file": "src/features/director-review/components/ApprovalTrail.tsx",
+            "type": "card",
+            "lab_components": ["AppCard", "AppList", "AppChip"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md.",
+            "props": ["request: Pick<Request,'finalTitle'|'reference'|'approverNote'|'processor'|'budgetOfficerSignatureUrl'|'budgetOfficerSignedAt'>"],
+            "description": "What IDO recommended and whether the budget officer has signed. When they have not, it says so explicitly — the Director is entitled to know they are approving ahead of the budget check, not left to infer it."
+          },
+          {
+            "name": "DirectorActionButtons",
+            "file": "src/features/director-review/components/DirectorActionButtons.tsx",
+            "type": "widget",
+            "lab_components": ["AppCard", "AppButton", "AppDialog", "AppModal", "AppTextArea", "AppAlert", "AppToast"],
+            "heroui_components": [],
+            "heroui_note": "None. AppDialog confirms the approval, AppModal carries the rejection note.",
+            "props": ["requestId: string", "directorReviewStatus: string | null", "hasSignature: boolean", "canApprove: boolean", "isBudgetPending: boolean"],
+            "description": "Approve and Reject. Reject is hidden while directorReviewStatus is UNDER_BUDGET_OFFICER_REVIEW, because the server would refuse it. The approval dialog says whether the budget officer has signed yet."
+          },
+          {
+            "name": "RequestActivityFeed",
+            "file": "src/features/request-detail/components/RequestActivityFeed.tsx",
+            "type": "list",
+            "lab_components": ["AppTimeline"],
+            "heroui_components": [],
+            "heroui_note": "None. Spec 006, unfiltered.",
+            "props": ["auditLogs: AuditLogEntry[]"],
+            "description": "The full history."
+          },
+          {
+            "name": "RequestCommentThread",
+            "file": "src/features/request-comments/components/RequestCommentThread.tsx",
+            "type": "widget",
+            "lab_components": ["AppCommentSection"],
+            "heroui_components": [],
+            "heroui_note": "None. Spec 008.",
+            "props": ["requestId: string"],
+            "description": "The conversation."
+          }
+        ],
+        "actions": [
+          { "name": "approveByDirector", "type": "button", "description": "Confirms, stamps the signature, moves the request to IDO final review", "triggers": "opens modal then calls tRPC procedure" },
+          { "name": "rejectByDirector", "type": "button", "description": "Opens a modal with a required note. Terminal. Hidden while the budget stage is still open.", "triggers": "opens modal then calls tRPC procedure" },
+          { "name": "viewPdf", "type": "link", "description": "Header action, new tab", "triggers": "navigates" }
+        ]
+      }
+    ],
+    "components": [],
+    "forms": [
+      {
+        "name": "DirectorRejectModal",
+        "file": "src/features/director-review/components/DirectorActionButtons.tsx",
+        "schema_file": "src/features/director-review/validations/schema/director-approver.schema.ts",
+        "method": "PATCH",
+        "server_fn": "request.rejectByDirector",
+        "success_message": "Request rejected.",
+        "error_message": "Failed to process the action. Please try again.",
+        "fields": [
+          { "name": "note", "type": "textarea", "label": "Reason", "placeholder": "Explain the decision — the requestor will read this", "required": true, "zod_rule": "z.string().min(1, 'Note is required')" }
+        ]
+      }
+    ],
+    "hooks": [
+      { "file": "src/features/director-review/hooks/use-director-review-queries.ts", "actor": "director", "type": "query", "invalidates": [], "note": "Reads request.getById." },
+      { "file": "src/features/director-review/hooks/use-director-review-mutations.ts", "actor": "director", "type": "mutation", "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.staffList.queryKey()", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()"], "note": "approve and reject, with isAnyPending." }
+    ],
+    "store": { "needed": false }
+  },
+
+  "requirements": {
+    "functional": [
+      "Approving accepts both UNDER_DIRECTOR_REVIEW and UNDER_BUDGET_OFFICER_REVIEW. This is the documented two-scenario rule: budget-then-director, or director alone.",
+      "Rejecting accepts only UNDER_DIRECTOR_REVIEW, so a request cannot be rejected at a stage it has not reached.",
+      "Approving requires a signature; the URL is copied onto the request so a later profile change cannot alter the record.",
+      "Rejecting does not require a signature.",
+      "Approving sets three columns at once — directorReviewStatus, idoFinalStatus and masterStatus — plus the signature pair, all in one transaction with the audit log.",
+      "masterStatus becomes UNDER_IDO_FINAL_REVIEW, which is the first time since submission that the requestor's view moves.",
+      "The approval trail states whether the budget officer has signed, so approving ahead of them is a visible choice.",
+      "Once approved, this page opens read-only; the Director's next involvement is the final approval page (spec 014), which the staff dashboard routes to."
+    ],
+    "authorization": [
+      "Route gate: assertAuthenticatedRoleFn with ['DIRECTOR'].",
+      "Server gate: roleProcedure('DIRECTOR') on both, then assertPermission(APPROVE_DIRECTOR), then the stage check, then — for approval — the signature check.",
+      "The stage check reads directorReviewStatus, never masterStatus, which cannot distinguish the budget sub-stage from the director sub-stage.",
+      "A BUDGET_OFFICER or IDO role calling either procedure gets FORBIDDEN.",
+      "The same DIRECTOR role also owns the final approval (spec 014); the two are separated by the column they read, not by the role."
+    ],
+    "ux": [
+      "The approval is a confirmation dialog naming what it does — stamps a signature and sends the request to the IDO Chairperson.",
+      "When the budget officer has not signed, the dialog says so plainly rather than leaving the Director to notice an absence.",
+      "Reject is hidden, not disabled, while the budget stage is open — a disabled control invites a search for the missing precondition, and here there is nothing the Director can do to enable it.",
+      "A missing signature is explained on the page with a link to the profile before an attempt is made.",
+      "Both controls are disabled while either mutation is in flight."
+    ]
+  },
+
+  "validations": {
+    "schemas": [
+      {
+        "file": "src/features/director-review/validations/schema/director-approver.schema.ts",
+        "used_by": ["DirectorActionButtons", "approveByDirector", "rejectByDirector"],
+        "rules": [
+          { "field": "directorApproveSchema.id", "zod_rule": "z.string().min(1)" },
+          { "field": "directorRejectSchema.note", "zod_rule": "z.string().min(1, 'Note is required')" }
+        ]
+      }
+    ],
+    "server_guards": [
+      { "procedure": "request.approveByDirector", "guard": "roleProcedure('DIRECTOR')", "error": "FORBIDDEN — Insufficient permissions" },
+      { "procedure": "request.approveByDirector", "guard": "assertPermission(APPROVE_DIRECTOR)", "error": "FORBIDDEN — You don't have permission to perform this action" },
+      { "procedure": "request.approveByDirector", "guard": "ctx.user.signatureUrl is present", "error": "FORBIDDEN — Your profile is missing a signature. Please complete your profile before approving." },
+      { "procedure": "request.approveByDirector", "guard": "directorReviewStatus is UNDER_DIRECTOR_REVIEW or UNDER_BUDGET_OFFICER_REVIEW", "error": "FORBIDDEN — This request is not at the director review stage" },
+      { "procedure": "request.rejectByDirector", "guard": "directorReviewStatus is exactly UNDER_DIRECTOR_REVIEW", "error": "FORBIDDEN — This request is not at the director review stage" }
+    ]
+  },
+
+  "test_requirements": [
+    {
+      "file": "src/integrations/trpc/routers/request.director-review.test.ts",
+      "type": "unit",
+      "covers": [
+        "approve at UNDER_DIRECTOR_REVIEW stamps the signature and opens the IDO final stage",
+        "approve at UNDER_BUDGET_OFFICER_REVIEW is ALLOWED and ends the budget stage",
+        "reject at UNDER_BUDGET_OFFICER_REVIEW is FORBIDDEN",
+        "reject at UNDER_DIRECTOR_REVIEW sets both statuses to DIRECTOR_REJECTED",
+        "approve with no signatureUrl is FORBIDDEN and writes nothing",
+        "approve sets masterStatus UNDER_IDO_FINAL_REVIEW",
+        "a BUDGET_OFFICER calling approveByDirector gets FORBIDDEN",
+        "an IDO_CHAIRPERSON calling approveByDirector gets FORBIDDEN",
+        "a director without APPROVE_DIRECTOR gets FORBIDDEN",
+        "approving twice is FORBIDDEN the second time",
+        "each successful action writes exactly one audit log in the same transaction"
+      ]
+    },
+    {
+      "file": "cypress/e2e/director-review.cy.ts",
+      "type": "e2e",
+      "covers": [
+        "approving moves the request into the chairperson's final-review queue",
+        "the approval dialog says whether the budget officer has signed",
+        "Reject is not offered while the budget stage is still open",
+        "a director with no signature sees Approve disabled with a link to the profile"
+      ]
+    }
+  ],
+
+  "acceptance_criteria": [
+    { "given": "a request at directorReviewStatus UNDER_DIRECTOR_REVIEW and a director with a signature", "when": "they approve", "then": "the signature is stamped, directorReviewStatus is DIRECTOR_APPROVED, idoFinalStatus and masterStatus are UNDER_IDO_FINAL_REVIEW" },
+    { "given": "a request still at UNDER_BUDGET_OFFICER_REVIEW", "when": "the director approves", "then": "the approval succeeds and the budget officer's page becomes read-only" },
+    { "given": "the same request", "when": "the director tries to reject it", "then": "the control is not offered and a crafted call returns FORBIDDEN" },
+    { "given": "a director whose profile has no signature", "when": "they call approveByDirector", "then": "the call fails with the missing-signature message and nothing is written" },
+    { "given": "an approved request", "when": "the IDO Chairperson opens their dashboard", "then": "it appears in their queue and routes to /final-review" },
+    { "given": "a BUDGET_OFFICER", "when": "they call request.approveByDirector", "then": "the call fails with FORBIDDEN" }
+  ],
+
+  "edge_cases": [
+    "The asymmetry between approve (two states) and reject (one state) is deliberate and is the single most fragile rule in the workflow. Any refactor that unifies the two guards breaks the documented behaviour.",
+    "A director approving while the budget officer is mid-approval is a genuine race: whichever transaction commits first wins, and the loser's guard then refuses. Both outcomes are correct; the UI must show the refusal as 'already moved on', not as an error.",
+    "The signature URL is copied, not joined — an already-stamped approval must not change when the director updates their profile picture of a signature.",
+    "Approving writes five columns; all of them plus the audit log belong in one transaction, or a partial failure leaves a signed request that never moved.",
+    "The Director appears twice in the workflow with the same role. resolveReviewRoute (spec 009) keys on finalDirectorStatus to tell the two apart, and this page must open read-only for a request that has reached the final stage rather than trying to act on it.",
+    "masterStatus moves here for the first time since submission; the requestor's counters and list must be invalidated even though nothing about the requestor changed."
+  ],
+
+  "out_of_scope": [
+    "The Director's FINAL approval — spec 014, a different page with a different guard.",
+    "The budget stage — spec 011.",
+    "The IDO Chairperson's final review — spec 013.",
+    "Delegation or an acting director — there is one DIRECTOR role and no delegation model."
+  ]
+}
+

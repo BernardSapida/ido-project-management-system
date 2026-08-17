@@ -1,0 +1,262 @@
+{
+  "spec_number": 11,
+  "spec_title": "Budget Officer Review",
+  "feature_name": "budget-review",
+  "description": "The conditional stage. A budget officer confirms the request has a PPMP allocation, stamps their signature and passes it to the Director — or rejects it, which is terminal. The stage exists only when a BUDGET_OFFICER account exists, and the Director can approve past it.",
+  "depends_on": [1, 3, 9, 10],
+
+  "source_reference": {
+    "pages": ["IRMS-old/src/routes/_authenticated/requests/$requestId/budget-review.tsx"],
+    "files": [
+      "IRMS-old/src/features/budget-review/components/BudgetActionButtons.tsx",
+      "IRMS-old/src/features/budget-review/validations/schema/budget-approver.schema.ts",
+      "IRMS-old/src/integrations/trpc/routers/request.router.ts (approveBudget, rejectBudget)"
+    ],
+    "docs": ["IRMS-old/flows/03-budget-officer-review.md", "IRMS-old/TASKS.md (director + budget concurrent approval)"]
+  },
+
+  "flow": {
+    "actors": ["BUDGET_OFFICER"],
+    "happy_path": [
+      { "step": 1, "actor": "BUDGET_OFFICER", "action": "opens a recommended request from the queue", "result": "the request read-only, the IDO's final title and note, the activity feed and the comment thread" },
+      { "step": 2, "actor": "BUDGET_OFFICER", "action": "checks the budget / PPMP allocation", "result": "outside the system — the app records the decision, not the working" },
+      { "step": 3, "actor": "BUDGET_OFFICER", "action": "presses Approve", "result": "budgetOfficerSignatureUrl and budgetOfficerSignedAt are stamped from their profile, directorReviewStatus moves to UNDER_DIRECTOR_REVIEW, and an APPROVED_BY_BUDGET_OFFICER audit log is written" },
+      { "step": 4, "actor": "system", "action": "leaves masterStatus alone", "result": "it stays UNDER_DIRECTOR_REVIEW throughout — the requestor never sees the budget sub-stage" }
+    ],
+    "alternate_paths": [
+      { "name": "Reject", "trigger": "Reject with a required note", "result": "directorReviewStatus and masterStatus both BUDGET_OFFICER_REJECTED. Terminal" },
+      { "name": "Director approved first", "trigger": "the Director approves while directorReviewStatus is still UNDER_BUDGET_OFFICER_REVIEW", "result": "the request moves to IDO final review and the budget approval is no longer required; this page opens read-only and says so" },
+      { "name": "No signature on profile", "trigger": "the officer has never uploaded one", "result": "Approve is disabled with the reason, and approveBudget refuses server-side" },
+      { "name": "Already actioned", "trigger": "the officer's own earlier approval", "result": "read-only, showing their signature and when it was stamped" },
+      { "name": "APPROVE_BUDGET revoked", "trigger": "an admin removed the grant", "result": "both controls disabled with a reason and both procedures refuse" }
+    ]
+  },
+
+  "database": {
+    "models": [
+      { "name": "Request", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] },
+      { "name": "AuditLog", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] }
+    ]
+  },
+
+  "trpc_procedures": [
+    {
+      "name": "approveBudget",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "mutation",
+      "procedure": "roleProcedure('BUDGET_OFFICER')",
+      "input_schema": "src/features/budget-review/validations/schema/budget-approver.schema.ts (budgetApproveSchema)",
+      "input": { "id": "string" },
+      "output": { "id": "string", "directorReviewStatus": "'UNDER_DIRECTOR_REVIEW'", "budgetOfficerSignedAt": "string" },
+      "guards": ["roleProcedure('BUDGET_OFFICER')", "assertPermission(APPROVE_BUDGET)", "ctx.user.signatureUrl must be present", "directorReviewStatus must be exactly UNDER_BUDGET_OFFICER_REVIEW"],
+      "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.staffList.queryKey()", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()"],
+      "description": "Stamps the officer's signature URL and the timestamp, then advances directorReviewStatus to UNDER_DIRECTOR_REVIEW. masterStatus is deliberately untouched. The audit log records fromStatus and toStatus as the same masterStatus, because this stage is internal."
+    },
+    {
+      "name": "rejectBudget",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "mutation",
+      "procedure": "roleProcedure('BUDGET_OFFICER')",
+      "input_schema": "src/features/budget-review/validations/schema/budget-approver.schema.ts (budgetRejectSchema)",
+      "input": { "id": "string", "note": "string (required)" },
+      "output": { "id": "string", "directorReviewStatus": "'BUDGET_OFFICER_REJECTED'" },
+      "guards": ["roleProcedure('BUDGET_OFFICER')", "assertPermission(APPROVE_BUDGET)", "directorReviewStatus must be UNDER_BUDGET_OFFICER_REVIEW"],
+      "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.staffList.queryKey()", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()"],
+      "description": "Sets both directorReviewStatus and masterStatus to BUDGET_OFFICER_REJECTED — a rejection is visible to the requestor, unlike an approval at this stage. No signature is required to reject."
+    }
+  ],
+
+  "frontend": {
+    "pages": [
+      {
+        "name": "BudgetReviewPage",
+        "route_file": "src/routes/_authenticated/requests/$requestId/budget-review.tsx",
+        "breadcrumb": "Budget Review",
+        "main_width": "wide",
+        "role": "BUDGET_OFFICER",
+        "layout": "AppLayout (frame, from _authenticated.tsx) — page renders AppPageHeader + content only",
+        "page_header": { "title": "Budget Review", "subtitle": "Confirm the PPMP allocation, then approve or reject.", "action": "AppButton — View PDF, new tab" },
+        "components": [
+          {
+            "name": "RequestForm",
+            "file": "src/features/request-form/components/RequestForm.tsx",
+            "type": "form",
+            "lab_components": ["AppReadOnlyField", "AppCard", "AppChip", "AppStepper"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md. Reused from spec 005 with forceReadOnly.",
+            "props": ["mode: 'edit'", "forceReadOnly", "defaultValues", "masterStatus", "idoEvaluationStatus", "processor", "requestId"],
+            "description": "Read-only."
+          },
+          {
+            "name": "IdoDecisionSummary",
+            "file": "src/features/budget-review/components/IdoDecisionSummary.tsx",
+            "type": "card",
+            "lab_components": ["AppCard", "AppReadOnlyField", "AppChip"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md.",
+            "props": ["finalTitle: string | null", "reference: string | null", "approverNote: string | null", "processor: string | null"],
+            "description": "What IDO decided and why, read-only. The budget officer's job starts from that decision, so it is on the page rather than buried in the activity feed."
+          },
+          {
+            "name": "BudgetActionButtons",
+            "file": "src/features/budget-review/components/BudgetActionButtons.tsx",
+            "type": "widget",
+            "lab_components": ["AppCard", "AppButton", "AppDialog", "AppModal", "AppTextArea", "AppAlert", "AppToast"],
+            "heroui_components": [],
+            "heroui_note": "None. AppDialog confirms the approval (it stamps a signature and cannot be undone); AppModal carries the rejection note.",
+            "props": ["requestId: string", "directorReviewStatus: string | null", "hasSignature: boolean", "canApprove: boolean"],
+            "description": "Approve and Reject. When hasSignature is false, Approve is disabled and an AppAlert links to /profile. When the stage has passed — including the case where the Director approved first — the card explains that instead of showing controls."
+          },
+          {
+            "name": "RequestActivityFeed",
+            "file": "src/features/request-detail/components/RequestActivityFeed.tsx",
+            "type": "list",
+            "lab_components": ["AppTimeline"],
+            "heroui_components": [],
+            "heroui_note": "None. Spec 006, unfiltered.",
+            "props": ["auditLogs: AuditLogEntry[]"],
+            "description": "The full history."
+          },
+          {
+            "name": "RequestCommentThread",
+            "file": "src/features/request-comments/components/RequestCommentThread.tsx",
+            "type": "widget",
+            "lab_components": ["AppCommentSection"],
+            "heroui_components": [],
+            "heroui_note": "None. Spec 008.",
+            "props": ["requestId: string"],
+            "description": "The conversation."
+          }
+        ],
+        "actions": [
+          { "name": "approveBudget", "type": "button", "description": "Confirms, then stamps the signature and advances the request", "triggers": "opens modal then calls tRPC procedure" },
+          { "name": "rejectBudget", "type": "button", "description": "Opens a modal with a required note. Terminal.", "triggers": "opens modal then calls tRPC procedure" },
+          { "name": "viewPdf", "type": "link", "description": "Header action, new tab", "triggers": "navigates" }
+        ]
+      }
+    ],
+    "components": [],
+    "forms": [
+      {
+        "name": "BudgetRejectModal",
+        "file": "src/features/budget-review/components/BudgetActionButtons.tsx",
+        "schema_file": "src/features/budget-review/validations/schema/budget-approver.schema.ts",
+        "method": "PATCH",
+        "server_fn": "request.rejectBudget",
+        "success_message": "Request rejected.",
+        "error_message": "Failed to process the action. Please try again.",
+        "fields": [
+          { "name": "note", "type": "textarea", "label": "Reason", "placeholder": "Explain the budget decision — the requestor will read this", "required": true, "zod_rule": "z.string().min(1, 'Note is required')" }
+        ]
+      }
+    ],
+    "hooks": [
+      { "file": "src/features/budget-review/hooks/use-budget-review-queries.ts", "actor": "budget", "type": "query", "invalidates": [], "note": "Reads request.getById." },
+      { "file": "src/features/budget-review/hooks/use-budget-review-mutations.ts", "actor": "budget", "type": "mutation", "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.staffList.queryKey()", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()"], "note": "approve and reject, with isAnyPending." }
+    ],
+    "store": { "needed": false }
+  },
+
+  "requirements": {
+    "functional": [
+      "The whole stage is conditional. If no BUDGET_OFFICER account exists, IDO's recommendation sets directorReviewStatus straight to UNDER_DIRECTOR_REVIEW and this page is never reached.",
+      "Approving does NOT change masterStatus. The requestor's view says 'Director Review' from the moment IDO recommends until the director acts.",
+      "Approving requires a signature on the officer's profile; the URL is copied onto the request so the record keeps the signature that was used, not a pointer that a later profile edit would change.",
+      "Rejecting does not require a signature — a refusal is not a signed instrument.",
+      "Rejecting sets masterStatus too, because the requestor must see that the request stopped and why.",
+      "The Director may approve while this stage is still open, which ends the budget stage without an approval. This page must then open read-only and say the request has already moved on.",
+      "The IDO's decision — final title, reference, note, processor — is shown on the page.",
+      "budgetOfficerSignedAt is what the signature summary on the final approval page (spec 014) reads."
+    ],
+    "authorization": [
+      "Route gate: assertAuthenticatedRoleFn with ['BUDGET_OFFICER'].",
+      "Server gate: roleProcedure('BUDGET_OFFICER') on both procedures, then assertPermission(APPROVE_BUDGET), then the stage check.",
+      "The stage check reads directorReviewStatus, not masterStatus — masterStatus is UNDER_DIRECTOR_REVIEW for both the budget and the director sub-stages and cannot distinguish them.",
+      "An IDO officer or the Director calling approveBudget gets FORBIDDEN, even though both are staff and both can read the request.",
+      "The signature check is server-side. Disabling the button is a courtesy; the procedure is the gate."
+    ],
+    "ux": [
+      "The approval is a confirmation dialog, not a bare button — it stamps a signature onto a document and cannot be undone.",
+      "A missing signature is explained on the page with a link to the profile, before the officer tries and fails.",
+      "The stage's read-only state names the reason: 'Already approved by you on 3 March' or 'The Campus Director has already approved this request'.",
+      "Reject is visually secondary and always asks for a reason first.",
+      "The IDO decision block sits above the actions, because it is the input to the decision being made."
+    ]
+  },
+
+  "validations": {
+    "schemas": [
+      {
+        "file": "src/features/budget-review/validations/schema/budget-approver.schema.ts",
+        "used_by": ["BudgetActionButtons", "approveBudget", "rejectBudget"],
+        "rules": [
+          { "field": "budgetApproveSchema.id", "zod_rule": "z.string().min(1)" },
+          { "field": "budgetRejectSchema.note", "zod_rule": "z.string().min(1, 'Note is required')" }
+        ]
+      }
+    ],
+    "server_guards": [
+      { "procedure": "request.approveBudget", "guard": "roleProcedure('BUDGET_OFFICER')", "error": "FORBIDDEN — Insufficient permissions" },
+      { "procedure": "request.approveBudget", "guard": "assertPermission(APPROVE_BUDGET)", "error": "FORBIDDEN — You don't have permission to perform this action" },
+      { "procedure": "request.approveBudget", "guard": "ctx.user.signatureUrl is present", "error": "FORBIDDEN — Your profile is missing a signature. Please complete your profile before approving." },
+      { "procedure": "request.approveBudget", "guard": "directorReviewStatus === 'UNDER_BUDGET_OFFICER_REVIEW'", "error": "FORBIDDEN — This request is not at the budget review stage" },
+      { "procedure": "request.rejectBudget", "guard": "role, permission and the same stage check; no signature required", "error": "FORBIDDEN — as above" }
+    ]
+  },
+
+  "test_requirements": [
+    {
+      "file": "src/integrations/trpc/routers/request.budget-review.test.ts",
+      "type": "unit",
+      "covers": [
+        "approve stamps budgetOfficerSignatureUrl and budgetOfficerSignedAt from the session user",
+        "approve advances directorReviewStatus to UNDER_DIRECTOR_REVIEW and leaves masterStatus unchanged",
+        "approve by an officer with no signatureUrl is FORBIDDEN and writes nothing",
+        "approve when directorReviewStatus is already UNDER_DIRECTOR_REVIEW is FORBIDDEN — the director approved first",
+        "reject sets both directorReviewStatus and masterStatus to BUDGET_OFFICER_REJECTED",
+        "reject with no note fails validation",
+        "reject succeeds without a signature",
+        "a DIRECTOR calling approveBudget gets FORBIDDEN",
+        "an IDO_OFFICER calling approveBudget gets FORBIDDEN",
+        "an officer without APPROVE_BUDGET gets FORBIDDEN",
+        "every successful action writes exactly one audit log in the same transaction"
+      ]
+    },
+    {
+      "file": "cypress/e2e/budget-review.cy.ts",
+      "type": "e2e",
+      "covers": [
+        "an officer with no signature sees Approve disabled and a link to the profile",
+        "approving moves the request into the director's queue",
+        "a request the director already approved opens read-only with an explanation",
+        "rejecting shows the reason on the requestor's detail page"
+      ]
+    }
+  ],
+
+  "acceptance_criteria": [
+    { "given": "a request at UNDER_BUDGET_OFFICER_REVIEW and an officer with a signature", "when": "they approve", "then": "the signature and timestamp are stamped, directorReviewStatus becomes UNDER_DIRECTOR_REVIEW, and masterStatus is still UNDER_DIRECTOR_REVIEW" },
+    { "given": "an officer whose profile has no signature", "when": "they open the page", "then": "Approve is disabled with a link to the profile, and a crafted call returns the missing-signature error" },
+    { "given": "a request the Campus Director has already approved", "when": "the budget officer opens it", "then": "the page is read-only and says the director has already approved it" },
+    { "given": "a request being rejected", "when": "the officer submits with an empty note", "then": "'Note is required' is shown and no call is made" },
+    { "given": "a rejected request", "when": "the requestor opens their detail page", "then": "the status reads Budget Rejected and the officer's reason is shown" },
+    { "given": "an IDO_OFFICER", "when": "they call request.approveBudget", "then": "the call fails with FORBIDDEN" }
+  ],
+
+  "edge_cases": [
+    "The two-approver race is real and intended: budget-then-director, or director alone. The guards encode it — approveBudget requires exactly UNDER_BUDGET_OFFICER_REVIEW, while approveByDirector (spec 012) accepts either that or UNDER_DIRECTOR_REVIEW. Changing either one breaks the pair.",
+    "The signature URL is COPIED onto the request. A later profile change must not alter an already-stamped approval, so never join to the user for a stamped signature.",
+    "Approving leaves masterStatus alone, so nothing in the requestor's view changes — the invalidation of myList and mySummary is still needed for the staff queue counts, but do not 'fix' the missing status change.",
+    "A budget officer account created after a request was routed straight to the director does not pull it back; the routing was decided at recommendation time.",
+    "The stage check must read directorReviewStatus. Reading masterStatus makes the budget and director stages indistinguishable and lets an officer act after the director has finished.",
+    "budgetOfficerSignedAt with no corresponding masterStatus change means this stage is invisible in the requestor's activity feed — that is deliberate, but it also means a rejection is the only budget event they ever see."
+  ],
+
+  "out_of_scope": [
+    "The actual budget or PPMP figures — the system records a decision, not an allocation. There is no amount field and none is being added.",
+    "The director's approvals — specs 012 and 014.",
+    "Reassigning a request to a different budget officer — there is no assignment model.",
+    "Any budget stage after the director acts — once past, it is gone."
+  ]
+}
+

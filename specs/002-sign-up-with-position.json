@@ -1,0 +1,219 @@
+{
+  "spec_number": 2,
+  "spec_title": "Sign-up with Position",
+  "feature_name": "auth-signup",
+  "description": "Extends the template's sign-up page with the requestor's Position, which the printed form needs and which decides which representative row the requestor's signature lands on in the PDF. Everyone who self-registers is a USER; staff accounts are created by an admin (spec 017).",
+  "depends_on": [1],
+
+  "source_reference": {
+    "pages": ["IRMS-old/src/routes/sign-up.tsx"],
+    "files": [
+      "IRMS-old/src/features/auth-signup/components/SignUpForm.tsx",
+      "IRMS-old/src/features/auth-signup/validations/schema/sign-up.schema.ts",
+      "IRMS-old/src/features/auth-signup/hooks/use-user-auth-signup-mutations.ts",
+      "IRMS-old/src/integrations/trpc/routers/auth-signup.router.ts"
+    ],
+    "docs": ["IRMS-old/flows/01-user-submit-request.md (Step 1)"]
+  },
+
+  "flow": {
+    "actors": ["anonymous"],
+    "happy_path": [
+      { "step": 1, "actor": "anonymous", "action": "opens /sign-up", "result": "an AppAuthPageShell with first name, last name, email, position, password and confirm password" },
+      { "step": 2, "actor": "anonymous", "action": "picks a Position from the five options", "result": "the value is stored on the user and later pre-fills the request form's Position field" },
+      { "step": 3, "actor": "anonymous", "action": "submits", "result": "better-auth creates the account with role USER, the four USER permissions are granted, and they are signed in" },
+      { "step": 4, "actor": "USER", "action": "is redirected", "result": "to /profile, because profileComplete is false until a signature is uploaded (spec 003)" }
+    ],
+    "alternate_paths": [
+      { "name": "Email already registered", "trigger": "the email exists", "result": "CONFLICT — 'An account with this email already exists.' shown on the email field, not as a toast alone" },
+      { "name": "Passwords differ", "trigger": "confirmPassword !== password", "result": "the message lands on confirmPassword, client-side, before any request is made" },
+      { "name": "No position chosen", "trigger": "the select is left empty", "result": "'Please select a position' — position is required for a USER because the PDF cannot be filled without it" }
+    ]
+  },
+
+  "database": {
+    "models": [
+      {
+        "name": "User",
+        "action": "reuse",
+        "prisma_note": "No schema change — position, role and profileComplete were added in spec 001",
+        "fields": []
+      }
+    ]
+  },
+
+  "trpc_procedures": [
+    {
+      "name": "signUp",
+      "router": "src/integrations/trpc/routers/auth-signup.router.ts",
+      "type": "mutation",
+      "procedure": "publicProcedure",
+      "input_schema": "src/features/auth-signup/validations/schema/sign-up.schema.ts",
+      "input": { "firstname": "string", "lastname": "string", "email": "string", "position": "PositionEnum", "password": "string" },
+      "output": { "id": "string", "email": "string", "role": "\"USER\"", "position": "string", "profileComplete": "false" },
+      "guards": ["public — this is the registration endpoint", "role is hardcoded to USER and never read from input"],
+      "invalidates": [],
+      "description": "Calls auth.api.signUpEmail with name composed from firstname + lastname, then seedUserPermissions(id, 'USER', id). confirmPassword is stripped by a schema .transform before it reaches the handler so it can never be persisted or logged."
+    }
+  ],
+
+  "frontend": {
+    "pages": [
+      {
+        "name": "SignUpPage",
+        "route_file": "src/routes/sign-up.tsx",
+        "breadcrumb": null,
+        "main_width": "prose",
+        "role": "all",
+        "layout": "AppAuthPageShell — a public route, outside the _authenticated frame, so AppLayout is not involved",
+        "page_header": { "title": "Create your account", "subtitle": "File and track building design requests.", "action": null },
+        "components": [
+          {
+            "name": "SignUpForm",
+            "file": "src/features/auth-signup/components/SignUpForm.tsx",
+            "type": "form",
+            "lab_components": ["AppAuthPageShell", "AppInputGroup", "AppSelect", "AppPasswordField", "AppButton", "AppAlert", "AppToast"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md — there is no AppTypography. Everything else is covered by a lab component; AppPasswordField supplies the reveal toggle the old hand-rolled field lacked.",
+            "props": [],
+            "description": "Replaces the old SignUpForm's raw TextField/Select markup. The two password fields both use AppPasswordField."
+          }
+        ],
+        "actions": [
+          { "name": "submitSignUp", "type": "button", "description": "Validates then registers, signs in and redirects to /profile", "triggers": "calls tRPC procedure" },
+          { "name": "goToSignIn", "type": "link", "description": "For an existing account", "triggers": "navigates" }
+        ]
+      }
+    ],
+    "components": [],
+    "forms": [
+      {
+        "name": "SignUpForm",
+        "file": "src/features/auth-signup/components/SignUpForm.tsx",
+        "schema_file": "src/features/auth-signup/validations/schema/sign-up.schema.ts",
+        "method": "POST",
+        "server_fn": "authSignup.signUp",
+        "success_message": "Account created. Complete your profile to continue.",
+        "error_message": "Signup failed. Please try again.",
+        "fields": [
+          { "name": "firstname", "type": "text", "label": "First name", "placeholder": "Juan", "required": true, "zod_rule": "z.string().min(1, 'First name is required').min(2, 'At least 2 characters')" },
+          { "name": "lastname", "type": "text", "label": "Last name", "placeholder": "Dela Cruz", "required": true, "zod_rule": "z.string().min(1, 'Last name is required').min(2, 'At least 2 characters')" },
+          { "name": "email", "type": "text", "label": "Email", "placeholder": "you@tup.edu.ph", "required": true, "zod_rule": "z.string().min(1, 'Email is required').email('Enter a valid email')" },
+          { "name": "position", "type": "dropdown", "label": "Position", "placeholder": "Select position", "required": true, "note": "Five options: Student Representative, Administration Representative, Faculty Representative, Alumni Representative, Department Head. Shared constant POSITION_OPTIONS.", "zod_rule": "z.enum(['STUDENT_REPRESENTATIVE','ADMINISTRATION_REPRESENTATIVE','FACULTY_REPRESENTATIVE','ALUMNI_REPRESENTATIVE','DEPARTMENT_HEAD'], { message: 'Please select a position' })" },
+          { "name": "password", "type": "password", "label": "Password", "placeholder": "At least 8 characters", "required": true, "zod_rule": "z.string().min(1, 'Password is required').min(8, 'At least 8 characters')" },
+          { "name": "confirmPassword", "type": "password", "label": "Confirm password", "placeholder": "Re-enter your password", "required": true, "zod_rule": "z.string().min(1, 'Please confirm your password')" }
+        ]
+      }
+    ],
+    "hooks": [
+      {
+        "file": "src/features/auth-signup/hooks/use-user-auth-signup-mutations.ts",
+        "actor": "user",
+        "type": "mutation",
+        "invalidates": [],
+        "note": "On success calls authClient.signIn.email with the same credentials, then navigates to /profile."
+      }
+    ],
+    "store": { "needed": false }
+  },
+
+  "requirements": {
+    "functional": [
+      "POSITION_OPTIONS is defined once, in src/features/request-form/lib/request-options.ts (spec 005), and imported here — the old repo had the same five options copied into three files and they must not drift.",
+      "name is composed server-side as `${firstname} ${lastname}` and is never a form field.",
+      "role is hardcoded to 'USER' in the router and is not part of the input schema, so a crafted request cannot ask for DIRECTOR.",
+      "seedUserPermissions runs after the account is created, granting the four USER actions.",
+      "profileComplete starts false, which is what sends the new user to /profile.",
+      "confirmPassword is removed by a Zod .transform before the handler runs."
+    ],
+    "authorization": [
+      "publicProcedure by necessity — this is registration.",
+      "The role is server-assigned. No input field, no header and no query parameter may influence it.",
+      "Self sign-up creates a requestor only. Every staff account comes from the admin page (spec 017)."
+    ],
+    "ux": [
+      "The email conflict message renders on the email field, not only as a toast — a toast the user has scrolled past is not an error message.",
+      "The submit button shows isPending while the mutation runs and is disabled for the duration, so a double click cannot create two attempts.",
+      "Password fields use AppPasswordField's reveal toggle; a user typing a password they cannot see is the commonest cause of the mismatch error.",
+      "Position's helper text says why it is asked for: it appears on the printed request form."
+    ]
+  },
+
+  "validations": {
+    "schemas": [
+      {
+        "file": "src/features/auth-signup/validations/schema/sign-up.schema.ts",
+        "used_by": ["SignUpForm", "authSignup.signUp"],
+        "rules": [
+          { "field": "firstname", "zod_rule": "z.string().min(1, 'First name is required').min(2, 'At least 2 characters')" },
+          { "field": "lastname", "zod_rule": "z.string().min(1, 'Last name is required').min(2, 'At least 2 characters')" },
+          { "field": "email", "zod_rule": "z.string().min(1, 'Email is required').email('Enter a valid email')" },
+          { "field": "position", "zod_rule": "z.enum([...POSITION_VALUES], { message: 'Please select a position' })" },
+          { "field": "password", "zod_rule": "z.string().min(1, 'Password is required').min(8, 'At least 8 characters')" },
+          { "field": "confirmPassword", "zod_rule": "z.string().min(1, 'Please confirm your password')" },
+          { "field": "form", "zod_rule": ".refine((d) => d.password === d.confirmPassword, { message: 'Passwords do not match', path: ['confirmPassword'] })" }
+        ]
+      }
+    ],
+    "server_guards": [
+      { "procedure": "authSignup.signUp", "guard": "email is lowercased and checked for an existing user before creation", "error": "CONFLICT — An account with this email already exists." },
+      { "procedure": "authSignup.signUp", "guard": "role is written as the literal 'USER'", "error": "n/a — input cannot carry a role at all" },
+      { "procedure": "authSignup.signUp", "guard": "the same SignUpSchema validates the input server-side; the client copy is a convenience, not the gate", "error": "BAD_REQUEST — Zod issues" }
+    ]
+  },
+
+  "test_requirements": [
+    {
+      "file": "src/features/auth-signup/validations/schema/sign-up.schema.test.ts",
+      "type": "unit",
+      "covers": [
+        "mismatched passwords fail with the message on confirmPassword",
+        "a 7-character password fails",
+        "an unlisted position value fails",
+        "a malformed email fails",
+        "a valid payload strips confirmPassword after transform"
+      ]
+    },
+    {
+      "file": "src/integrations/trpc/routers/auth-signup.router.test.ts",
+      "type": "unit",
+      "covers": [
+        "a successful sign-up writes role USER even when the input object carries role: 'DIRECTOR'",
+        "a duplicate email returns CONFLICT and creates no account",
+        "seedUserPermissions is called with 'USER' and grants exactly four actions",
+        "profileComplete is false on the created user"
+      ]
+    },
+    {
+      "file": "cypress/e2e/sign-up.cy.ts",
+      "type": "e2e",
+      "covers": [
+        "a new user signs up and lands on /profile",
+        "submitting with an empty position shows the position error and makes no network call"
+      ]
+    }
+  ],
+
+  "acceptance_criteria": [
+    { "given": "an unused email and a valid form", "when": "the user submits", "then": "the account is created with role USER, position stored, profileComplete false, and the browser lands on /profile" },
+    { "given": "an email that already has an account", "when": "the user submits", "then": "the form shows 'An account with this email already exists.' on the email field and no second account is created" },
+    { "given": "password 'abcd1234' and confirm 'abcd12345'", "when": "the user blurs the confirm field", "then": "'Passwords do not match' appears under confirmPassword and the submit button stays enabled but the submit is blocked" },
+    { "given": "a crafted tRPC call carrying role: 'ADMIN'", "when": "authSignup.signUp runs", "then": "the created user's role is USER" },
+    { "given": "a freshly signed-up user", "when": "they query their permissions", "then": "they hold CREATE_REQUEST, SUBMIT_REQUEST, ADD_COMMENT and SUBMIT_CSM and nothing else" }
+  ],
+
+  "edge_cases": [
+    "Email is lowercased before the uniqueness check and before creation, or 'A@x.com' and 'a@x.com' become two accounts.",
+    "better-auth's additionalFields must declare position, role, signatureUrl and profileComplete, or signUpEmail silently drops them.",
+    "If seedUserPermissions fails after the account is created the user exists with zero permissions and every action 403s — wrap both in one transaction or make the failure loud rather than swallowed.",
+    "sendOnSignUp for email verification stays false and there is no mail provider; a self-registered user is emailVerified false and assertAuthenticatedFn redirects them to /verify-email, which they cannot escape. Decide deliberately: either wire a provider or mark USER sign-ups verified, and write down which.",
+    "User.status defaults to inactive after spec 001 — sign-up must set 'active' explicitly or every new account is locked out by protectedProcedure."
+  ],
+
+  "out_of_scope": [
+    "Sign-in, forgot password and reset password — already in the template and unchanged.",
+    "Email verification delivery — see the edge case; a provider is a separate decision.",
+    "Staff account creation — spec 017.",
+    "Signature upload and the profileComplete gate — spec 003."
+  ]
+}

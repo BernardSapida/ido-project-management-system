@@ -1,0 +1,389 @@
+{
+  "spec_number": 1,
+  "spec_title": "Foundation — Schema, Roles, Permissions, Status Maps, Navigation",
+  "feature_name": "irms-core",
+  "description": "Establishes everything the rest of the migration stands on: the six-role enum, the user profile extensions, all request-lifecycle tables, the per-user permission grant table, the document-number generator, the status maps that name and colour every state, the role-aware sidebar entries, and the seeded accounts. No user-facing page ships here.",
+  "depends_on": [],
+
+  "source_reference": {
+    "pages": [],
+    "files": [
+      "IRMS-old/prisma/models/user.prisma",
+      "IRMS-old/prisma/models/request.prisma",
+      "IRMS-old/prisma/models/csm.prisma",
+      "IRMS-old/prisma/models/user-permission.prisma",
+      "IRMS-old/src/lib/permissions.ts",
+      "IRMS-old/src/lib/status-maps/request-status.ts",
+      "IRMS-old/src/config/navigation.config.ts",
+      "IRMS-old/src/integrations/trpc/routers/request.router.ts (generateDocumentNumber)"
+    ],
+    "docs": ["IRMS-old/flows/00-overview.md", "IRMS-old/accounts.md"]
+  },
+
+  "flow": {
+    "actors": ["ADMIN", "USER", "IDO_OFFICER", "IDO_CHAIRPERSON", "BUDGET_OFFICER", "DIRECTOR"],
+    "happy_path": [
+      { "step": 1, "actor": "system", "action": "prisma migrate runs the new models", "result": "Request, AuditLog, RequestComment, Csm, DocumentSequence, UserPermission exist; Role gains four staff values; User gains position, signatureUrl, profileComplete" },
+      { "step": 2, "actor": "system", "action": "prisma db seed runs", "result": "one active, email-verified account per role exists with role-default permissions granted" },
+      { "step": 3, "actor": "any", "action": "signs in", "result": "the sidebar shows only the destinations their role owns, and getDefaultRoute sends them to their landing page" },
+      { "step": 4, "actor": "USER", "action": "submits their first request of the year", "result": "generateDocumentNumber issues YYYY-0001 and DocumentSequence.lastSequence becomes 1" }
+    ],
+    "alternate_paths": [
+      { "name": "Concurrent submits", "trigger": "two users submit in the same second of the same year", "result": "the transactional upsert+increment issues two distinct numbers; no duplicate, no gap" },
+      { "name": "Year rolls over", "trigger": "first submit after 1 January", "result": "a new DocumentSequence row is created for the new year and numbering restarts at 0001" },
+      { "name": "Role changed by admin", "trigger": "adminAccounts.updateUserRole", "result": "permissions are wiped and reseeded from the new role's defaults, so a demoted director keeps nothing" }
+    ]
+  },
+
+  "database": {
+    "models": [
+      {
+        "name": "Role",
+        "action": "extend",
+        "prisma_note": "Enum in prisma/models/user.prisma — adds the four staff roles to the existing USER/ADMIN pair",
+        "fields": [
+          { "name": "IDO_OFFICER", "type": "enum_value", "prisma_modifier": "" },
+          { "name": "IDO_CHAIRPERSON", "type": "enum_value", "prisma_modifier": "" },
+          { "name": "DIRECTOR", "type": "enum_value", "prisma_modifier": "" },
+          { "name": "BUDGET_OFFICER", "type": "enum_value", "prisma_modifier": "" }
+        ]
+      },
+      {
+        "name": "Action",
+        "action": "create",
+        "prisma_note": "New enum in prisma/models/user-permission.prisma — the seven grantable capabilities",
+        "fields": [
+          { "name": "CREATE_REQUEST", "type": "enum_value", "prisma_modifier": "" },
+          { "name": "SUBMIT_REQUEST", "type": "enum_value", "prisma_modifier": "" },
+          { "name": "ADD_COMMENT", "type": "enum_value", "prisma_modifier": "" },
+          { "name": "REVIEW_REQUEST", "type": "enum_value", "prisma_modifier": "" },
+          { "name": "APPROVE_BUDGET", "type": "enum_value", "prisma_modifier": "" },
+          { "name": "APPROVE_DIRECTOR", "type": "enum_value", "prisma_modifier": "" },
+          { "name": "SUBMIT_CSM", "type": "enum_value", "prisma_modifier": "" }
+        ]
+      },
+      {
+        "name": "User",
+        "action": "extend",
+        "prisma_note": "Extends prisma/models/user.prisma. role loses its bare type and gains @default(USER); status default flips to inactive so an admin activates staff deliberately",
+        "fields": [
+          { "name": "role", "type": "Role", "prisma_modifier": "@default(USER)" },
+          { "name": "position", "type": "String", "prisma_modifier": "?" },
+          { "name": "signatureUrl", "type": "String", "prisma_modifier": "?" },
+          { "name": "profileComplete", "type": "Boolean", "prisma_modifier": "@default(false)" },
+          { "name": "requests", "type": "Request", "prisma_modifier": "[] @relation(\"UserRequests\")", "relation": "Request" },
+          { "name": "auditLogs", "type": "AuditLog", "prisma_modifier": "[] @relation(\"UserAuditLogs\")", "relation": "AuditLog" },
+          { "name": "requestComments", "type": "RequestComment", "prisma_modifier": "[] @relation(\"UserRequestComments\")", "relation": "RequestComment" },
+          { "name": "permissions", "type": "UserPermission", "prisma_modifier": "[]", "relation": "UserPermission" }
+        ]
+      },
+      {
+        "name": "Request",
+        "action": "create",
+        "prisma_note": "New model in prisma/models/request.prisma — the core entity. The five *Status columns are deliberately separate: masterStatus is what the requestor sees, the others are per-stage state a reviewer's guard reads",
+        "fields": [
+          { "name": "id", "type": "String", "prisma_modifier": "@id @default(cuid())" },
+          { "name": "documentNumber", "type": "String", "prisma_modifier": "? @unique" },
+          { "name": "title", "type": "String", "prisma_modifier": "" },
+          { "name": "finalTitle", "type": "String", "prisma_modifier": "?" },
+          { "name": "typeOfRequest", "type": "String", "prisma_modifier": "" },
+          { "name": "priority", "type": "String", "prisma_modifier": "" },
+          { "name": "requestedBy", "type": "String", "prisma_modifier": "" },
+          { "name": "position", "type": "String", "prisma_modifier": "" },
+          { "name": "targetOrg", "type": "String", "prisma_modifier": "@default(\"IDO\")" },
+          { "name": "responsibleOrg", "type": "String", "prisma_modifier": "@default(\"IDO\")" },
+          { "name": "processor", "type": "String", "prisma_modifier": "?" },
+          { "name": "details", "type": "String", "prisma_modifier": "" },
+          { "name": "justification", "type": "String", "prisma_modifier": "" },
+          { "name": "workScope", "type": "String", "prisma_modifier": "" },
+          { "name": "reference", "type": "String", "prisma_modifier": "?" },
+          { "name": "approverNote", "type": "String", "prisma_modifier": "?" },
+          { "name": "masterStatus", "type": "String", "prisma_modifier": "@default(\"DRAFT\")" },
+          { "name": "idoEvaluationStatus", "type": "String", "prisma_modifier": "?" },
+          { "name": "directorReviewStatus", "type": "String", "prisma_modifier": "?" },
+          { "name": "idoFinalStatus", "type": "String", "prisma_modifier": "?" },
+          { "name": "finalDirectorStatus", "type": "String", "prisma_modifier": "?" },
+          { "name": "completionStatus", "type": "String", "prisma_modifier": "?" },
+          { "name": "requestStartAt", "type": "DateTime", "prisma_modifier": "?" },
+          { "name": "requestEndAt", "type": "DateTime", "prisma_modifier": "?" },
+          { "name": "budgetOfficerSignatureUrl", "type": "String", "prisma_modifier": "?" },
+          { "name": "budgetOfficerSignedAt", "type": "DateTime", "prisma_modifier": "?" },
+          { "name": "directorSignatureUrl", "type": "String", "prisma_modifier": "?" },
+          { "name": "directorSignedAt", "type": "DateTime", "prisma_modifier": "?" },
+          { "name": "idoFinalSignatureUrl", "type": "String", "prisma_modifier": "?" },
+          { "name": "idoFinalSignedAt", "type": "DateTime", "prisma_modifier": "?" },
+          { "name": "finalDirectorSignatureUrl", "type": "String", "prisma_modifier": "?" },
+          { "name": "finalDirectorSignedAt", "type": "DateTime", "prisma_modifier": "?" },
+          { "name": "attachments", "type": "Json", "prisma_modifier": "@default(\"[]\")" },
+          { "name": "userId", "type": "String", "prisma_modifier": "" },
+          { "name": "user", "type": "User", "prisma_modifier": "@relation(\"UserRequests\", fields: [userId], references: [id])", "relation": "User" },
+          { "name": "auditLogs", "type": "AuditLog", "prisma_modifier": "[] @relation(\"RequestAuditLogs\")", "relation": "AuditLog" },
+          { "name": "comments", "type": "RequestComment", "prisma_modifier": "[] @relation(\"RequestComments\")", "relation": "RequestComment" },
+          { "name": "csm", "type": "Csm", "prisma_modifier": "? @relation(\"RequestCsm\")", "relation": "Csm" },
+          { "name": "createdAt", "type": "DateTime", "prisma_modifier": "@default(now())" },
+          { "name": "updatedAt", "type": "DateTime", "prisma_modifier": "@updatedAt" }
+        ]
+      },
+      {
+        "name": "AuditLog",
+        "action": "create",
+        "prisma_note": "New model in prisma/models/request.prisma — one row per action taken on a request. It is the only history the app has; nothing overwrites it",
+        "fields": [
+          { "name": "id", "type": "String", "prisma_modifier": "@id @default(cuid())" },
+          { "name": "requestId", "type": "String", "prisma_modifier": "" },
+          { "name": "request", "type": "Request", "prisma_modifier": "@relation(\"RequestAuditLogs\", fields: [requestId], references: [id])", "relation": "Request" },
+          { "name": "actorId", "type": "String", "prisma_modifier": "" },
+          { "name": "actor", "type": "User", "prisma_modifier": "@relation(\"UserAuditLogs\", fields: [actorId], references: [id])", "relation": "User" },
+          { "name": "action", "type": "String", "prisma_modifier": "" },
+          { "name": "fromStatus", "type": "String", "prisma_modifier": "?" },
+          { "name": "toStatus", "type": "String", "prisma_modifier": "?" },
+          { "name": "note", "type": "String", "prisma_modifier": "?" },
+          { "name": "createdAt", "type": "DateTime", "prisma_modifier": "@default(now())" },
+          { "name": "updatedAt", "type": "DateTime", "prisma_modifier": "@updatedAt" }
+        ]
+      },
+      {
+        "name": "RequestComment",
+        "action": "create",
+        "prisma_note": "New model in prisma/models/request.prisma — the requestor/processor conversation. Cascades on request delete",
+        "fields": [
+          { "name": "id", "type": "String", "prisma_modifier": "@id @default(cuid())" },
+          { "name": "requestId", "type": "String", "prisma_modifier": "" },
+          { "name": "request", "type": "Request", "prisma_modifier": "@relation(\"RequestComments\", fields: [requestId], references: [id], onDelete: Cascade)", "relation": "Request" },
+          { "name": "userId", "type": "String", "prisma_modifier": "" },
+          { "name": "user", "type": "User", "prisma_modifier": "@relation(\"UserRequestComments\", fields: [userId], references: [id])", "relation": "User" },
+          { "name": "message", "type": "String", "prisma_modifier": "" },
+          { "name": "createdAt", "type": "DateTime", "prisma_modifier": "@default(now())" },
+          { "name": "updatedAt", "type": "DateTime", "prisma_modifier": "@updatedAt" }
+        ]
+      },
+      {
+        "name": "Csm",
+        "action": "create",
+        "prisma_note": "New model in prisma/models/csm.prisma — the satisfaction record, created by the final director approval and completed by the requestor",
+        "fields": [
+          { "name": "id", "type": "String", "prisma_modifier": "@id @default(cuid())" },
+          { "name": "requestId", "type": "String", "prisma_modifier": "@unique" },
+          { "name": "request", "type": "Request", "prisma_modifier": "@relation(\"RequestCsm\", fields: [requestId], references: [id])", "relation": "Request" },
+          { "name": "submittedAt", "type": "DateTime", "prisma_modifier": "?" },
+          { "name": "createdAt", "type": "DateTime", "prisma_modifier": "@default(now())" },
+          { "name": "updatedAt", "type": "DateTime", "prisma_modifier": "@updatedAt" }
+        ]
+      },
+      {
+        "name": "DocumentSequence",
+        "action": "create",
+        "prisma_note": "New model in prisma/models/request.prisma — one row per calendar year, holding the last issued sequence",
+        "fields": [
+          { "name": "id", "type": "String", "prisma_modifier": "@id @default(cuid())" },
+          { "name": "year", "type": "Int", "prisma_modifier": "@unique" },
+          { "name": "lastSequence", "type": "Int", "prisma_modifier": "@default(0)" },
+          { "name": "createdAt", "type": "DateTime", "prisma_modifier": "@default(now())" },
+          { "name": "updatedAt", "type": "DateTime", "prisma_modifier": "@updatedAt" }
+        ]
+      },
+      {
+        "name": "UserPermission",
+        "action": "create",
+        "prisma_note": "New model in prisma/models/user-permission.prisma — a per-user grant of one Action. Role decides the DEFAULTS; this table is the truth",
+        "fields": [
+          { "name": "id", "type": "String", "prisma_modifier": "@id @default(cuid())" },
+          { "name": "userId", "type": "String", "prisma_modifier": "" },
+          { "name": "action", "type": "Action", "prisma_modifier": "" },
+          { "name": "grantedAt", "type": "DateTime", "prisma_modifier": "@default(now())" },
+          { "name": "grantedBy", "type": "String", "prisma_modifier": "" },
+          { "name": "user", "type": "User", "prisma_modifier": "@relation(fields: [userId], references: [id], onDelete: Cascade)", "relation": "User" },
+          { "name": "@@unique", "type": "constraint", "prisma_modifier": "([userId, action])" }
+        ]
+      }
+    ]
+  },
+
+  "trpc_procedures": [
+    {
+      "name": "generateDocumentNumber",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "mutation",
+      "procedure": "protectedProcedure",
+      "input_schema": null,
+      "input": {},
+      "output": { "documentNumber": "string" },
+      "guards": ["authenticated"],
+      "invalidates": [],
+      "description": "Atomically upserts the current year's DocumentSequence with lastSequence increment inside a transaction and returns YYYY-NNNN, zero-padded to four digits. Exported as a plain helper too, because request.submit calls it inline rather than over the wire."
+    }
+  ],
+
+  "frontend": {
+    "pages": [],
+    "components": [],
+    "forms": [],
+    "hooks": [],
+    "store": { "needed": false },
+    "navigation_config": {
+      "file": "src/config/navigation.config.ts",
+      "description": "Replaces the template's Dashboard/Admin/Profile items with the IRMS destinations. getNavigation filters by role; the sidebar only ORGANISES — every route also carries a server-side role gate.",
+      "entries": [
+        { "label": "My Requests", "route": "/requests", "icon": "FileText", "roles": ["USER"], "exact": true },
+        { "label": "New Request", "route": "/requests/new", "icon": "FilePlus", "roles": ["USER"] },
+        { "label": "Dashboard", "route": "/staff/dashboard", "icon": "LayoutDashboard", "roles": ["IDO_OFFICER", "IDO_CHAIRPERSON", "BUDGET_OFFICER", "DIRECTOR"] },
+        { "label": "Accounts", "route": "/admin", "icon": "Users", "roles": ["ADMIN"] }
+      ],
+      "secondary_entries": [
+        { "label": "Profile", "route": "/profile", "icon": "UserCircle", "roles": ["USER", "ADMIN", "IDO_OFFICER", "IDO_CHAIRPERSON", "BUDGET_OFFICER", "DIRECTOR"] }
+      ],
+      "default_routes": {
+        "USER": "/requests",
+        "ADMIN": "/admin",
+        "IDO_OFFICER": "/staff/dashboard",
+        "IDO_CHAIRPERSON": "/staff/dashboard",
+        "BUDGET_OFFICER": "/staff/dashboard",
+        "DIRECTOR": "/staff/dashboard"
+      },
+      "role_labels": {
+        "USER": "Requestor",
+        "ADMIN": "Administrator",
+        "IDO_OFFICER": "IDO Officer",
+        "IDO_CHAIRPERSON": "IDO Chairperson",
+        "BUDGET_OFFICER": "Budget Officer",
+        "DIRECTOR": "Campus Director"
+      }
+    }
+  },
+
+  "seeder": {
+    "file": "prisma/seed.ts",
+    "runner": "npm run db:seed",
+    "strategy": "upsert on email — idempotent, safe to re-run, never resets a changed password",
+    "password": "@Password123",
+    "password_note": "Hashed with better-auth's own hashPassword from better-auth/crypto, the same function the sign-up path uses",
+    "accounts": [
+      { "email": "admin@gmail.com", "firstname": "Super", "lastname": "Admin", "name": "Super Admin", "role": "ADMIN", "position": null, "status": "active", "profileComplete": true, "emailVerified": true, "signatureUrl": null },
+      { "email": "user@gmail.com", "firstname": "Juan", "lastname": "Dela Cruz", "name": "Juan Dela Cruz", "role": "USER", "position": "FACULTY_REPRESENTATIVE", "status": "active", "profileComplete": true, "emailVerified": true, "signatureUrl": null },
+      { "email": "ido-officer@gmail.com", "firstname": "Ida", "lastname": "Reyes", "name": "Ida Reyes", "role": "IDO_OFFICER", "position": null, "status": "active", "profileComplete": true, "emailVerified": true, "signatureUrl": null },
+      { "email": "ido-chairperson@gmail.com", "firstname": "Carlos", "lastname": "Santos", "name": "Carlos Santos", "role": "IDO_CHAIRPERSON", "position": null, "status": "active", "profileComplete": true, "emailVerified": true, "signatureUrl": null },
+      { "email": "director@gmail.com", "firstname": "Divina", "lastname": "Ramos", "name": "Divina Ramos", "role": "DIRECTOR", "position": null, "status": "active", "profileComplete": true, "emailVerified": true, "signatureUrl": null },
+      { "email": "budget-officer@gmail.com", "firstname": "Ben", "lastname": "Cruz", "name": "Ben Cruz", "role": "BUDGET_OFFICER", "position": null, "status": "active", "profileComplete": true, "emailVerified": true, "signatureUrl": null }
+    ],
+    "post_steps": [
+      "seedUserPermissions(user.id, role, user.id) for every seeded account so each lands with its role defaults",
+      "emailVerified: true on every seeded account — the auth guard bounces an unverified user to /verify-email and there is no mail provider wired"
+    ]
+  },
+
+  "requirements": {
+    "functional": [
+      "Role has exactly six values: USER, ADMIN, IDO_OFFICER, IDO_CHAIRPERSON, DIRECTOR, BUDGET_OFFICER.",
+      "src/utils/config.ts USER_ROLES lists all six, so UserRole stays the single source for role typing across nav, routes and auth functions.",
+      "src/lib/permissions.ts exports ALL_ACTIONS, ACTION_LABELS (label + description per action, used by the admin permissions modal), ROLE_DEFAULT_PERMISSIONS, seedUserPermissions, resetAndSeedPermissions and assertPermission.",
+      "ROLE_DEFAULT_PERMISSIONS: USER = CREATE_REQUEST, SUBMIT_REQUEST, ADD_COMMENT, SUBMIT_CSM; IDO_OFFICER and IDO_CHAIRPERSON = ADD_COMMENT, REVIEW_REQUEST; BUDGET_OFFICER = ADD_COMMENT, APPROVE_BUDGET; DIRECTOR = ADD_COMMENT, APPROVE_DIRECTOR; ADMIN = none.",
+      "assertPermission(userId, action) reads UserPermission and throws FORBIDDEN when the grant is absent. Role is never consulted at action time — only at grant time.",
+      "src/lib/status-maps/request-status.ts exports masterStatusMap (label + AppChip tone per masterStatus), idoEvaluationStatusMap, MASTER_STATUS_OPTIONS and FILTER_OPTIONS.",
+      "masterStatusMap covers DRAFT, SUBMITTED, RETURNED, UNDER_IDO_REVIEW, UNDER_DIRECTOR_REVIEW, UNDER_IDO_FINAL_REVIEW, UNDER_FINAL_DIRECTOR_REVIEW, APPROVED, FOR_NEXT_YEAR_PPMP, REJECTED_BY_IDO, BUDGET_OFFICER_REJECTED, DIRECTOR_REJECTED, IDO_FINAL_REJECTED, FINAL_REJECTED, COMPLETED.",
+      "The FINAL_REJECTED label reads 'Director Final Rejected', not 'Final Rejected' — it was the fix logged in IRMS-old TASKS.md and must not regress.",
+      "Chip tones come from ChipTone (default | accent | success | warning | danger), never a raw colour, because AppChip takes a tone.",
+      "generateDocumentNumber runs inside prisma.$transaction with upsert + increment, and formats as `${year}-${String(lastSequence).padStart(4, '0')}`.",
+      "src/routes/_authenticated.tsx passes mainWidth from the matched route's staticData.mainWidth into AppLayout, defaulting to 'default' — the frame already accepts the prop and nothing currently feeds it.",
+      "The seed creates one account per role, all active and email-verified, with role-default permissions granted."
+    ],
+    "authorization": [
+      "roleProcedure(...roles) in src/integrations/trpc/init.ts is the only role gate; it already exists and now accepts the four new Role values with no change.",
+      "protectedProcedure additionally loads the user's status and throws FORBIDDEN unless it is 'active' — a suspended account keeps a valid session but can do nothing. This is an addition to the template's protectedProcedure.",
+      "assertAuthenticatedRoleFn (src/features/auth/functions/auth.functions.ts) validates against all six roles via USER_ROLES, so a route gate cannot name a role the enum does not have.",
+      "No page-level gate replaces a procedure-level gate. A user can always deep-link; the router is what refuses."
+    ],
+    "ux": [
+      "Sidebar entries are role-filtered so nobody sees a destination that will bounce them, but the filter is convenience, not security.",
+      "Role label under the wordmark says what the person is ('Campus Director'), not what the enum is ('DIRECTOR').",
+      "Status colours are consistent everywhere they appear — a chip in a table, a chip in the timeline and a chip on the detail page all read masterStatusMap."
+    ]
+  },
+
+  "validations": {
+    "schemas": [
+      {
+        "file": "src/utils/config.ts",
+        "used_by": ["navigation.config.ts", "auth.functions.ts", "every route gate"],
+        "rules": [
+          { "field": "UserRole", "zod_rule": "keyof typeof USER_ROLES — six literal keys, no string fallback" }
+        ]
+      }
+    ],
+    "server_guards": [
+      { "procedure": "protectedProcedure", "guard": "session exists", "error": "UNAUTHORIZED — Not authenticated" },
+      { "procedure": "protectedProcedure", "guard": "user.status === 'active'", "error": "FORBIDDEN — Your account is not active. Please contact an administrator." },
+      { "procedure": "roleProcedure(...)", "guard": "ctx.user.role is in the allowed list", "error": "FORBIDDEN — Insufficient permissions" },
+      { "procedure": "assertPermission", "guard": "a UserPermission row exists for (userId, action)", "error": "FORBIDDEN — You don't have permission to perform this action" },
+      { "procedure": "generateDocumentNumber", "guard": "upsert + increment inside a transaction", "error": "none — the transaction is the guard against duplicate numbers" }
+    ]
+  },
+
+  "test_requirements": [
+    {
+      "file": "src/lib/permissions.test.ts",
+      "type": "unit",
+      "covers": [
+        "ROLE_DEFAULT_PERMISSIONS grants a USER exactly CREATE_REQUEST, SUBMIT_REQUEST, ADD_COMMENT, SUBMIT_CSM",
+        "ROLE_DEFAULT_PERMISSIONS grants ADMIN nothing — an admin manages accounts and never touches a request",
+        "assertPermission resolves when the grant row exists",
+        "assertPermission throws FORBIDDEN when the grant row is absent, even for a user whose ROLE would have it by default",
+        "resetAndSeedPermissions deletes every existing grant before inserting the new role's defaults"
+      ]
+    },
+    {
+      "file": "src/lib/status-maps/request-status.test.ts",
+      "type": "unit",
+      "covers": [
+        "every masterStatus written by any procedure in specs 005-015 has an entry in masterStatusMap",
+        "FINAL_REJECTED reads 'Director Final Rejected'",
+        "every entry's tone is one of the five ChipTone values"
+      ]
+    },
+    {
+      "file": "src/integrations/trpc/routers/request.document-number.test.ts",
+      "type": "unit",
+      "covers": [
+        "first call of a year returns YYYY-0001",
+        "lastSequence 41 returns YYYY-0042 and writes 42",
+        "a new year creates its own DocumentSequence row and restarts at 0001",
+        "two concurrent calls return two different numbers"
+      ]
+    },
+    {
+      "file": "src/config/navigation.config.test.ts",
+      "type": "unit",
+      "covers": [
+        "getNavigation('USER') returns My Requests and New Request and not the staff dashboard",
+        "getNavigation('IDO_OFFICER') returns the staff dashboard only",
+        "getNavigation('ADMIN') returns Accounts only",
+        "getDefaultRoute returns a route the role's navigation actually contains, for all six roles"
+      ]
+    }
+  ],
+
+  "acceptance_criteria": [
+    { "given": "a fresh database", "when": "npm run db:migrate and npm run db:seed are run", "then": "six accounts exist, one per role, all active and emailVerified, each holding its role's default permissions" },
+    { "given": "the current year is 2026 and no request has been submitted", "when": "generateDocumentNumber is called", "then": "it returns 2026-0001 and DocumentSequence for 2026 has lastSequence 1" },
+    { "given": "lastSequence for 2026 is 41", "when": "generateDocumentNumber is called", "then": "it returns 2026-0042 and lastSequence becomes 42" },
+    { "given": "a user whose status is 'suspended' holds a valid session", "when": "they call any protectedProcedure", "then": "the call fails with FORBIDDEN and the message names the account state, not the endpoint" },
+    { "given": "a BUDGET_OFFICER whose APPROVE_BUDGET grant has been revoked by an admin", "when": "they call request.approveBudget", "then": "assertPermission throws FORBIDDEN even though their ROLE would grant it by default" },
+    { "given": "a signed-in IDO_OFFICER", "when": "the sidebar renders", "then": "it shows Dashboard and Profile only — no My Requests, no Accounts" }
+  ],
+
+  "edge_cases": [
+    "Two simultaneous submits in the same year must not produce duplicate document numbers — the upsert + increment must be inside prisma.$transaction, never a read-then-write.",
+    "documentNumber must never be regenerated once set — request.submit reads the existing value first and only generates when it is null, so a RETURNED request keeps its number on resubmit.",
+    "Changing a user's role must reset permissions rather than merge them — a director demoted to USER must not keep APPROVE_DIRECTOR.",
+    "Role must default to USER at the database level, never null — a null role breaks every navigation filter and every gate.",
+    "Adding enum values to Role is a destructive-looking migration on Postgres; generate the migration and check it does not rewrite the users table before applying it in production.",
+    "User.status default changes from 'active' (template) to 'inactive'; the seed and the admin-created accounts set 'active' explicitly, and self sign-up (spec 002) must decide deliberately which it wants."
+  ],
+
+  "out_of_scope": [
+    "Every page — this spec is schema, config and helpers only.",
+    "The request lifecycle procedures — each stage owns its own spec (010-014).",
+    "The admin UI for granting permissions — spec 017.",
+    "Email verification delivery — no mail provider is wired; the seed sidesteps it with emailVerified: true.",
+    "Migrating existing IRMS-old data — this is a fresh build, not a data migration."
+  ]
+}

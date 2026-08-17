@@ -1,0 +1,318 @@
+{
+  "spec_number": 5,
+  "spec_title": "New Request",
+  "feature_name": "request-form",
+  "description": "The request form itself — the one component every request page in the system renders, in create, edit or read-only mode. Covers the field set, the shared option constants, S3 attachments, the workflow stepper, and the two ways out of the page: save as draft, or submit and enter the approval chain.",
+  "depends_on": [1, 3],
+
+  "source_reference": {
+    "pages": ["IRMS-old/src/routes/_authenticated/requests/new.tsx"],
+    "files": [
+      "IRMS-old/src/features/request-form/components/RequestForm.tsx",
+      "IRMS-old/src/features/request-form/components/AttachmentUploader.tsx",
+      "IRMS-old/src/features/request-form/components/WorkflowTimeline.tsx",
+      "IRMS-old/src/features/request-form/lib/request-options.ts",
+      "IRMS-old/src/features/request-form/validations/schema/request.schema.ts",
+      "IRMS-old/src/features/request-form/utils/attachment-upload.ts",
+      "IRMS-old/src/integrations/trpc/routers/request.router.ts (create, saveDraft, submit)"
+    ],
+    "docs": ["IRMS-old/flows/01-user-submit-request.md", "IRMS-old/PDF Flow.md (Stage 1-2)", "IRMS-old/TASKS.md (save draft redirect, drag-and-drop attachments)"]
+  },
+
+  "flow": {
+    "actors": ["USER"],
+    "happy_path": [
+      { "step": 1, "actor": "USER", "action": "opens /requests/new", "result": "an empty form; Requested By is pre-filled from the session and Position from the profile" },
+      { "step": 2, "actor": "USER", "action": "fills title, type, priority, details, justification, work scope", "result": "fields validate on blur and re-validate on change once wrong" },
+      { "step": 3, "actor": "USER", "action": "drops supporting files", "result": "they are parked as pending uploads — nothing reaches S3 yet" },
+      { "step": 4, "actor": "USER", "action": "presses Save Draft", "result": "attachments flush to S3, the request is created with masterStatus DRAFT, an audit log CREATED is written, and the browser goes to /requests/$requestId — the VIEW page, not the edit page" },
+      { "step": 5, "actor": "USER", "action": "presses Submit Request instead", "result": "the request is created (or the draft updated), then submitted: masterStatus SUBMITTED, a document number YYYY-NNNN is issued, an audit log SUBMITTED is written, and the browser goes to the detail page" }
+    ],
+    "alternate_paths": [
+      { "name": "No position on profile", "trigger": "the requestor's profile has no position", "result": "request.create refuses with FORBIDDEN naming the profile — the position is printed on the form and cannot be blank" },
+      { "name": "CREATE_REQUEST revoked", "trigger": "an admin removed the grant", "result": "assertPermission throws FORBIDDEN before anything is written" },
+      { "name": "Upload fails on save", "trigger": "S3 rejects a file during the flush", "result": "nothing is created, the form keeps its values and its files, and the error names which file failed" },
+      { "name": "Validation fails", "trigger": "a required field is empty on submit", "result": "the first invalid field is focused and no request is made — for both Save Draft and Submit, because a draft still has to be a valid record" }
+    ]
+  },
+
+  "database": {
+    "models": [
+      { "name": "Request", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] },
+      { "name": "AuditLog", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] },
+      { "name": "DocumentSequence", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] }
+    ]
+  },
+
+  "trpc_procedures": [
+    {
+      "name": "create",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "mutation",
+      "procedure": "protectedProcedure",
+      "input_schema": "src/features/request-form/validations/schema/request.schema.ts (createRequestSchema)",
+      "input": { "title": "string", "typeOfRequest": "string", "priority": "'LOW'|'MEDIUM'|'HIGH'", "requestedBy": "string", "position": "PositionEnum", "details": "string", "justification": "string", "workScope": "string", "attachments": "Attachment[]" },
+      "output": { "id": "string", "masterStatus": "'DRAFT'" },
+      "guards": ["ctx.user.position must be set", "assertPermission(CREATE_REQUEST)", "userId, requestedBy, position, targetOrg and responsibleOrg are all written server-side from the session, never from input"],
+      "invalidates": ["trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()"],
+      "description": "Creates a DRAFT and its CREATED audit log in one transaction. requestedBy is composed from the session's firstname + lastname; position comes from the session user, so the input copies are advisory only."
+    },
+    {
+      "name": "saveDraft",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "mutation",
+      "procedure": "protectedProcedure",
+      "input_schema": "src/features/request-form/validations/schema/request.schema.ts (saveDraftRequestSchema)",
+      "input": { "id": "string", "...createRequestSchema": "" },
+      "output": { "id": "string", "masterStatus": "string" },
+      "guards": ["the request must exist", "request.userId === ctx.user.id", "masterStatus must be DRAFT or RETURNED"],
+      "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()"],
+      "description": "Updates an editable request in place. Writes no audit log — an edit is not a lifecycle event."
+    },
+    {
+      "name": "submit",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "mutation",
+      "procedure": "protectedProcedure",
+      "input_schema": null,
+      "input": { "id": "string" },
+      "output": { "id": "string", "documentNumber": "string", "masterStatus": "'SUBMITTED'" },
+      "guards": ["request.userId === ctx.user.id", "assertPermission(SUBMIT_REQUEST)", "masterStatus must be DRAFT or RETURNED"],
+      "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()", "trpc.request.listSubmitted.queryKey()", "trpc.request.staffList.queryKey()"],
+      "description": "Sets masterStatus SUBMITTED, issues a document number ONLY if one is not already set, and writes a SUBMITTED audit log — whose createdAt becomes the date and time printed on the PDF."
+    }
+  ],
+
+  "frontend": {
+    "pages": [
+      {
+        "name": "RequestCreatePage",
+        "route_file": "src/routes/_authenticated/requests/new.tsx",
+        "breadcrumb": "New Request",
+        "main_width": "wide",
+        "role": "USER",
+        "layout": "AppLayout (frame, from _authenticated.tsx) — page renders AppPageHeader + content only",
+        "page_header": { "title": "New Request", "subtitle": "Fill out every required field, then save as a draft or submit it.", "action": null },
+        "components": [
+          {
+            "name": "RequestForm",
+            "file": "src/features/request-form/components/RequestForm.tsx",
+            "type": "form",
+            "lab_components": ["AppInputGroup", "AppSelect", "AppTextArea", "AppReadOnlyField", "AppCard", "AppChip", "AppButton", "AppStepper", "AppToast"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md. Everything else is a lab component; the old AppForm field-array abstraction is dropped in favour of explicit fields, because the read-only mode needs per-field control the array config never gave it.",
+            "props": ["mode: 'create' | 'edit'", "defaultValues?: Partial<RequestFormValues>", "requestId?: string", "masterStatus?: string", "idoEvaluationStatus?: string | null", "processor?: string | null", "forceReadOnly?: boolean", "hideAttachments?: boolean", "onEdit?: () => void", "onViewPdf?: () => void"],
+            "description": "The whole form. Two columns on desktop: fields on the left, a side rail on the right holding processor, attachments, the status chip and the action buttons. In read-only mode every field renders through AppReadOnlyField rather than a disabled input — a disabled input still looks like something you failed to be allowed to type in."
+          },
+          {
+            "name": "AttachmentUploader",
+            "file": "src/features/request-form/components/AttachmentUploader.tsx",
+            "type": "widget",
+            "lab_components": ["AppFileUpload", "AppList", "AppButton"],
+            "heroui_components": [],
+            "heroui_note": "None. AppFileUpload brings the dashed dropzone, drag-and-drop, per-file progress, retry and remove — the four things IRMS-old listed as an open task and never built.",
+            "props": ["value: Attachment[]", "onChange: (files: Attachment[]) => void", "isDisabled?: boolean"],
+            "description": "Multiple files, any type, capped by maxFiles and maxSizeBytes from src/lib/upload-constraints.ts. Uses useDeferredUpload('request-attachments'): dropping parks, saving sends. In read-only mode it becomes a plain download list."
+          },
+          {
+            "name": "WorkflowStepper",
+            "file": "src/features/request-form/components/WorkflowStepper.tsx",
+            "type": "widget",
+            "lab_components": ["AppStepper", "AppChip"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md. AppStepper replaces the hand-rolled framer-motion timeline, its pulsing box-shadow animation and its own connector maths.",
+            "props": ["masterStatus: string", "idoEvaluationStatus?: string | null"],
+            "description": "Seven steps: Draft, Submitted, IDO Evaluation, Director Review, IDO Final, Final Director, Completed. currentStep is derived from masterStatus; a returned or rejected request pins the marker at the stage it stopped and the label reads Returned or Rejected."
+          }
+        ],
+        "actions": [
+          { "name": "saveDraft", "type": "button", "description": "Validates, flushes uploads, creates or updates the draft, then navigates to /requests/$requestId", "triggers": "calls tRPC procedure" },
+          { "name": "submitRequest", "type": "button", "description": "Validates, flushes uploads, creates-or-updates then submits, then navigates to /requests/$requestId", "triggers": "calls tRPC procedure" }
+        ]
+      }
+    ],
+    "components": [
+      {
+        "name": "request-options",
+        "file": "src/features/request-form/lib/request-options.ts",
+        "type": "widget",
+        "lab_components": [],
+        "heroui_components": [],
+        "heroui_note": "Not a component — the shared constants. Listed here because three specs import them and they must exist exactly once.",
+        "props": [],
+        "description": "TYPE_OF_REQUEST_OPTIONS (New Construction, Renovation, Addition, Rehabilitation, Minor Repair, Other), PRIORITY_OPTIONS (Low, Medium, High), POSITION_OPTIONS (the five representative positions), JUSTIFICATION_OPTIONS (Operational Need, System Upgrade, New Functionality, Compliance Requirement, Cost Reduction, Other)."
+      }
+    ],
+    "forms": [
+      {
+        "name": "RequestForm",
+        "file": "src/features/request-form/components/RequestForm.tsx",
+        "schema_file": "src/features/request-form/validations/schema/request.schema.ts",
+        "method": "POST",
+        "server_fn": "request.create | request.saveDraft | request.submit",
+        "success_message": "Draft saved. | Request submitted. Your request has been sent to IDO for review.",
+        "error_message": "Failed to save the request. Please try again.",
+        "fields": [
+          { "name": "title", "type": "text", "label": "Title", "placeholder": "Enter request title", "required": true, "zod_rule": "z.string().min(1, 'Title is required').max(255)" },
+          { "name": "typeOfRequest", "type": "dropdown", "label": "Type of Request", "placeholder": "Select type", "required": true, "note": "Prints as a checkbox row on the PDF, so the value must stay one of the six constants.", "zod_rule": "z.string().min(1, 'Type of request is required')" },
+          { "name": "priority", "type": "dropdown", "label": "Priority", "placeholder": "Select priority", "required": true, "zod_rule": "z.enum(['LOW','MEDIUM','HIGH'], { message: 'Priority is required' })" },
+          { "name": "requestedBy", "type": "text", "label": "Requested By", "placeholder": "Full name of the requestor", "required": true, "readonly": true, "note": "Pre-filled from the session and rewritten server-side from firstname + lastname. Shown so the requestor can see what will be printed.", "zod_rule": "z.string().min(1, 'Requested by is required').max(255)" },
+          { "name": "position", "type": "dropdown", "label": "Position", "placeholder": "Select position", "required": true, "note": "Defaults to the profile's position. Decides which representative row the signature lands on in the PDF.", "zod_rule": "z.enum([...POSITION_VALUES], { message: 'Position is required' })" },
+          { "name": "details", "type": "textarea", "label": "Details", "placeholder": "Describe the request in detail", "required": true, "note": "Prints verbatim in the DETAILS cell of the form.", "zod_rule": "z.string().min(1, 'Details are required')" },
+          { "name": "justification", "type": "dropdown", "label": "Justification", "placeholder": "Select justification", "required": true, "zod_rule": "z.string().min(1, 'Justification is required')" },
+          { "name": "workScope", "type": "textarea", "label": "Work Scope", "placeholder": "Describe the scope of work", "required": true, "zod_rule": "z.string().min(1, 'Work scope is required')" },
+          { "name": "attachments", "type": "file", "label": "Attachments", "placeholder": "", "required": false, "note": "Deferred uploads. Each entry is { url, name } and url must be a stored URL, never a blob:.", "zod_rule": "z.array(z.object({ url: storedImageUrl(), name: z.string().min(1) }))" }
+        ]
+      }
+    ],
+    "hooks": [
+      { "file": "src/features/request-form/hooks/use-user-request-queries.ts", "actor": "user", "type": "query", "invalidates": [], "note": "useRequestById — suspense query on request.getById, shared with specs 006 and 007." },
+      { "file": "src/features/request-form/hooks/use-user-request-mutations.ts", "actor": "user", "type": "mutation", "invalidates": ["trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()", "trpc.request.getById.queryKey({ id })", "trpc.request.staffList.queryKey()"], "note": "create, saveDraft and submit, each wrapped in useUploadingSubmit so the flush → rewrite → save → release order cannot be got wrong at a call site." }
+    ],
+    "store": { "needed": false }
+  },
+
+  "requirements": {
+    "functional": [
+      "targetOrg and responsibleOrg are constants ('IDO'), stripped from the payload before it is sent and written server-side. They exist because the printed form has the fields, not because anyone chooses them.",
+      "Save Draft redirects to /requests/$requestId — the view page — not back to the edit page. The expectation is that the user then presses Edit Request deliberately (an explicit IRMS-old fix).",
+      "Submit from the create page performs create-then-submit in sequence; from an existing draft it performs saveDraft-then-submit, so unsaved edits are never lost by submitting.",
+      "The document number is issued once, on the first submit. A RETURNED request that is resubmitted keeps its original number.",
+      "Uploads are deferred: dropping a file parks it under an object URL and only the save flushes it, so files the user thought better of never reach the bucket.",
+      "'request-attachments' is added to UPLOAD_FOLDERS, and src/lib/image-urls.ts reports every attachment URL of every request or the sweep will delete live attachments.",
+      "The workflow stepper is visible in every mode, including create, where it correctly shows step 1 of 7.",
+      "The side rail shows Processor as 'Not yet assigned' until IDO recommends the request, with the caption saying who assigns it."
+    ],
+    "authorization": [
+      "Route gate: assertAuthenticatedRoleFn with allowedRoles ['USER'].",
+      "Server gate on create: ctx.user.position must be set, then assertPermission(CREATE_REQUEST). Both run before anything is written.",
+      "Server gate on saveDraft and submit: ownership (request.userId === ctx.user.id) AND an editable status. Staff have their own routes and must not be able to edit a requestor's text.",
+      "Ownership is checked against the session, never against a userId in the payload.",
+      "Editable statuses are exactly DRAFT and RETURNED. Anything else is FORBIDDEN, which is what stops a requestor rewriting a request that is already under review."
+    ],
+    "ux": [
+      "Validation is on blur, re-validated on change once a field is wrong — the useAppForm default. Never validate while the user is still typing their first attempt.",
+      "Both buttons show a pending state and are disabled while either mutation runs, so a double press cannot create two requests.",
+      "The helper line under the buttons says what each does: submitting sends it to IDO, saving lets you finish later.",
+      "Attachments show real byte progress during the flush. A silent pause between pressing Submit and the redirect is the worst version of this screen.",
+      "Read-only mode uses AppReadOnlyField, not disabled inputs.",
+      "Required fields are marked on the label, not only by the error that appears after the fact."
+    ]
+  },
+
+  "validations": {
+    "schemas": [
+      {
+        "file": "src/features/request-form/validations/schema/request.schema.ts",
+        "used_by": ["RequestForm", "request.create", "request.saveDraft"],
+        "rules": [
+          { "field": "title", "zod_rule": "z.string().min(1, 'Title is required').max(255)" },
+          { "field": "typeOfRequest", "zod_rule": "z.string().min(1, 'Type of request is required')" },
+          { "field": "priority", "zod_rule": "z.enum(['LOW','MEDIUM','HIGH'], { message: 'Priority is required' })" },
+          { "field": "requestedBy", "zod_rule": "z.string().min(1, 'Requested by is required').max(255)" },
+          { "field": "position", "zod_rule": "z.enum([...POSITION_VALUES], { message: 'Position is required' })" },
+          { "field": "details", "zod_rule": "z.string().min(1, 'Details are required')" },
+          { "field": "justification", "zod_rule": "z.string().min(1, 'Justification is required')" },
+          { "field": "workScope", "zod_rule": "z.string().min(1, 'Work scope is required')" },
+          { "field": "attachments", "zod_rule": "z.array(attachmentSchema) where attachmentSchema = z.object({ url: storedImageUrl(), name: z.string().min(1) })" },
+          { "field": "createRequestSchema", "zod_rule": "requestFormSchema.omit({ targetOrg: true, responsibleOrg: true })" },
+          { "field": "saveDraftRequestSchema", "zod_rule": "createRequestSchema.extend({ id: z.string().min(1) })" }
+        ]
+      }
+    ],
+    "server_guards": [
+      { "procedure": "request.create", "guard": "ctx.user.position is not null", "error": "FORBIDDEN — Please set your position in your profile before creating a request" },
+      { "procedure": "request.create", "guard": "assertPermission(CREATE_REQUEST)", "error": "FORBIDDEN — You don't have permission to perform this action" },
+      { "procedure": "request.saveDraft", "guard": "the request exists", "error": "NOT_FOUND — Request not found" },
+      { "procedure": "request.saveDraft", "guard": "request.userId === ctx.user.id", "error": "FORBIDDEN — Access denied" },
+      { "procedure": "request.saveDraft", "guard": "masterStatus is DRAFT or RETURNED", "error": "FORBIDDEN — Request cannot be edited in its current status" },
+      { "procedure": "request.submit", "guard": "request.userId === ctx.user.id", "error": "FORBIDDEN — Access denied" },
+      { "procedure": "request.submit", "guard": "assertPermission(SUBMIT_REQUEST)", "error": "FORBIDDEN — You don't have permission to perform this action" },
+      { "procedure": "request.submit", "guard": "masterStatus is DRAFT or RETURNED", "error": "FORBIDDEN — Request cannot be submitted in its current status" },
+      { "procedure": "request.submit", "guard": "documentNumber is only generated when the existing value is null", "error": "n/a — the guard is against renumbering, not a rejection" }
+    ]
+  },
+
+  "test_requirements": [
+    {
+      "file": "src/features/request-form/validations/schema/request.schema.test.ts",
+      "type": "unit",
+      "covers": [
+        "a 256-character title fails",
+        "an empty details field fails",
+        "priority 'URGENT' fails",
+        "an attachment with a blob: url fails",
+        "createRequestSchema rejects targetOrg and responsibleOrg keys",
+        "saveDraftRequestSchema requires id"
+      ]
+    },
+    {
+      "file": "src/integrations/trpc/routers/request.create.test.ts",
+      "type": "unit",
+      "covers": [
+        "a user with no position gets FORBIDDEN and no row is written",
+        "a user without CREATE_REQUEST gets FORBIDDEN and no row is written",
+        "a successful create writes masterStatus DRAFT and a CREATED audit log in the same transaction",
+        "requestedBy is written from the session, not from the input, when the two differ",
+        "userId is written from the session even when the input carries another userId"
+      ]
+    },
+    {
+      "file": "src/integrations/trpc/routers/request.submit.test.ts",
+      "type": "unit",
+      "covers": [
+        "submitting a DRAFT sets SUBMITTED, issues a document number and writes a SUBMITTED audit log",
+        "submitting a RETURNED request keeps its existing document number",
+        "submitting a SUBMITTED request is FORBIDDEN",
+        "another user's request is FORBIDDEN, not NOT_FOUND",
+        "a user without SUBMIT_REQUEST is FORBIDDEN"
+      ]
+    },
+    {
+      "file": "src/integrations/trpc/routers/request.save-draft.test.ts",
+      "type": "unit",
+      "covers": [
+        "saving a DRAFT updates the fields",
+        "saving a RETURNED request is allowed",
+        "saving a request under review is FORBIDDEN",
+        "saving another user's draft is FORBIDDEN"
+      ]
+    },
+    {
+      "file": "cypress/e2e/request-create.cy.ts",
+      "type": "e2e",
+      "covers": [
+        "filling the form and pressing Save Draft lands on /requests/$id, not on the edit page",
+        "dropping a file makes no network call until a save",
+        "submitting shows the document number on the detail page",
+        "pressing Submit with the title empty focuses the title field and makes no request"
+      ]
+    }
+  ],
+
+  "acceptance_criteria": [
+    { "given": "a USER whose profile has a position", "when": "they open /requests/new", "then": "Requested By and Position are pre-filled and the stepper shows step 1 of 7" },
+    { "given": "a completed form with two files attached", "when": "the user presses Save Draft", "then": "both files upload, a DRAFT is created with a CREATED audit log, and the browser is on /requests/$requestId" },
+    { "given": "the same form", "when": "the user presses Submit Request", "then": "the request is created and submitted in one flow, a YYYY-NNNN document number is shown on the detail page, and the status chip reads Submitted" },
+    { "given": "a request already SUBMITTED", "when": "a crafted call to request.saveDraft is made for it", "then": "the call fails with FORBIDDEN and nothing changes" },
+    { "given": "a RETURNED request with document number 2026-0007", "when": "the requestor resubmits it", "then": "the number is still 2026-0007" },
+    { "given": "a USER whose CREATE_REQUEST grant was revoked", "when": "they press Save Draft", "then": "the call fails with the permission message and no row is written" }
+  ],
+
+  "edge_cases": [
+    "Submit from the create page is two mutations. If the submit half fails, a DRAFT already exists — do not retry create on the retry, and take the user to the draft rather than leaving them on a form whose data is already saved.",
+    "requestedBy and position arrive in the payload but the server rewrites both from the session; treat the input copies as display values only, or a crafted payload files a request in someone else's name.",
+    "attachments is a Json column, so nothing at the database level guarantees its shape — the Zod array is the only guard and it must run on the server too.",
+    "A flush that half-succeeds leaves some files in the bucket and no row pointing at them. That is what s3:sweep is for; do not attempt inline cleanup on failure.",
+    "Draft validation is full validation. A draft that skips required fields becomes a submitted request that skips them, because submit only checks status.",
+    "The stepper's index map must cover every masterStatus including the terminal rejections, or a rejected request renders with currentStep -1 and no marker at all."
+  ],
+
+  "out_of_scope": [
+    "Editing an existing request — spec 007, same component in edit mode.",
+    "The detail/view page — spec 006.",
+    "The comment thread — spec 008; it is not mounted on the create page because there is nothing to comment on yet.",
+    "The PDF — spec 016.",
+    "Rich text in Details — the printed form is plain text and a rich body would not survive it."
+  ]
+}

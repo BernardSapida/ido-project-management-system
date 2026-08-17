@@ -1,0 +1,264 @@
+{
+  "spec_number": 14,
+  "spec_title": "Final Director Approval",
+  "feature_name": "final-director-approval",
+  "description": "The last approval, and the one that unlocks everything downstream. The Campus Director signs a second time; the request becomes APPROVED, a CSM record is created for the requestor, and the signatures on the PDF become visible. Rejecting here stops a request that has already passed every other desk.",
+  "depends_on": [1, 3, 9, 13],
+
+  "source_reference": {
+    "pages": ["IRMS-old/src/routes/_authenticated/requests/$requestId/final-director-approval.tsx"],
+    "files": [
+      "IRMS-old/src/features/final-director-approval/components/FinalDirectorActionButtons.tsx",
+      "IRMS-old/src/features/final-director-approval/components/SignatureSummary.tsx",
+      "IRMS-old/src/features/final-director-approval/validations/schema/final-director-approver.schema.ts",
+      "IRMS-old/src/integrations/trpc/routers/request.router.ts (finalDirectorApprove, finalDirectorReject)"
+    ],
+    "docs": ["IRMS-old/flows/06-director-final-approval.md", "IRMS-old/PDF Flow.md (Stage 7 — the signature gate)"]
+  },
+
+  "flow": {
+    "actors": ["DIRECTOR"],
+    "happy_path": [
+      { "step": 1, "actor": "DIRECTOR", "action": "opens a request the chairperson has signed", "result": "the request read-only, the signature summary showing every signature collected so far, the activity feed and the thread" },
+      { "step": 2, "actor": "DIRECTOR", "action": "presses Approve & Sign", "result": "finalDirectorSignatureUrl and finalDirectorSignedAt stamped, finalDirectorStatus APPROVED, masterStatus APPROVED, completionStatus CSM_PENDING, requestEndAt set if it was null, a Csm row created, and a FINAL_DIRECTOR_APPROVED audit log — all in one transaction" },
+      { "step": 3, "actor": "requestor", "action": "opens their request", "result": "the CSM banner is waiting for them and the PDF now carries both signatures" }
+    ],
+    "alternate_paths": [
+      { "name": "Reject", "trigger": "Reject with a required note", "result": "finalDirectorStatus and masterStatus both FINAL_REJECTED, labelled 'Director Final Rejected'. Terminal, and no CSM record is created" },
+      { "name": "No signature on profile", "trigger": "the director has never uploaded one", "result": "Approve & Sign is disabled with the reason, and the procedure refuses" },
+      { "name": "Already approved", "trigger": "their own earlier approval", "result": "read-only, showing both their signatures and the approval date, with a link to the finished PDF" },
+      { "name": "Csm row already exists", "trigger": "a retry after a partial failure", "result": "the transaction must not create a second Csm — requestId is unique, so a duplicate create throws and rolls the whole approval back" }
+    ]
+  },
+
+  "database": {
+    "models": [
+      { "name": "Request", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] },
+      { "name": "Csm", "action": "reuse", "prisma_note": "Defined in spec 001 — the row is CREATED here, by the approval, and completed by the requestor in spec 015", "fields": [] },
+      { "name": "AuditLog", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] }
+    ]
+  },
+
+  "trpc_procedures": [
+    {
+      "name": "finalDirectorApprove",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "mutation",
+      "procedure": "roleProcedure('DIRECTOR')",
+      "input_schema": "src/features/final-director-approval/validations/schema/final-director-approver.schema.ts (finalDirectorApproveSchema)",
+      "input": { "id": "string" },
+      "output": { "id": "string", "finalDirectorStatus": "'APPROVED'", "masterStatus": "'APPROVED'", "completionStatus": "'CSM_PENDING'", "finalDirectorSignedAt": "string", "requestEndAt": "string" },
+      "guards": ["roleProcedure('DIRECTOR')", "assertPermission(APPROVE_DIRECTOR)", "ctx.user.signatureUrl must be present", "finalDirectorStatus must be exactly UNDER_FINAL_DIRECTOR_APPROVAL"],
+      "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.staffList.queryKey()", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()", "trpc.csm.getMyCsm.queryKey({ requestId })", "trpc.request.getForPdf.queryKey({ id })", "trpc.request.getSignaturesAsBase64.queryKey({ requestId })"],
+      "description": "The gate the whole PDF hangs on. Stamps the signature, sets finalDirectorStatus APPROVED (which is what the PDF checks), masterStatus APPROVED, completionStatus CSM_PENDING, requestEndAt if null, creates the Csm row and writes the audit log — one transaction, all or nothing."
+    },
+    {
+      "name": "finalDirectorReject",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "mutation",
+      "procedure": "roleProcedure('DIRECTOR')",
+      "input_schema": "src/features/final-director-approval/validations/schema/final-director-approver.schema.ts (finalDirectorRejectSchema)",
+      "input": { "id": "string", "note": "string (required)" },
+      "output": { "id": "string", "finalDirectorStatus": "'FINAL_REJECTED'" },
+      "guards": ["roleProcedure('DIRECTOR')", "assertPermission(APPROVE_DIRECTOR)", "finalDirectorStatus must be UNDER_FINAL_DIRECTOR_APPROVAL"],
+      "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.staffList.queryKey()", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()"],
+      "description": "Sets finalDirectorStatus and masterStatus to FINAL_REJECTED. No Csm row is created and no signature is required."
+    }
+  ],
+
+  "frontend": {
+    "pages": [
+      {
+        "name": "FinalDirectorApprovalPage",
+        "route_file": "src/routes/_authenticated/requests/$requestId/final-director-approval.tsx",
+        "breadcrumb": "Final Approval",
+        "main_width": "wide",
+        "role": "DIRECTOR",
+        "layout": "AppLayout (frame, from _authenticated.tsx) — page renders AppPageHeader + content only",
+        "page_header": { "title": "Final Approval", "subtitle": "The last approval. Signing here approves the request and releases the signed form.", "action": "AppButton — View PDF, new tab" },
+        "components": [
+          {
+            "name": "RequestForm",
+            "file": "src/features/request-form/components/RequestForm.tsx",
+            "type": "form",
+            "lab_components": ["AppReadOnlyField", "AppCard", "AppChip", "AppStepper"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md. Reused from spec 005 with forceReadOnly.",
+            "props": ["mode: 'edit'", "forceReadOnly", "defaultValues", "masterStatus", "idoEvaluationStatus", "processor", "requestId"],
+            "description": "Read-only."
+          },
+          {
+            "name": "SignatureSummary",
+            "file": "src/features/final-director-approval/components/SignatureSummary.tsx",
+            "type": "card",
+            "lab_components": ["AppCard", "AppList", "AppChip"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md. Signature images are plain <img> inside the list rows — there is no lab component for a signature image and inventing one for three rows would be worse than not.",
+            "props": ["request: Pick<Request,'budgetOfficerSignatureUrl'|'budgetOfficerSignedAt'|'directorSignatureUrl'|'directorSignedAt'|'idoFinalSignatureUrl'|'idoFinalSignedAt'>"],
+            "description": "Three rows — Budget Officer, Campus Director (first approval), IDO Chairperson — each showing the signature image and when it was stamped, or 'Not yet signed'. This is what the Director is countersigning, so it is the most important block on the page."
+          },
+          {
+            "name": "FinalDirectorActionButtons",
+            "file": "src/features/final-director-approval/components/FinalDirectorActionButtons.tsx",
+            "type": "widget",
+            "lab_components": ["AppCard", "AppButton", "AppDialog", "AppModal", "AppTextArea", "AppAlert", "AppToast"],
+            "heroui_components": [],
+            "heroui_note": "None. AppDialog confirms the signing; AppModal carries the rejection note.",
+            "props": ["requestId: string", "finalDirectorStatus: string | null", "hasSignature: boolean", "canApprove: boolean"],
+            "description": "Approve & Sign, and Reject. The confirmation dialog states the consequences plainly: the request becomes approved, the signed form is released, and the requestor is asked for feedback."
+          },
+          {
+            "name": "RequestActivityFeed",
+            "file": "src/features/request-detail/components/RequestActivityFeed.tsx",
+            "type": "list",
+            "lab_components": ["AppTimeline"],
+            "heroui_components": [],
+            "heroui_note": "None. Spec 006, unfiltered.",
+            "props": ["auditLogs: AuditLogEntry[]"],
+            "description": "The full history — by this stage it is the whole journey."
+          },
+          {
+            "name": "RequestCommentThread",
+            "file": "src/features/request-comments/components/RequestCommentThread.tsx",
+            "type": "widget",
+            "lab_components": ["AppCommentSection"],
+            "heroui_components": [],
+            "heroui_note": "None. Spec 008.",
+            "props": ["requestId: string"],
+            "description": "The conversation."
+          }
+        ],
+        "actions": [
+          { "name": "finalDirectorApprove", "type": "button", "description": "Confirms, stamps the signature, approves the request and creates the CSM record", "triggers": "opens modal then calls tRPC procedure" },
+          { "name": "finalDirectorReject", "type": "button", "description": "Opens a modal with a required note. Terminal.", "triggers": "opens modal then calls tRPC procedure" },
+          { "name": "viewPdf", "type": "link", "description": "Header action, new tab. After approval this is the finished, fully signed document.", "triggers": "navigates" }
+        ]
+      }
+    ],
+    "components": [],
+    "forms": [
+      {
+        "name": "FinalDirectorRejectModal",
+        "file": "src/features/final-director-approval/components/FinalDirectorActionButtons.tsx",
+        "schema_file": "src/features/final-director-approval/validations/schema/final-director-approver.schema.ts",
+        "method": "PATCH",
+        "server_fn": "request.finalDirectorReject",
+        "success_message": "Request rejected.",
+        "error_message": "Failed to process the action. Please try again.",
+        "fields": [
+          { "name": "note", "type": "textarea", "label": "Reason", "placeholder": "Explain the decision — the requestor will read this", "required": true, "zod_rule": "z.string().min(1, 'Note is required')" }
+        ]
+      }
+    ],
+    "hooks": [
+      { "file": "src/features/final-director-approval/hooks/use-final-director-approval-queries.ts", "actor": "director", "type": "query", "invalidates": [], "note": "Reads request.getById." },
+      { "file": "src/features/final-director-approval/hooks/use-final-director-approval-mutations.ts", "actor": "director", "type": "mutation", "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.staffList.queryKey()", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()", "trpc.csm.getMyCsm.queryKey({ requestId })", "trpc.request.getForPdf.queryKey({ id })"], "note": "approve and reject, with isAnyPending." }
+    ],
+    "store": { "needed": false }
+  },
+
+  "requirements": {
+    "functional": [
+      "finalDirectorStatus === 'APPROVED' is the master gate for the PDF's signatures. Nothing else unlocks them, and no other procedure may set that value.",
+      "The approval writes six things plus the Csm row plus the audit log, and every one of them is in the same transaction.",
+      "The Csm row is created here, empty, with submittedAt null. The requestor completes it (spec 015).",
+      "completionStatus CSM_PENDING is what the requestor's banner and their CSM route both key on.",
+      "requestEndAt is set only if it was null, so a retry cannot move the completion date.",
+      "Approving requires a signature; the URL is copied onto the request.",
+      "Rejecting requires a note, requires no signature, and creates no Csm row.",
+      "FINAL_REJECTED is labelled 'Director Final Rejected' everywhere, distinct from the chairperson's 'IDO Final Rejected'.",
+      "After approval the page opens read-only with a link to the finished PDF."
+    ],
+    "authorization": [
+      "Route gate: assertAuthenticatedRoleFn with ['DIRECTOR'].",
+      "Server gate: roleProcedure('DIRECTOR'), then assertPermission(APPROVE_DIRECTOR), then the stage check on finalDirectorStatus, then the signature check on approval.",
+      "The stage check reads finalDirectorStatus. This is the only column that distinguishes the Director's final approval from their first one — both are the same role on the same request.",
+      "An IDO_CHAIRPERSON calling finalDirectorApprove gets FORBIDDEN, even though they signed the request moments before.",
+      "Nothing about this stage is reachable by a requestor."
+    ],
+    "ux": [
+      "The signature summary is the centre of the page. A director countersigning three other signatures must be able to see all three.",
+      "The confirmation dialog names all three consequences: approved, signed form released, feedback requested. This is the least reversible action in the system.",
+      "A missing signature is explained with a link to the profile before an attempt is made.",
+      "After approval the page states plainly that the request is complete and offers the PDF, rather than showing a dead action panel.",
+      "Reject is visually secondary and always asks for a reason."
+    ]
+  },
+
+  "validations": {
+    "schemas": [
+      {
+        "file": "src/features/final-director-approval/validations/schema/final-director-approver.schema.ts",
+        "used_by": ["FinalDirectorActionButtons", "both procedures"],
+        "rules": [
+          { "field": "finalDirectorApproveSchema.id", "zod_rule": "z.string().min(1)" },
+          { "field": "finalDirectorRejectSchema.note", "zod_rule": "z.string().min(1, 'Note is required')" }
+        ]
+      }
+    ],
+    "server_guards": [
+      { "procedure": "request.finalDirectorApprove", "guard": "roleProcedure('DIRECTOR')", "error": "FORBIDDEN — Insufficient permissions" },
+      { "procedure": "request.finalDirectorApprove", "guard": "assertPermission(APPROVE_DIRECTOR)", "error": "FORBIDDEN — You don't have permission to perform this action" },
+      { "procedure": "request.finalDirectorApprove", "guard": "ctx.user.signatureUrl is present", "error": "FORBIDDEN — Your profile is missing a signature. Please complete your profile before approving." },
+      { "procedure": "request.finalDirectorApprove", "guard": "finalDirectorStatus === 'UNDER_FINAL_DIRECTOR_APPROVAL'", "error": "FORBIDDEN — This request is not at the final approval stage" },
+      { "procedure": "request.finalDirectorApprove", "guard": "the Csm create is inside the same transaction as the request update", "error": "the unique constraint on Csm.requestId rolls the whole approval back on a duplicate" },
+      { "procedure": "request.finalDirectorReject", "guard": "role, permission and the same stage check", "error": "FORBIDDEN — as above" }
+    ]
+  },
+
+  "test_requirements": [
+    {
+      "file": "src/integrations/trpc/routers/request.final-director-approval.test.ts",
+      "type": "unit",
+      "covers": [
+        "approve stamps the signature, sets finalDirectorStatus APPROVED, masterStatus APPROVED and completionStatus CSM_PENDING",
+        "approve creates exactly one Csm row with submittedAt null",
+        "approve sets requestEndAt only when it was null",
+        "approve with no signatureUrl is FORBIDDEN and creates no Csm row",
+        "approve at the wrong stage is FORBIDDEN",
+        "approving twice fails the second time and does not create a second Csm row",
+        "reject sets both statuses to FINAL_REJECTED and creates no Csm row",
+        "reject with no note fails validation",
+        "an IDO_CHAIRPERSON calling finalDirectorApprove gets FORBIDDEN",
+        "a director without APPROVE_DIRECTOR gets FORBIDDEN",
+        "a failure inside the transaction leaves the request at UNDER_FINAL_DIRECTOR_APPROVAL with no Csm row and no audit log"
+      ]
+    },
+    {
+      "file": "cypress/e2e/final-director-approval.cy.ts",
+      "type": "e2e",
+      "covers": [
+        "the signature summary shows the budget, director and chairperson signatures before approval",
+        "approving makes the requestor's CSM banner appear",
+        "approving makes both signatures appear on the PDF",
+        "rejecting shows 'Director Final Rejected' on the requestor's list"
+      ]
+    }
+  ],
+
+  "acceptance_criteria": [
+    { "given": "a request at finalDirectorStatus UNDER_FINAL_DIRECTOR_APPROVAL and a director with a signature", "when": "they approve and sign", "then": "masterStatus and finalDirectorStatus are APPROVED, completionStatus is CSM_PENDING, and a Csm row exists with submittedAt null" },
+    { "given": "the same approval", "when": "the requestor opens their request", "then": "the CSM banner is shown and the PDF carries the chairperson's and the director's signatures" },
+    { "given": "a director with no signature on their profile", "when": "they call finalDirectorApprove", "then": "the call fails with the missing-signature message and no Csm row is created" },
+    { "given": "an approved request", "when": "the director opens the page again", "then": "it is read-only, shows both signatures, and offers the finished PDF" },
+    { "given": "a request rejected at this stage", "when": "the requestor opens their list", "then": "the status chip reads 'Director Final Rejected' and no CSM is ever requested" },
+    { "given": "an IDO_CHAIRPERSON", "when": "they call request.finalDirectorApprove", "then": "the call fails with FORBIDDEN" }
+  ],
+
+  "edge_cases": [
+    "This is the single most consequential write in the app: six columns, a new row in another table and an audit log. Anything less than one transaction can leave an approved request with no CSM, or a CSM with no approval.",
+    "Csm.requestId is unique, so a retry after a partial commit throws — which is the correct outcome, because it means the first attempt already succeeded. Surface it as 'already approved', not as a server error.",
+    "The PDF gate is finalDirectorStatus === 'APPROVED', not masterStatus. Both are set here, but a future change that sets one without the other silently releases or withholds the signatures.",
+    "requestEndAt guarded on null matters for the same reason requestStartAt is: it is the duration the office reports on.",
+    "The Director appears twice in the workflow. Routing (spec 009) and both stage guards key on different columns; conflating them lets a director approve the final stage from the first-stage page.",
+    "The signature summary reads the request's stored URLs, not the users' current profiles — a signature changed afterwards must not alter what was countersigned."
+  ],
+
+  "out_of_scope": [
+    "The CSM form itself — spec 015; this stage only creates the empty record.",
+    "The PDF rendering — spec 016; this stage only flips the gate.",
+    "The Director's first approval — spec 012.",
+    "Any post-approval amendment — an approved request is final; there is no reopen."
+  ]
+}
+

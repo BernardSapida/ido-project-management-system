@@ -1,0 +1,343 @@
+{
+  "spec_number": 16,
+  "spec_title": "Request PDF",
+  "feature_name": "request-pdf",
+  "description": "A faithful reproduction of TUPC-F-OCD-IDO-01, the Building Design Request Form, rendered from the request record with @react-pdf/renderer. It is the artefact the whole workflow exists to produce, and its signatures appear only once the Campus Director has given final approval.",
+  "depends_on": [1, 3, 5, 14],
+
+  "source_reference": {
+    "pages": ["IRMS-old/src/routes/_authenticated/requests/$requestId/pdf.tsx"],
+    "files": [
+      "IRMS-old/src/features/request-pdf/components/RequestFormPDFDocument.tsx",
+      "IRMS-old/src/features/request-pdf/components/RequestPdfViewer.tsx",
+      "IRMS-old/src/features/request-pdf/components/RequestPdfInner.tsx",
+      "IRMS-old/src/features/request-pdf/types/request-pdf.types.ts",
+      "IRMS-old/src/integrations/trpc/routers/request.router.ts (getForPdf, getSignaturesAsBase64)"
+    ],
+    "docs": ["IRMS-old/PDF Flow.md", "IRMS-old/documents/TUPC-F-OCD-IDO-01 (BUILDING DESIGN REQUEST FORM)-02.pdf", "IRMS-old/TASKS.md (PDF date format)"]
+  },
+
+  "flow": {
+    "actors": ["USER", "IDO_OFFICER", "IDO_CHAIRPERSON", "BUDGET_OFFICER", "DIRECTOR"],
+    "happy_path": [
+      { "step": 1, "actor": "any reader", "action": "presses View PDF on a submitted request", "result": "/requests/$requestId/pdf opens in a new tab" },
+      { "step": 2, "actor": "system", "action": "fetches the record and the signatures", "result": "getForPdf returns the printable fields; getSignaturesAsBase64 returns each signature inlined as a data URI" },
+      { "step": 3, "actor": "system", "action": "renders", "result": "an A4 document in a viewer, matching the paper form section by section" },
+      { "step": 4, "actor": "any reader", "action": "downloads or prints", "result": "the file is named after the document number" }
+    ],
+    "alternate_paths": [
+      { "name": "Not yet finally approved", "trigger": "finalDirectorStatus is anything but APPROVED", "result": "the form renders with every field filled but the IDO and Director signature cells, their dates and the Action checkboxes empty — the server never sends those values" },
+      { "name": "Requestor has no signature", "trigger": "signatureUrl is null on the profile", "result": "the requestor's signature cell is blank; everything else renders" },
+      { "name": "A signature image fails to fetch", "trigger": "S3 returns an error for one URL", "result": "that one cell is blank and the rest of the document still renders — a broken image must never take the whole PDF down" },
+      { "name": "Not allowed to read the request", "trigger": "an unrelated USER or an ADMIN", "result": "FORBIDDEN from both procedures and an error state in the viewer" },
+      { "name": "Draft", "trigger": "the request has never been submitted", "result": "the page is not linked, and if reached it renders the form with no document number and no submission date" }
+    ]
+  },
+
+  "database": {
+    "models": [
+      { "name": "Request", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] },
+      { "name": "User", "action": "reuse", "prisma_note": "Read for the requestor's signatureUrl", "fields": [] }
+    ]
+  },
+
+  "trpc_procedures": [
+    {
+      "name": "getForPdf",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "query",
+      "procedure": "protectedProcedure",
+      "input_schema": null,
+      "input": { "id": "string" },
+      "output": { "id": "string", "documentNumber": "string | null", "title": "string", "finalTitle": "string | null", "typeOfRequest": "string", "nameOfBuildingArea": "string", "details": "string", "requestedBy": "string", "position": "string", "requestorSignatureUrl": "string | null", "requestSubmittedAt": "string | null", "reference": "string | null", "approverNote": "string | null", "idoFinalSignatureUrl": "string | null", "idoFinalSignedAt": "string | null", "finalDirectorSignatureUrl": "string | null", "finalDirectorSignedAt": "string | null", "finalDirectorStatus": "string | null", "masterStatus": "string", "idoEvaluationStatus": "string | null" },
+      "guards": ["the request exists", "the caller is the owner OR holds a staff role — the same rule as request.getById", "the four approval signature/date fields are returned as null unless finalDirectorStatus === 'APPROVED'"],
+      "invalidates": [],
+      "description": "The printable projection. requestSubmittedAt is the createdAt of the first SUBMITTED audit log, which is what the DATE and TIME cells under the requestor print. The signature gate is applied here, on the server, not in the renderer."
+    },
+    {
+      "name": "getSignaturesAsBase64",
+      "router": "src/integrations/trpc/routers/request.router.ts",
+      "type": "query",
+      "procedure": "protectedProcedure",
+      "input_schema": null,
+      "input": { "requestId": "string" },
+      "output": { "requestorSignatureBase64": "string | null", "idoFinalSignatureBase64": "string | null", "finalDirectorSignatureBase64": "string | null" },
+      "guards": ["the same access rule as getForPdf", "the IDO and Director signatures are converted only when finalDirectorStatus === 'APPROVED'"],
+      "invalidates": [],
+      "description": "Fetches each signature image server-side and returns it as a data: URI. @react-pdf/renderer cannot reliably load a remote image inside the browser, and a signed S3 URL would expire; a per-image failure resolves to null rather than throwing."
+    }
+  ],
+
+  "frontend": {
+    "pages": [
+      {
+        "name": "RequestPdfPage",
+        "route_file": "src/routes/_authenticated/requests/$requestId/pdf.tsx",
+        "breadcrumb": "View PDF",
+        "main_width": "full",
+        "role": "all",
+        "layout": "AppLayout (frame, from _authenticated.tsx) — page renders AppPageHeader + the viewer. mainWidth 'full' because the width IS the feature here",
+        "page_header": { "title": "Building Design Request Form", "subtitle": "{documentNumber} — the printed form as it stands today.", "action": "AppButton — Download" },
+        "components": [
+          {
+            "name": "RequestPdfViewer",
+            "file": "src/features/request-pdf/components/RequestPdfViewer.tsx",
+            "type": "widget",
+            "lab_components": ["AppCard", "AppButton", "AppErrorState", "AppQueryError", "AppProgressCircle"],
+            "heroui_components": [],
+            "heroui_note": "None. The PDFViewer itself comes from @react-pdf/renderer and is not a UI component in the lab sense — it is a renderer. Everything around it (the frame, the loading state, the error state, the download control) is a lab component.",
+            "props": ["request: RequestPdfData | undefined", "signatures: SignatureBundle | undefined", "isLoading: boolean", "isError: boolean"],
+            "description": "Client-only. The renderer must not run during SSR — mount it behind a client guard, or the server build pulls in a canvas dependency it cannot satisfy. Loading is a progress circle with the document name; failure is an AppErrorState with a retry."
+          },
+          {
+            "name": "RequestFormPDFDocument",
+            "file": "src/features/request-pdf/components/RequestFormPDFDocument.tsx",
+            "type": "widget",
+            "lab_components": [],
+            "heroui_components": [],
+            "heroui_note": "None, and none possible. This is @react-pdf/renderer primitives — Document, Page, View, Text, Image, StyleSheet — which share no runtime with the DOM. It is the one component in the migration that cannot use a lab component, and that is a property of the target format, not a shortcut.",
+            "props": ["request: RequestPdfData", "requestorSignatureBase64: string | null", "idoFinalSignatureBase64: string | null", "finalDirectorSignatureBase64: string | null", "isApproved: boolean"],
+            "description": "The seven-section reproduction of the paper form. See pdf_layout."
+          }
+        ],
+        "actions": [
+          { "name": "downloadPdf", "type": "button", "description": "Saves the document as {documentNumber}.pdf", "triggers": "PDFDownloadLink from @react-pdf/renderer" }
+        ]
+      }
+    ],
+    "components": [],
+    "forms": [],
+    "hooks": [
+      { "file": "src/features/request-pdf/hooks/use-user-request-pdf-queries.ts", "actor": "user", "type": "query", "invalidates": [], "note": "useRequestForPdf and useSignaturesForPdf; the second is enabled only once the first has resolved." }
+    ],
+    "store": { "needed": false }
+  },
+
+  "pdf_layout": {
+    "page": {
+      "size": "A4",
+      "orientation": "portrait",
+      "padding": "30pt all sides",
+      "font_family": "Helvetica",
+      "base_font_size": 8,
+      "border_color": "#000000",
+      "border_width": 0.5,
+      "shade_color": "#000000 with white text"
+    },
+    "sections": [
+      {
+        "section": 1,
+        "name": "Header",
+        "layout": "bordered row — logo cell 20%, institution block 80%",
+        "rows": [
+          { "row": 1, "content": "TUP logo — 20% cell. Institution block: 'Technological University of the Philippines' bold centred, 'Cavite Campus' bold centred, address, telefax and email lines centred" },
+          { "row": 2, "content": "sub-row — 'IDO' 15% | 'BUILDING DESIGN REQUEST FORM' bold centred size 10, 70% | 'Page 1/1' right, 15%" }
+        ]
+      },
+      {
+        "section": 2,
+        "name": "Details of Request",
+        "layout": "full width bordered table",
+        "header_row": { "content": "DETAILS OF REQUEST", "style": "bold, shaded, white text" },
+        "rows": [
+          { "row": 1, "columns": [ { "width": "25%", "content": "TYPE OF REQUEST — bold" }, { "width": "75%", "content": "checkbox row over the six TYPE_OF_REQUEST_OPTIONS plus 'Others (Please Specify)' — the one matching request.typeOfRequest is filled" } ] },
+          { "row": 2, "columns": [ { "width": "25%", "content": "NAME OF BUILDING/AREA & LOCATION — bold" }, { "width": "75%", "content": "finalTitle ?? title" } ] },
+          { "row": 3, "min_height": "80pt", "columns": [ { "width": "25%", "content": "DETAILS — bold, with '(Use a separate sheet if necessary)' italic size 7 beneath" }, { "width": "75%", "content": "request.details verbatim" } ] }
+        ]
+      },
+      {
+        "section": 3,
+        "name": "Requestor",
+        "layout": "full width bordered table",
+        "rows": [
+          { "row": 1, "columns": [ { "width": "25%", "content": "REQUESTED BY — bold" }, { "width": "35%", "content": "request.requestedBy" }, { "width": "10%", "content": "SIGNATURE — bold centred" }, { "width": "15%", "content": "requestorSignatureBase64 image, max height 30pt, contain" } ] },
+          { "row": 2, "columns": [ { "width": "25%", "content": "POSITION/DESIGNATION — bold" }, { "width": "35%", "content": "the LABEL for request.position, not the enum value" }, { "width": "10%", "content": "DATE — bold" }, { "width": "15%", "content": "requestSubmittedAt as MMMM DD, YYYY" }, { "width": "8%", "content": "TIME — bold" }, { "width": "7%", "content": "requestSubmittedAt as hh:mm AM/PM" } ] }
+        ]
+      },
+      {
+        "section": 4,
+        "name": "Related Personnel",
+        "layout": "full width bordered table, one group per representative position",
+        "header_row": { "content": "NOTE: To be accomplished by Related Personnel (At least 2) — italic size 7", "style": "plain row" },
+        "groups": [
+          { "role": "STUDENT_REPRESENTATIVE", "label": "STUDENT REPRESENTATIVE", "rows": [ { "row": "a", "content": "name blank | SIGNATURE | the requestor's signature IF request.position matches this role, else blank" }, { "row": "b", "content": "DATE | submitted date if the position matches, else blank | TIME | submitted time if it matches, else blank" } ] },
+          { "role": "ADMINISTRATION_REPRESENTATIVE", "label": "ADMINISTRATION REPRESENTATIVE", "rows": [ { "row": "a", "content": "as above" }, { "row": "b", "content": "as above" } ] },
+          { "role": "FACULTY_REPRESENTATIVE", "label": "FACULTY REPRESENTATIVE", "rows": [ { "row": "a", "content": "as above" }, { "row": "b", "content": "as above" } ] },
+          { "role": "ALUMNI_REPRESENTATIVE", "label": "ALUMNI REPRESENTATIVE", "rows": [ { "row": "a", "content": "as above" }, { "row": "b", "content": "as above" } ] }
+        ]
+      },
+      {
+        "section": 5,
+        "name": "Noted — Department Head",
+        "layout": "full width bordered table",
+        "header_row": { "content": "NOTED", "style": "bold, shaded, white text" },
+        "rows": [
+          { "row": 1, "content": "DEPT. HEAD/IMMEDIATE SUPERVISOR | blank | SIGNATURE | the requestor's signature if request.position is DEPARTMENT_HEAD, else blank" },
+          { "row": 2, "content": "DATE | submitted date if the position matches | TIME | submitted time if it matches" }
+        ]
+      },
+      {
+        "section": 6,
+        "name": "Recommendation by IDO and Action",
+        "layout": "two 50% columns side by side, each with its own shaded header",
+        "columns": [
+          {
+            "width": "50%",
+            "content": "RECOMMENDATION BY IDO",
+            "header_row": { "content": "RECOMMENDATION BY IDO", "style": "bold, shaded" },
+            "rows": [
+              { "row": 1, "content": "'Recommending Approval?' bold, then Yes / No checkboxes — Yes filled when idoEvaluationStatus is RECOMMENDED_BY_IDO, No filled when idoEvaluationStatus is set and is not RECOMMENDED_BY_IDO, neither filled while it is null" },
+              { "row": 2, "content": "'Reason: ' bold followed by approverNote" },
+              { "row": 3, "content": "IDO | SIGNATURE | idoFinalSignatureBase64 — only when isApproved" },
+              { "row": 4, "content": "DATE | idoFinalSignedAt as MMMM DD, YYYY when isApproved | TIME | hh:mm AM/PM when isApproved" }
+            ]
+          },
+          {
+            "width": "50%",
+            "content": "ACTION",
+            "header_row": { "content": "ACTION", "style": "bold, shaded" },
+            "rows": [
+              { "row": 1, "content": "Approved / Disapproved / Resubmit Request checkboxes — Approved filled when finalDirectorStatus is APPROVED, Disapproved when FINAL_REJECTED, Resubmit never filled" },
+              { "row": 2, "content": "'Notes: ' bold followed by approverNote" },
+              { "row": 3, "content": "CAMPUS DIRECTOR | SIGNATURE | finalDirectorSignatureBase64 — only when isApproved" },
+              { "row": 4, "content": "DATE | finalDirectorSignedAt as MMMM DD, YYYY when isApproved | TIME | hh:mm AM/PM when isApproved" }
+            ]
+          }
+        ]
+      },
+      {
+        "section": 7,
+        "name": "Action — Campus Director (full width)",
+        "layout": "full width bordered table",
+        "header_row": { "content": "ACTION", "style": "bold, shaded, white text" },
+        "rows": [
+          { "row": 1, "content": "Approved / Disapproved / Resubmit Request checkboxes, same rule as section 6" },
+          { "row": 2, "content": "Notes: | approverNote" },
+          { "row": 3, "content": "CAMPUS DIRECTOR | blank | SIGNATURE | finalDirectorSignatureBase64 when isApproved" },
+          { "row": 4, "content": "DATE | finalDirectorSignedAt when isApproved | TIME | when isApproved" }
+        ]
+      }
+    ],
+    "footer": { "content": "TUPC-F-OCD-IDO-01 Ø2 (07.12.19)", "style": "left-aligned, font size 7" }
+  },
+
+  "requirements": {
+    "functional": [
+      "@react-pdf/renderer is added as a dependency — it is not in the IPMS template.",
+      "The signature gate is finalDirectorStatus === 'APPROVED', enforced on the SERVER in both procedures. The renderer's isApproved check is a second belt, not the gate.",
+      "Every date printed anywhere in the document is MMMM DD, YYYY — 'March 03, 2026'. Times are hh:mm AM/PM (an explicit IRMS-old fix).",
+      "requestSubmittedAt comes from the first SUBMITTED audit log, not from createdAt — a draft written in January and submitted in March prints March.",
+      "The position printed is the LABEL from POSITION_OPTIONS, never the SCREAMING_SNAKE enum value.",
+      "Signatures are inlined as data URIs by the server. The renderer never fetches a remote image.",
+      "A single failed image fetch resolves to null and leaves that cell blank; it must not fail the query.",
+      "The viewer is client-only — the renderer must not be pulled into the SSR bundle.",
+      "The download is named after the document number.",
+      "The document reproduces the source form section by section; the paper original is in IRMS-old/documents/ and is the acceptance reference."
+    ],
+    "authorization": [
+      "Route gate: assertAuthenticatedFn — five roles legitimately read this document.",
+      "Server gate on both procedures: the owner or a staff role, exactly as request.getById. ADMIN is excluded.",
+      "The signature gate is a second, independent server-side rule: even a reader who is allowed the document gets nulls for the approval signatures until the final approval lands.",
+      "getSignaturesAsBase64 fetches images server-side, so an S3 URL is never handed to the browser — which also means bucket access does not have to be public."
+    ],
+    "ux": [
+      "The viewer fills the width; mainWidth is 'full' because a squeezed A4 preview is unreadable.",
+      "Loading shows a progress indicator naming the document, not a bare spinner — generating a PDF takes visible time.",
+      "A failure shows an AppErrorState with a retry, never a blank page.",
+      "A request that is not yet approved shows a line above the viewer saying the signatures appear once the Campus Director gives final approval, so a blank cell is not read as a bug.",
+      "Download is a real control, not only the browser's own PDF chrome."
+    ]
+  },
+
+  "validations": {
+    "schemas": [
+      {
+        "file": "src/features/request-pdf/types/request-pdf.types.ts",
+        "used_by": ["RequestFormPDFDocument", "getForPdf"],
+        "rules": [
+          { "field": "RequestPdfData", "zod_rule": "a TypeScript interface, not a Zod schema — it is a server projection, not user input. The only validated input is id: z.string().min(1)" }
+        ]
+      }
+    ],
+    "server_guards": [
+      { "procedure": "request.getForPdf", "guard": "the request exists", "error": "NOT_FOUND — Request not found" },
+      { "procedure": "request.getForPdf", "guard": "owner or staff role", "error": "FORBIDDEN — Access denied" },
+      { "procedure": "request.getForPdf", "guard": "idoFinalSignatureUrl, idoFinalSignedAt, finalDirectorSignatureUrl and finalDirectorSignedAt are null unless finalDirectorStatus === 'APPROVED'", "error": "n/a — redaction, not rejection" },
+      { "procedure": "request.getSignaturesAsBase64", "guard": "the same access rule", "error": "FORBIDDEN — Access denied" },
+      { "procedure": "request.getSignaturesAsBase64", "guard": "the approval signatures are converted only when approved", "error": "n/a — redaction" }
+    ]
+  },
+
+  "test_requirements": [
+    {
+      "file": "src/integrations/trpc/routers/request.get-for-pdf.test.ts",
+      "type": "unit",
+      "covers": [
+        "an unapproved request returns null for all four approval signature and date fields",
+        "an approved request returns all four",
+        "requestSubmittedAt is the first SUBMITTED audit log's createdAt, not the request's createdAt",
+        "the owner can read it",
+        "an IDO_OFFICER can read someone else's",
+        "an unrelated USER gets FORBIDDEN",
+        "an ADMIN gets FORBIDDEN"
+      ]
+    },
+    {
+      "file": "src/integrations/trpc/routers/request.get-signatures.test.ts",
+      "type": "unit",
+      "covers": [
+        "the requestor's signature is converted regardless of approval state",
+        "the IDO and Director signatures are null while unapproved",
+        "a fetch failure for one image returns null for that one and does not reject the query",
+        "an unrelated USER gets FORBIDDEN"
+      ]
+    },
+    {
+      "file": "src/features/request-pdf/lib/format-pdf-date.test.ts",
+      "type": "unit",
+      "covers": [
+        "a date formats as 'March 03, 2026' with a zero-padded day",
+        "a time formats as '02:05 PM'",
+        "midnight formats as '12:00 AM' and noon as '12:00 PM'",
+        "null formats as an empty string, never 'Invalid Date'"
+      ]
+    },
+    {
+      "file": "cypress/e2e/request-pdf.cy.ts",
+      "type": "e2e",
+      "covers": [
+        "View PDF opens the document for a submitted request",
+        "an unapproved request shows the signature cells empty and the explanatory line",
+        "an approved request shows both signatures",
+        "the download saves a file named after the document number"
+      ]
+    }
+  ],
+
+  "acceptance_criteria": [
+    { "given": "a request approved by the Campus Director", "when": "the PDF renders", "then": "the IDO and Campus Director signature cells carry images, their dates read MMMM DD, YYYY, and the Approved checkbox is filled" },
+    { "given": "the same request before that approval", "when": "the PDF renders", "then": "those cells and dates are empty and the Action checkboxes are all unfilled" },
+    { "given": "a requestor whose position is FACULTY_REPRESENTATIVE", "when": "the PDF renders", "then": "their signature appears in the Faculty Representative row and in the Requested By row, and nowhere else" },
+    { "given": "a request submitted on 3 March 2026 at 14:05", "when": "the PDF renders", "then": "the requestor's DATE reads 'March 03, 2026' and TIME reads '02:05 PM'" },
+    { "given": "an unrelated USER", "when": "they open the PDF route", "then": "both queries fail with FORBIDDEN and the viewer shows an error state" },
+    { "given": "a signature whose S3 object is missing", "when": "the PDF renders", "then": "that one cell is blank and the rest of the document is intact" }
+  ],
+
+  "edge_cases": [
+    "@react-pdf/renderer must not be imported into the SSR bundle. Mount the viewer client-only, or the server build fails on a dependency it cannot resolve.",
+    "Signatures MUST be base64. A remote URL inside the renderer either fails silently or races the render, and a presigned S3 URL expires — which is why the server does the fetch.",
+    "The signature gate lives on the server in two places. A future 'optimisation' that moves it into the renderer publishes signatures to anyone who opens devtools.",
+    "approverNote is printed in three places (the IDO Reason and both Notes cells) because the old model has one note column. If a later stage overwrites it, all three change together. Decide deliberately before adding per-stage note columns.",
+    "The 'No' recommendation checkbox is filled when idoEvaluationStatus is set and is not RECOMMENDED_BY_IDO — a returned request therefore prints as 'No', which is arguably wrong but is the existing behaviour; confirm with the office before changing it.",
+    "Section 4 keys the requestor's signature on request.position. A requestor whose position is DEPARTMENT_HEAD appears in section 5 instead, and none of the four representative rows is filled.",
+    "The logo is a placeholder rectangle in the old implementation. Ship the real TUP mark or keep the placeholder deliberately; a grey box on an official form is a defect somebody will report."
+  ],
+
+  "out_of_scope": [
+    "Server-side PDF generation or emailing the document — it renders in the browser, on demand.",
+    "A second page or a continuation sheet — the form is Page 1/1 and the details cell simply grows.",
+    "Digitally signed (cryptographic) PDFs — the signatures are images of handwriting, as on the paper form.",
+    "Editing the PDF — it is a projection of the record.",
+    "The CSM form as a printed document — nothing asks for one."
+  ]
+}

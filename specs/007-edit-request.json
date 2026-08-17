@@ -1,0 +1,203 @@
+{
+  "spec_number": 7,
+  "spec_title": "Edit Request",
+  "feature_name": "request-form",
+  "description": "The same request form in edit mode, reachable only while a request is a draft or has been returned by IDO. It is the requestor's second chance: fix what the reviewer asked for and resubmit under the same document number.",
+  "depends_on": [5, 6],
+
+  "source_reference": {
+    "pages": ["IRMS-old/src/routes/_authenticated/requests/$requestId/edit.tsx"],
+    "files": [
+      "IRMS-old/src/features/request-form/components/RequestForm.tsx",
+      "IRMS-old/src/features/request-form/hooks/use-user-request-mutations.ts"
+    ],
+    "docs": ["IRMS-old/flows/01-user-submit-request.md (path A — Returned by IDO)", "IRMS-old/TASKS.md (save draft redirect)"]
+  },
+
+  "flow": {
+    "actors": ["USER"],
+    "happy_path": [
+      { "step": 1, "actor": "USER", "action": "presses Edit Request on the detail page", "result": "the form loads with every saved value in place and the attachments listed" },
+      { "step": 2, "actor": "USER", "action": "changes fields, adds or removes attachments", "result": "removals take effect on save; additions are parked until save" },
+      { "step": 3, "actor": "USER", "action": "presses Save Draft", "result": "saveDraft runs and the browser returns to /requests/$requestId" },
+      { "step": 4, "actor": "USER", "action": "presses Submit Request instead", "result": "saveDraft then submit, in that order, so the resubmission carries the edits — the document number is unchanged" }
+    ],
+    "alternate_paths": [
+      { "name": "Status changed while the page was open", "trigger": "IDO acted on the request in another tab", "result": "saveDraft returns FORBIDDEN with the status message; the page shows it and offers a reload rather than losing the typing silently" },
+      { "name": "Not the owner", "trigger": "a USER edits an id that is not theirs", "result": "FORBIDDEN from saveDraft; the route also refuses because getById already refused" },
+      { "name": "A staff role opens the edit URL", "trigger": "deep link", "result": "the route gate sends them to /unauthorized — staff never edit a requestor's words" },
+      { "name": "Returned request resubmitted", "trigger": "Submit on a RETURNED request", "result": "masterStatus SUBMITTED, a fresh SUBMITTED audit log, the SAME document number, and idoEvaluationStatus is cleared so the request re-enters the IDO queue" }
+    ]
+  },
+
+  "database": {
+    "models": [
+      { "name": "Request", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] },
+      { "name": "AuditLog", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] }
+    ]
+  },
+
+  "trpc_procedures": [
+    { "name": "getById", "router": "src/integrations/trpc/routers/request.router.ts", "type": "query", "procedure": "protectedProcedure", "input_schema": null, "input": { "id": "string" }, "output": { "request": "Request & { auditLogs }" }, "guards": ["as spec 006"], "invalidates": [], "description": "Reused unchanged." },
+    { "name": "saveDraft", "router": "src/integrations/trpc/routers/request.router.ts", "type": "mutation", "procedure": "protectedProcedure", "input_schema": "src/features/request-form/validations/schema/request.schema.ts (saveDraftRequestSchema)", "input": { "id": "string", "...createRequestSchema": "" }, "output": { "id": "string", "masterStatus": "string" }, "guards": ["ownership", "masterStatus DRAFT or RETURNED"], "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()"], "description": "Defined in spec 005, used here." },
+    { "name": "submit", "router": "src/integrations/trpc/routers/request.router.ts", "type": "mutation", "procedure": "protectedProcedure", "input_schema": null, "input": { "id": "string" }, "output": { "id": "string", "documentNumber": "string" }, "guards": ["ownership", "SUBMIT_REQUEST", "masterStatus DRAFT or RETURNED"], "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()", "trpc.request.staffList.queryKey()"], "description": "Defined in spec 005. When resubmitting a RETURNED request it must also clear idoEvaluationStatus, or the request lands back in the queue still flagged as returned." }
+  ],
+
+  "frontend": {
+    "pages": [
+      {
+        "name": "RequestEditPage",
+        "route_file": "src/routes/_authenticated/requests/$requestId/edit.tsx",
+        "breadcrumb": "Edit Request",
+        "main_width": "wide",
+        "role": "USER",
+        "layout": "AppLayout (frame, from _authenticated.tsx) — page renders AppPageHeader + content only",
+        "page_header": { "title": "Edit Request", "subtitle": "Update your request, then save it or submit it when it is ready.", "action": null },
+        "components": [
+          {
+            "name": "RequestForm",
+            "file": "src/features/request-form/components/RequestForm.tsx",
+            "type": "form",
+            "lab_components": ["AppInputGroup", "AppSelect", "AppTextArea", "AppFileUpload", "AppCard", "AppChip", "AppButton", "AppStepper", "AppToast"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md. Identical component to spec 005, mode 'edit', not read-only.",
+            "props": ["mode: 'edit'", "requestId: string", "defaultValues: Partial<RequestFormValues>", "masterStatus: string", "idoEvaluationStatus: string | null", "processor: string | null"],
+            "description": "Values arrive through RHF's `values` option so a request that resolves after the first render lands in the fields with no effect to write."
+          },
+          {
+            "name": "ReturnedRequestNotice",
+            "file": "src/features/request-detail/components/RejectionNotice.tsx",
+            "type": "banner",
+            "lab_components": ["AppAlert"],
+            "heroui_components": [],
+            "heroui_note": "None. Defined in spec 006 and reused here.",
+            "props": ["action", "note", "actorName", "occurredAt"],
+            "description": "On a RETURNED request the reviewer's note is pinned above the form while it is being fixed — that is what the user is editing against."
+          },
+          {
+            "name": "RequestCommentThread",
+            "file": "src/features/request-comments/components/RequestCommentThread.tsx",
+            "type": "widget",
+            "lab_components": ["AppCommentSection"],
+            "heroui_components": [],
+            "heroui_note": "None. Defined in spec 008.",
+            "props": ["requestId: string"],
+            "description": "Kept on the edit page so the requestor can ask a question without leaving what they are fixing."
+          }
+        ],
+        "actions": [
+          { "name": "saveDraft", "type": "button", "description": "Saves and returns to the detail page", "triggers": "calls tRPC procedure" },
+          { "name": "submitRequest", "type": "button", "description": "Saves then submits, then returns to the detail page", "triggers": "calls tRPC procedure" },
+          { "name": "cancel", "type": "link", "description": "Back to the detail page without saving; warns while the form is dirty", "triggers": "navigates" }
+        ]
+      }
+    ],
+    "components": [],
+    "forms": [
+      {
+        "name": "RequestForm",
+        "file": "src/features/request-form/components/RequestForm.tsx",
+        "schema_file": "src/features/request-form/validations/schema/request.schema.ts",
+        "method": "PATCH",
+        "server_fn": "request.saveDraft | request.submit",
+        "success_message": "Draft saved. | Request submitted. Your request has been sent to IDO for review.",
+        "error_message": "Failed to save the request. Please try again.",
+        "fields": [
+          { "name": "(identical to spec 005)", "type": "text", "label": "—", "placeholder": "", "required": true, "note": "The field set, labels, placeholders and Zod rules are the same object. This spec does not restate them; changing one changes both pages.", "zod_rule": "requestFormSchema" }
+        ]
+      }
+    ],
+    "hooks": [
+      { "file": "src/features/request-form/hooks/use-user-request-queries.ts", "actor": "user", "type": "query", "invalidates": [], "note": "useRequestById." },
+      { "file": "src/features/request-form/hooks/use-user-request-mutations.ts", "actor": "user", "type": "mutation", "invalidates": ["trpc.request.getById.queryKey({ id })", "trpc.request.myList.queryKey()", "trpc.request.mySummary.queryKey()", "trpc.request.staffList.queryKey()"], "note": "Same hook as spec 005." }
+    ],
+    "store": { "needed": false }
+  },
+
+  "requirements": {
+    "functional": [
+      "The page is reachable only for DRAFT and RETURNED. Any other status renders a read-only notice with a link back to the detail page rather than an editable form the server will refuse.",
+      "Form values come from RHF's `values` option, not from a useEffect reset, so a late-resolving query cannot fight the user's typing.",
+      "Save Draft returns to /requests/$requestId, the view page — the same rule as spec 005.",
+      "Submit performs saveDraft first, so a resubmission always carries the current edits.",
+      "Resubmitting a RETURNED request clears idoEvaluationStatus so the IDO queue shows it as a fresh submission rather than as still-returned.",
+      "The document number is untouched by any edit or resubmission.",
+      "Removing an attachment removes it from the record on save; the S3 object itself is left to s3:sweep, never deleted inline.",
+      "The reviewer's return note stays visible while the form is being corrected."
+    ],
+    "authorization": [
+      "Route gate: assertAuthenticatedRoleFn with allowedRoles ['USER'].",
+      "Server gate: saveDraft and submit both check ownership against the session and both check the status. The route gate stops the wrong role; the procedures stop the wrong request and the wrong moment.",
+      "A staff role must not be able to edit request content at all — their influence on the record is finalTitle, reference and notes, through their own review procedures.",
+      "The status check is what stops a requestor rewriting a request that is already with the Director."
+    ],
+    "ux": [
+      "Navigating away with unsaved changes warns first; a request that took ten minutes to write must not vanish to a stray back button.",
+      "Both buttons are disabled while either mutation is in flight and show their pending label.",
+      "A FORBIDDEN from a status change while the page was open is shown as a banner naming the new status, with a reload action — not as a bare toast.",
+      "Attachment removals are visible immediately in the list but only committed on save, matching the deferred-upload model in the other direction."
+    ]
+  },
+
+  "validations": {
+    "schemas": [
+      { "file": "src/features/request-form/validations/schema/request.schema.ts", "used_by": ["RequestForm", "request.saveDraft"], "rules": [ { "field": "all", "zod_rule": "saveDraftRequestSchema = createRequestSchema.extend({ id: z.string().min(1) }) — see spec 005 for the field rules" } ] }
+    ],
+    "server_guards": [
+      { "procedure": "request.saveDraft", "guard": "request.userId === ctx.user.id", "error": "FORBIDDEN — Access denied" },
+      { "procedure": "request.saveDraft", "guard": "masterStatus is DRAFT or RETURNED", "error": "FORBIDDEN — Request cannot be edited in its current status" },
+      { "procedure": "request.submit", "guard": "ownership, SUBMIT_REQUEST and an editable status", "error": "FORBIDDEN — as spec 005" },
+      { "procedure": "request.submit", "guard": "documentNumber is reused when already set", "error": "n/a" }
+    ]
+  },
+
+  "test_requirements": [
+    {
+      "file": "src/integrations/trpc/routers/request.resubmit.test.ts",
+      "type": "unit",
+      "covers": [
+        "resubmitting a RETURNED request keeps its document number",
+        "resubmitting clears idoEvaluationStatus",
+        "resubmitting writes a second SUBMITTED audit log rather than overwriting the first",
+        "editing a request under Director review is FORBIDDEN",
+        "editing another user's draft is FORBIDDEN"
+      ]
+    },
+    {
+      "file": "cypress/e2e/request-edit.cy.ts",
+      "type": "e2e",
+      "covers": [
+        "Edit Request is offered on a draft and not on a submitted request",
+        "the reviewer's return note is visible while editing a returned request",
+        "Save Draft returns to the detail page",
+        "Submit from the edit page carries the edits into the resubmission",
+        "navigating away with unsaved changes warns first",
+        "a DIRECTOR deep-linking to the edit URL lands on /unauthorized"
+      ]
+    }
+  ],
+
+  "acceptance_criteria": [
+    { "given": "a DRAFT owned by the viewer", "when": "they open the edit page", "then": "every saved value is in its field and the attachments are listed" },
+    { "given": "a RETURNED request with the note 'Attach the floor plan'", "when": "the edit page loads", "then": "the note is pinned above the form" },
+    { "given": "an edited RETURNED request with document number 2026-0007", "when": "the user presses Submit Request", "then": "the edits are saved first, the status becomes SUBMITTED, and the number is still 2026-0007" },
+    { "given": "a request that IDO recommended while the edit page was open", "when": "the user presses Save Draft", "then": "the save fails with the status message and the typed values are still on screen" },
+    { "given": "a signed-in IDO_OFFICER", "when": "they open /requests/$id/edit", "then": "they are redirected to /unauthorized" }
+  ],
+
+  "edge_cases": [
+    "Submit is two mutations. If saveDraft succeeds and submit fails, the edits are already stored — the retry must not re-save, and the user must be told the save landed but the submission did not.",
+    "Clearing idoEvaluationStatus on resubmission is easy to forget and produces a request that shows as 'Returned' inside the IDO queue while actually being a new submission.",
+    "RHF `values` replaces the whole form when the query object identity changes; make sure the query is not refetching on window focus while the user types, or their edits are overwritten.",
+    "An attachment removed but not saved must reappear after a cancel — the removal lives in form state, not in the record.",
+    "The status check and the ownership check must both run before the update, and the update must be a single Prisma call on the checked id, or a status change between check and write slips through."
+  ],
+
+  "out_of_scope": [
+    "Creating a request — spec 005.",
+    "Any staff-side edit of the record — specs 010-014 own finalTitle, reference and notes.",
+    "Version history of edits — AuditLog records lifecycle events, not field diffs, and nothing asks for a diff.",
+    "Withdrawing or deleting a request — the old app had neither."
+  ]
+}
+

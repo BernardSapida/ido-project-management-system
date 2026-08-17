@@ -1,0 +1,218 @@
+{
+  "spec_number": 8,
+  "spec_title": "Request Comment Thread",
+  "feature_name": "request-comments",
+  "description": "A conversation attached to one request, shared by the requestor and everyone processing it. It is the only channel in the system: there is no email, so a reviewer who needs a clarification either returns the request or asks here. Mounted on the detail page, the edit page and all five review pages.",
+  "depends_on": [1, 6],
+
+  "source_reference": {
+    "pages": ["mounted on every request page in IRMS-old"],
+    "files": [
+      "IRMS-old/src/features/request-comments/components/CommentThread.tsx",
+      "IRMS-old/src/features/request-comments/hooks/use-comment-queries.ts",
+      "IRMS-old/src/features/request-comments/hooks/use-comment-mutations.ts",
+      "IRMS-old/src/integrations/trpc/routers/comment.router.ts"
+    ],
+    "docs": ["IRMS-old/GENERAL.md (comment section — allow edit/delete)"]
+  },
+
+  "flow": {
+    "actors": ["USER", "IDO_OFFICER", "IDO_CHAIRPERSON", "BUDGET_OFFICER", "DIRECTOR"],
+    "happy_path": [
+      { "step": 1, "actor": "any participant", "action": "opens a request page", "result": "the thread loads oldest-first under the request, with each author's name and role" },
+      { "step": 2, "actor": "any participant", "action": "types a message and posts it", "result": "it appears immediately, optimistically, and is confirmed when the mutation resolves" },
+      { "step": 3, "actor": "author", "action": "edits their own message", "result": "the body updates and an 'edited' marker appears" },
+      { "step": 4, "actor": "author", "action": "deletes their own message", "result": "it is removed after a confirmation" }
+    ],
+    "alternate_paths": [
+      { "name": "Someone else's message", "trigger": "a participant presses edit or delete on a message they did not write", "result": "the controls are not offered, and the procedures refuse with FORBIDDEN if called anyway" },
+      { "name": "ADD_COMMENT revoked", "trigger": "an admin removes the grant", "result": "the composer is disabled with a reason, and comment.create refuses" },
+      { "name": "No access to the request", "trigger": "a USER who does not own the request", "result": "comment.list refuses before any message is returned — the thread inherits the request's access rule exactly" },
+      { "name": "Post fails", "trigger": "network error", "result": "the optimistic message is marked failed with a retry, and nothing is silently lost" },
+      { "name": "Empty thread", "trigger": "a new request", "result": "an empty state inviting the first message, not a blank panel" }
+    ]
+  },
+
+  "database": {
+    "models": [
+      { "name": "RequestComment", "action": "reuse", "prisma_note": "Defined in spec 001", "fields": [] }
+    ]
+  },
+
+  "trpc_procedures": [
+    {
+      "name": "list",
+      "router": "src/integrations/trpc/routers/comment.router.ts",
+      "type": "query",
+      "procedure": "protectedProcedure",
+      "input_schema": null,
+      "input": { "requestId": "string" },
+      "output": { "comments": "(RequestComment & { user: Pick<User,'id'|'firstname'|'lastname'|'role'> })[]" },
+      "guards": ["the request must exist", "the caller owns the request OR holds a staff role — the same rule as request.getById"],
+      "invalidates": [],
+      "description": "Ordered oldest-first, each joined to its author's name and role."
+    },
+    {
+      "name": "create",
+      "router": "src/integrations/trpc/routers/comment.router.ts",
+      "type": "mutation",
+      "procedure": "protectedProcedure",
+      "input_schema": null,
+      "input": { "requestId": "string", "message": "string (1-2000)" },
+      "output": { "comment": "RequestComment & { user }" },
+      "guards": ["request access as above", "assertPermission(ADD_COMMENT)"],
+      "invalidates": ["trpc.comment.list.queryKey({ requestId })"],
+      "description": "userId comes from the session, never from input."
+    },
+    {
+      "name": "update",
+      "router": "src/integrations/trpc/routers/comment.router.ts",
+      "type": "mutation",
+      "procedure": "protectedProcedure",
+      "input_schema": null,
+      "input": { "id": "string", "message": "string (1-2000)" },
+      "output": { "comment": "RequestComment & { user }" },
+      "guards": ["the comment exists", "comment.userId === ctx.user.id — authorship, not role"],
+      "invalidates": ["trpc.comment.list.queryKey({ requestId })"],
+      "description": "Only the author may edit. A director editing a requestor's words would make the thread worthless as a record."
+    },
+    {
+      "name": "delete",
+      "router": "src/integrations/trpc/routers/comment.router.ts",
+      "type": "mutation",
+      "procedure": "protectedProcedure",
+      "input_schema": null,
+      "input": { "id": "string" },
+      "output": { "id": "string" },
+      "guards": ["the comment exists", "comment.userId === ctx.user.id"],
+      "invalidates": ["trpc.comment.list.queryKey({ requestId })"],
+      "description": "Hard delete. There is no moderation model and no soft-delete column."
+    }
+  ],
+
+  "frontend": {
+    "pages": [],
+    "components": [
+      {
+        "name": "RequestCommentThread",
+        "file": "src/features/request-comments/components/RequestCommentThread.tsx",
+        "type": "widget",
+        "lab_components": ["AppCommentSection", "AppQueryError"],
+        "heroui_components": [],
+        "heroui_note": "None. AppCommentSection supplies the composer, the optimistic post with retry, the edit and delete affordances, the 'edited' marker, relative timestamps and the empty state — all of which the old hand-rolled CommentThread implemented partially.",
+        "props": ["requestId: string", "isDisabled?: boolean", "disabledReason?: string"],
+        "description": "Maps RequestComment rows onto AppCommentSection's CommentItem shape: author is { id, name, handle: role label }, body is message, createdAt and editedAt from the row. onSubmit, onEdit and onDelete are the three mutations. Reactions and replies are NOT wired — the model has no parentId and no reaction table, so those props stay unset."
+      }
+    ],
+    "forms": [],
+    "hooks": [
+      { "file": "src/features/request-comments/hooks/use-comment-queries.ts", "actor": "user", "type": "query", "invalidates": [], "note": "comment.list, keyed by requestId." },
+      { "file": "src/features/request-comments/hooks/use-comment-mutations.ts", "actor": "user", "type": "mutation", "invalidates": ["trpc.comment.list.queryKey({ requestId })"], "note": "create, update and delete. Optimistic update on create, with rollback on failure." }
+    ],
+    "store": { "needed": false }
+  },
+
+  "requirements": {
+    "functional": [
+      "The thread is mounted on the request detail page, the edit page and all five review pages, with the same component and the same props everywhere.",
+      "Messages are ordered oldest-first — this is a conversation, not a feed.",
+      "Each message shows the author's name and their ROLE, because 'Carlos Santos' means nothing to a requestor and 'IDO Chairperson' does.",
+      "An edited message carries a visible marker and its updatedAt.",
+      "Delete asks for confirmation and then removes the row outright.",
+      "The composer is disabled with a stated reason when the caller lacks ADD_COMMENT.",
+      "Replies, reactions and mentions are deliberately not enabled — the data model has no parentId, no reaction table and no directory query, and half-wiring AppCommentSection's optional props would render controls that cannot work.",
+      "Message length is capped at 2000 characters, and the composer shows the remaining count as it approaches the cap."
+    ],
+    "authorization": [
+      "Read access exactly mirrors request.getById: owner or staff role. The thread must never be more visible than the request it hangs on.",
+      "Posting additionally requires the ADD_COMMENT grant, which every role holds by default and an admin can revoke.",
+      "Editing and deleting are gated on AUTHORSHIP, not on role. No role, including DIRECTOR, may edit or delete another person's message.",
+      "userId on a new comment comes from the session; the input carries no author field.",
+      "ADMIN cannot read the thread, for the same reason they cannot read the request."
+    ],
+    "ux": [
+      "The empty state invites the first message and says who can see it — 'Visible to you and everyone processing this request'.",
+      "An optimistic message shows as pending until confirmed, and as failed with a retry if the mutation rejects. A message that quietly disappears is the worst outcome here.",
+      "Timestamps are relative with the absolute value on hover.",
+      "The composer keeps its draft if the user navigates within the page; a lost half-written question is why people stop using the thread.",
+      "Edit and delete are shown only on the caller's own messages — the server refusal is the gate, but offering a control that always fails is a defect of its own."
+    ]
+  },
+
+  "validations": {
+    "schemas": [
+      {
+        "file": "src/features/request-comments/validations/schema/comment.schema.ts",
+        "used_by": ["RequestCommentThread", "comment.create", "comment.update"],
+        "rules": [
+          { "field": "message", "zod_rule": "z.string().trim().min(1, 'Message is required').max(2000, 'Messages are limited to 2000 characters')" },
+          { "field": "requestId", "zod_rule": "z.string().min(1)" },
+          { "field": "id", "zod_rule": "z.string().min(1)" }
+        ]
+      }
+    ],
+    "server_guards": [
+      { "procedure": "comment.list", "guard": "the request exists", "error": "NOT_FOUND — Request not found" },
+      { "procedure": "comment.list", "guard": "owner or staff role", "error": "FORBIDDEN — Access denied" },
+      { "procedure": "comment.create", "guard": "owner or staff role, then assertPermission(ADD_COMMENT)", "error": "FORBIDDEN — Access denied / You don't have permission to perform this action" },
+      { "procedure": "comment.update", "guard": "comment.userId === ctx.user.id", "error": "FORBIDDEN — Cannot edit another user's comment" },
+      { "procedure": "comment.delete", "guard": "comment.userId === ctx.user.id", "error": "FORBIDDEN — Cannot delete another user's comment" },
+      { "procedure": "comment.create / update", "guard": "message is trimmed then length-checked server-side", "error": "BAD_REQUEST — Zod issue on message" }
+    ]
+  },
+
+  "test_requirements": [
+    {
+      "file": "src/integrations/trpc/routers/comment.router.test.ts",
+      "type": "unit",
+      "covers": [
+        "the request owner can list and post",
+        "an IDO_OFFICER can list and post on someone else's request",
+        "an unrelated USER cannot list — FORBIDDEN",
+        "an ADMIN cannot list",
+        "a user without ADD_COMMENT cannot post but can still list",
+        "a DIRECTOR cannot edit a requestor's comment",
+        "a DIRECTOR cannot delete a requestor's comment",
+        "the author can edit and delete their own",
+        "userId is taken from the session even when the input carries another userId",
+        "a whitespace-only message is rejected",
+        "a 2001-character message is rejected"
+      ]
+    },
+    {
+      "file": "cypress/e2e/request-comments.cy.ts",
+      "type": "e2e",
+      "covers": [
+        "a requestor posts and an IDO officer sees it on the review page",
+        "edit and delete controls appear only on the caller's own messages",
+        "a failed post shows as failed with a retry rather than disappearing",
+        "the empty state is shown on a request with no messages"
+      ]
+    }
+  ],
+
+  "acceptance_criteria": [
+    { "given": "a request with three messages", "when": "the thread loads", "then": "they render oldest-first, each with the author's name and role label" },
+    { "given": "a message written by the requestor", "when": "a DIRECTOR views the thread", "then": "no edit or delete control is shown on it, and a crafted comment.update for it returns FORBIDDEN" },
+    { "given": "a USER whose ADD_COMMENT grant was revoked", "when": "they open a request", "then": "they can read the thread and the composer is disabled with a stated reason" },
+    { "given": "an unrelated USER", "when": "they call comment.list for a request they do not own", "then": "the call returns FORBIDDEN and no message body is returned" },
+    { "given": "the author of a message", "when": "they edit it", "then": "the body updates and an 'edited' marker appears with the new timestamp" }
+  ],
+
+  "edge_cases": [
+    "The thread's read rule and the request's read rule are the same rule written twice; extract one shared helper, or a change to one leaves the other exposing messages about a request the caller cannot open.",
+    "Deleting a request cascades its comments (onDelete: Cascade), but nothing in the app deletes requests — if that ever changes, the cascade is already correct and must not be replaced with a manual sweep.",
+    "AppCommentSection's optional reaction and reply props must stay unset, not stubbed with no-ops; a reply control that posts a top-level comment is worse than no reply control.",
+    "Optimistic create must roll back on failure AND keep the typed text, or a network blip costs the user their message.",
+    "Message is a free-text column rendered as text, never as HTML — the composer must not gain rich text without an escaping decision.",
+    "A comment's author may later change role; the thread shows the CURRENT role from the join, which can read oddly on old messages. That is accepted — storing the role at write time is not worth the column."
+  ],
+
+  "out_of_scope": [
+    "Threaded replies, reactions and @-mentions — the data model supports none of them.",
+    "Notifications or email on a new message — there is no notification system.",
+    "Attachments inside a comment — request attachments are the file channel.",
+    "Moderation, soft delete or an audit trail of edits — the thread is a conversation, not a record of record; AuditLog is that."
+  ]
+}
+

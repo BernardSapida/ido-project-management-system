@@ -1,0 +1,268 @@
+{
+  "spec_number": 3,
+  "spec_title": "Profile and Signature",
+  "feature_name": "user-profile",
+  "description": "The profile page, and the gate in front of the whole app. A user cannot reach any signed-in route until profileComplete is true, and profileComplete becomes true when a signature image is on file — because the signature is stamped onto the printed request form and onto every approval. Uploads move from Cloudinary to S3.",
+  "depends_on": [1, 2],
+
+  "source_reference": {
+    "pages": ["IRMS-old/src/routes/_authenticated/profile.tsx", "IRMS-old/src/routes/_authenticated.tsx (the profileComplete redirect)"],
+    "files": [
+      "IRMS-old/src/features/user-profile/components/ProfileForm.tsx",
+      "IRMS-old/src/features/user-profile/components/SignatureUploader.tsx",
+      "IRMS-old/src/features/user-profile/components/ProfileInfoCard.tsx",
+      "IRMS-old/src/features/user-profile/components/AboutAccount.tsx",
+      "IRMS-old/src/features/user-profile/validations/schema/update-profile.schema.ts",
+      "IRMS-old/src/integrations/trpc/routers/profile.router.ts"
+    ],
+    "docs": ["IRMS-old/flows/01-user-submit-request.md (Step 2)", "IRMS-old/flows/03-budget-officer-review.md (signature warning)"]
+  },
+
+  "flow": {
+    "actors": ["USER", "IDO_OFFICER", "IDO_CHAIRPERSON", "BUDGET_OFFICER", "DIRECTOR", "ADMIN"],
+    "happy_path": [
+      { "step": 1, "actor": "any signed-in", "action": "lands anywhere in the app with profileComplete false", "result": "_authenticated redirects to /profile and the page shows the setup wording, not the normal profile header" },
+      { "step": 2, "actor": "any signed-in", "action": "fills name, position (USER only) and drops a signature image", "result": "the file is parked as a pending upload; nothing has touched S3 yet" },
+      { "step": 3, "actor": "any signed-in", "action": "presses Save changes", "result": "the pending file is flushed to S3, the returned key replaces the object URL, profile.updateMyProfile persists it, profileComplete flips to true" },
+      { "step": 4, "actor": "any signed-in", "action": "is redirected", "result": "to getDefaultRoute(role) — /requests for a USER, /staff/dashboard for staff, /admin for an admin" },
+      { "step": 5, "actor": "returning user", "action": "opens /profile normally", "result": "profile header, editable form, change-password card and the signature panel with the current image" }
+    ],
+    "alternate_paths": [
+      { "name": "Approver with no signature", "trigger": "a BUDGET_OFFICER, DIRECTOR or IDO_CHAIRPERSON attempts an approval", "result": "the server refuses with a message naming the missing signature and pointing at the profile; the review pages also disable the approve control when user.signatureUrl is null" },
+      { "name": "Staff member with no position", "trigger": "a non-USER saves with position empty", "result": "allowed — position is required for USER only, and Save changes must stay enabled after a signature upload with position blank (an explicit IRMS-old bug fix)" },
+      { "name": "Signature replaced", "trigger": "a new file is dropped over an existing signature", "result": "the new URL replaces the old on save; the old object is left for the sweep, never deleted inline" },
+      { "name": "Flush fails", "trigger": "S3 rejects the upload on save", "result": "the mutation never runs, the form stays dirty, and an error toast names the failure — no record is saved carrying a blob: URL" }
+    ]
+  },
+
+  "database": {
+    "models": [
+      { "name": "User", "action": "reuse", "prisma_note": "position, signatureUrl and profileComplete were added in spec 001", "fields": [] }
+    ]
+  },
+
+  "trpc_procedures": [
+    {
+      "name": "getMyProfile",
+      "router": "src/integrations/trpc/routers/profile.router.ts",
+      "type": "query",
+      "procedure": "protectedProcedure",
+      "input_schema": null,
+      "input": {},
+      "output": { "id": "string", "name": "string", "email": "string", "role": "Role", "position": "string | null", "signatureUrl": "string | null", "profileComplete": "boolean", "firstname": "string", "lastname": "string" },
+      "guards": ["reads ctx.user.id only — there is no way to ask for another user's profile"],
+      "invalidates": [],
+      "description": "findUniqueOrThrow on the session user, selecting only the fields the page renders."
+    },
+    {
+      "name": "updateMyProfile",
+      "router": "src/integrations/trpc/routers/profile.router.ts",
+      "type": "mutation",
+      "procedure": "protectedProcedure",
+      "input_schema": "src/features/user-profile/validations/schema/update-profile.schema.ts",
+      "input": { "name": "string", "position": "string?", "signatureUrl": "string?" },
+      "output": { "id": "string", "name": "string", "position": "string | null", "signatureUrl": "string | null", "profileComplete": "boolean" },
+      "guards": ["writes ctx.user only", "profileComplete is derived server-side: true once signatureUrl is present, never sent by the client", "signatureUrl must pass storedImageUrl — a blob: URL is rejected"],
+      "invalidates": ["trpc.profile.getMyProfile.queryKey()"],
+      "description": "Calls auth.api.updateUser, then re-reads the session with disableCookieCache and forwards the refreshed set-cookie headers, so the browser's cached session does not keep profileComplete false for up to an hour and bounce the user back to /profile."
+    }
+  ],
+
+  "frontend": {
+    "pages": [
+      {
+        "name": "ProfilePage",
+        "route_file": "src/routes/_authenticated/profile.tsx",
+        "breadcrumb": "Profile",
+        "main_width": "default",
+        "role": "all",
+        "layout": "AppLayout (frame, from _authenticated.tsx) — page renders AppPageHeader + content only",
+        "page_header": { "title": "Profile", "subtitle": "Your account, position and signature.", "action": null },
+        "setup_variant": { "title": "Complete your profile", "subtitle": "Add your details and signature to get started.", "note": "Shown instead of the normal header while profileComplete is false. The change-password card is hidden in this state." },
+        "components": [
+          {
+            "name": "ProfileInfoCard",
+            "file": "src/features/user-profile/components/ProfileInfoCard.tsx",
+            "type": "card",
+            "lab_components": ["AppProfileBanner", "AppAvatar", "AppChip"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md. AppProfileBanner replaces the old hand-built header block.",
+            "props": ["user: ProfileUser | null", "isLoading: boolean"],
+            "description": "Name, email, role chip and position. Skeleton while the session loads."
+          },
+          {
+            "name": "ProfileForm",
+            "file": "src/features/user-profile/components/ProfileForm.tsx",
+            "type": "form",
+            "lab_components": ["AppInputGroup", "AppSelect", "AppReadOnlyField", "AppButton", "AppToast"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md. Email renders through AppReadOnlyField rather than a disabled TextField — it is a fact, not a field.",
+            "props": ["defaultValues: UpdateProfileValues", "role?: UserRole", "email?: string", "onStateChange: (s: { isDirty: boolean; isPending: boolean }) => void", "onSuccess: () => void"],
+            "description": "Name, position and the hidden signatureUrl. Reports dirty/pending upward so the page's action bar owns the buttons."
+          },
+          {
+            "name": "SignatureUploader",
+            "file": "src/features/user-profile/components/SignatureUploader.tsx",
+            "type": "widget",
+            "lab_components": ["AppFileUpload", "AppButton", "AppAlert"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md. AppFileUpload replaces the old click-only input and brings drag-and-drop, progress and retry with it.",
+            "props": ["currentSignatureUrl: string | null", "onChange: (url: string | undefined) => void"],
+            "description": "Single-file, image-only. Uses useDeferredUpload('signatures') so dropping parks the file and saving sends it. Shows the current signature above the dropzone with a caption asking for a clear white background."
+          },
+          {
+            "name": "ChangePasswordCard",
+            "file": "src/features/user/components/ChangePasswordCard.tsx",
+            "type": "card",
+            "lab_components": ["AppPasswordField", "AppButton", "AppToast"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md.",
+            "props": [],
+            "description": "Already in the template; reused unchanged. Hidden while profileComplete is false so setup asks for one thing."
+          },
+          {
+            "name": "AboutAccount",
+            "file": "src/features/user-profile/components/AboutAccount.tsx",
+            "type": "card",
+            "lab_components": ["AppList", "AppChip"],
+            "heroui_components": ["Typography"],
+            "heroui_note": "Typography per CLAUDE.md.",
+            "props": ["user: ProfileUser | null"],
+            "description": "Role, account status and member-since. Read-only."
+          }
+        ],
+        "actions": [
+          { "name": "saveProfile", "type": "button", "description": "Flush pending uploads, rewrite URLs, then save. Disabled until the form is dirty.", "triggers": "calls tRPC procedure" },
+          { "name": "discardChanges", "type": "button", "description": "Resets the form to the last saved values. Disabled when clean.", "triggers": "resets form" }
+        ]
+      }
+    ],
+    "components": [],
+    "forms": [
+      {
+        "name": "ProfileForm",
+        "file": "src/features/user-profile/components/ProfileForm.tsx",
+        "schema_file": "src/features/user-profile/validations/schema/update-profile.schema.ts",
+        "method": "PATCH",
+        "server_fn": "profile.updateMyProfile",
+        "success_message": "Profile saved.",
+        "error_message": "Failed to update profile. Please try again.",
+        "fields": [
+          { "name": "name", "type": "text", "label": "Full name", "placeholder": "Juan Dela Cruz", "required": true, "zod_rule": "z.string().min(1, 'Full name is required').max(255, 'Name is too long')" },
+          { "name": "email", "type": "text", "label": "Email", "placeholder": "", "required": false, "readonly": true, "note": "Rendered with AppReadOnlyField. Immutable — it is the auth identity.", "zod_rule": "not in the schema" },
+          { "name": "position", "type": "dropdown", "label": "Position", "placeholder": "Select position", "required": false, "note": "Required only when role is USER. For staff it is optional and may stay empty forever.", "zod_rule": "role === 'USER' ? z.string().min(1, 'Position is required') : z.string().optional()" },
+          { "name": "signatureUrl", "type": "file", "label": "Signature", "placeholder": "", "required": false, "note": "Set by SignatureUploader, not typed. Validated as a stored URL so a blob: value cannot be saved.", "zod_rule": "storedImageUrl().optional()" }
+        ]
+      }
+    ],
+    "hooks": [
+      { "file": "src/features/user-profile/hooks/use-user-profile-queries.ts", "actor": "user", "type": "query", "invalidates": [], "note": "profile.getMyProfile" },
+      { "file": "src/features/user-profile/hooks/use-user-profile-mutations.ts", "actor": "user", "type": "mutation", "invalidates": ["trpc.profile.getMyProfile.queryKey()"], "note": "Wrapped in useUploadingSubmit so the flush → rewrite → save → release order is not something a caller can get wrong." }
+    ],
+    "store": { "needed": false }
+  },
+
+  "requirements": {
+    "functional": [
+      "src/routes/_authenticated.tsx beforeLoad redirects to /profile when the session user's profileComplete is false and the path does not already start with /profile.",
+      "profileComplete is derived on the server: true once signatureUrl is non-empty. The client never sends it.",
+      "The signature upload is deferred: useDeferredUpload('signatures') parks the file behind an object URL and useUploadingSubmit flushes it on save, so a signature somebody dropped and thought better of never reaches the bucket.",
+      "'signatures' is added to UPLOAD_FOLDERS so the key prefix exists and the sweep can select on it.",
+      "src/lib/image-urls.ts reports user.signatureUrl for every user, or the sweep will delete signatures out from under live accounts.",
+      "After a successful setup save the page redirects to getDefaultRoute(role); on a normal edit it stays put and shows a toast.",
+      "The session cookie cache is refreshed after the write, or profileComplete stays false in the browser for up to an hour and the user is bounced straight back to /profile.",
+      "Save changes is enabled whenever the form is dirty, including the case of a staff member who uploaded a signature and left position blank."
+    ],
+    "authorization": [
+      "protectedProcedure on both procedures; both read and write ctx.user only, so there is no userId parameter to tamper with.",
+      "Any authenticated role may reach /profile — it is the one signed-in route with no role gate, and it must stay that way because it is where the redirect sends everyone.",
+      "signatureUrl is validated with storedImageUrl on the server, so a client that skipped the flush cannot persist a blob: URL."
+    ],
+    "ux": [
+      "The setup state says what is missing and why ('your signature appears on the printed request form'), not just 'complete your profile'.",
+      "AppFileUpload shows real byte progress during the flush; a signature upload that appears instant and then fails on save is the worst version of this screen.",
+      "The current signature is visible above the dropzone, so replacing one is a deliberate act rather than a surprise.",
+      "The action bar carries 'Unsaved changes will be lost if you navigate away' next to the buttons, and both buttons are disabled when the form is clean.",
+      "An approver whose signature is missing sees the reason on the review page too (spec 011-014), not only when the server refuses."
+    ]
+  },
+
+  "validations": {
+    "schemas": [
+      {
+        "file": "src/features/user-profile/validations/schema/update-profile.schema.ts",
+        "used_by": ["ProfileForm", "profile.updateMyProfile"],
+        "rules": [
+          { "field": "name", "zod_rule": "z.string().min(1, 'Full name is required').max(255, 'Name is too long')" },
+          { "field": "position", "zod_rule": "createUpdateProfileSchema(role) returns z.string().min(1, 'Position is required') for USER and z.string().optional() otherwise" },
+          { "field": "signatureUrl", "zod_rule": "storedImageUrl('Upload did not finish — try again').optional()" }
+        ]
+      }
+    ],
+    "server_guards": [
+      { "procedure": "profile.updateMyProfile", "guard": "the target is always ctx.user.id", "error": "n/a — no userId input exists" },
+      { "procedure": "profile.updateMyProfile", "guard": "signatureUrl passes storedImageUrl", "error": "BAD_REQUEST — the upload did not finish" },
+      { "procedure": "profile.updateMyProfile", "guard": "profileComplete is computed from signatureUrl server-side", "error": "n/a — the client value is ignored" },
+      { "procedure": "every approval procedure (specs 011-014)", "guard": "ctx.user.signatureUrl is present", "error": "FORBIDDEN — Your profile is missing a signature. Please complete your profile before approving." }
+    ]
+  },
+
+  "test_requirements": [
+    {
+      "file": "src/features/user-profile/validations/schema/update-profile.schema.test.ts",
+      "type": "unit",
+      "covers": [
+        "position empty fails for role USER",
+        "position empty passes for role DIRECTOR",
+        "a blob: signatureUrl fails storedImageUrl",
+        "an https S3 URL passes",
+        "a 256-character name fails"
+      ]
+    },
+    {
+      "file": "src/integrations/trpc/routers/profile.router.test.ts",
+      "type": "unit",
+      "covers": [
+        "updateMyProfile sets profileComplete true when a signatureUrl arrives",
+        "updateMyProfile leaves profileComplete unchanged when only the name changes",
+        "a client-sent profileComplete: true with no signature is ignored",
+        "the refreshed set-cookie headers are appended to the response"
+      ]
+    },
+    {
+      "file": "cypress/e2e/profile-setup.cy.ts",
+      "type": "e2e",
+      "covers": [
+        "a user with profileComplete false is redirected to /profile from /requests",
+        "dropping a signature makes no network request until Save changes is pressed",
+        "saving a signature redirects a USER to /requests and a DIRECTOR to /staff/dashboard",
+        "a staff member can save with position empty once a signature is present"
+      ]
+    }
+  ],
+
+  "acceptance_criteria": [
+    { "given": "a signed-in user whose profileComplete is false", "when": "they navigate to /requests", "then": "they are redirected to /profile and the setup wording is shown" },
+    { "given": "the profile setup screen with a signature dropped but not saved", "when": "the network tab is inspected", "then": "no upload request has been made" },
+    { "given": "a USER on /profile with position cleared", "when": "they press Save changes", "then": "'Position is required' appears and no request is sent" },
+    { "given": "a DIRECTOR on /profile with position empty and a new signature", "when": "they press Save changes", "then": "the save succeeds and profileComplete becomes true" },
+    { "given": "a user who has just saved their signature", "when": "the next page load happens", "then": "they are not bounced back to /profile — the session cookie carries profileComplete true" },
+    { "given": "a DIRECTOR whose signatureUrl is null", "when": "they call request.approveByDirector", "then": "the call fails with the missing-signature message" }
+  ],
+
+  "edge_cases": [
+    "The session cookie cache is the trap: without the disableCookieCache re-read and the forwarded set-cookie headers, profileComplete stays false in the browser for up to an hour and the user loops back to /profile after every save.",
+    "storedImageUrl must be on the SERVER's shape, not just the form's — a flush that never ran must fail at the boundary rather than save a record whose signature is permanently blank.",
+    "Replacing a signature orphans the old S3 object. Do not delete inline: an approval already stamped with that URL still renders it. Let s3:sweep handle it, and make sure image-urls.ts reports the CURRENT signature so the sweep never takes a live one.",
+    "position is optional for staff but the PDF's representative rows are keyed on position; a staff member with no position simply does not appear in those rows, which is correct.",
+    "The redirect guard must exempt /profile itself, or a user with profileComplete false redirects forever.",
+    "An ADMIN never approves anything, so their missing signature is harmless — do not add a signature requirement to the ADMIN path."
+  ],
+
+  "out_of_scope": [
+    "Changing the email address — it is the auth identity and stays immutable.",
+    "Avatar / profile photo — the old app had none and nothing needs one.",
+    "Deleting an account — the template's DeleteAccountCard is not mounted on this page; account state is an admin action (spec 017).",
+    "The approve-time signature guards themselves — declared here, implemented in specs 011-014."
+  ]
+}
