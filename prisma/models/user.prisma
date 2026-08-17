@@ -1,6 +1,10 @@
 enum Role {
   USER
   ADMIN
+  IDO_OFFICER
+  IDO_CHAIRPERSON
+  DIRECTOR
+  BUDGET_OFFICER
 }
 
 enum STATUS {
@@ -10,20 +14,27 @@ enum STATUS {
 }
 
 model User {
-  id            String   @id
-  name          String
-  firstname     String
-  lastname      String
-  role          Role
-  email         String   @unique
-  emailVerified Boolean  @default(false)
-  image         String?
-  status        STATUS   @default(active)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id              String   @id
+  name            String
+  firstname       String
+  lastname        String
+  role            Role     @default(USER)
+  position        String?
+  signatureUrl    String?
+  profileComplete Boolean  @default(false)
+  email           String   @unique
+  emailVerified   Boolean  @default(false)
+  image           String?
+  status          STATUS   @default(inactive)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  session Session[]
-  account Account[]
+  session         Session[]
+  account         Account[]
+  requests        Request[]        @relation("UserRequests")
+  auditLogs       AuditLog[]       @relation("UserAuditLogs")
+  requestComments RequestComment[] @relation("UserRequestComments")
+  permissions     UserPermission[]
 
   @@map("users")
 }

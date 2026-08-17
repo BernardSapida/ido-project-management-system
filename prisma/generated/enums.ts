@@ -9,9 +9,26 @@
 * 🟢 You can import this file directly.
 */
 
+export const Action = {
+  CREATE_REQUEST: 'CREATE_REQUEST',
+  SUBMIT_REQUEST: 'SUBMIT_REQUEST',
+  ADD_COMMENT: 'ADD_COMMENT',
+  REVIEW_REQUEST: 'REVIEW_REQUEST',
+  APPROVE_BUDGET: 'APPROVE_BUDGET',
+  APPROVE_DIRECTOR: 'APPROVE_DIRECTOR',
+  SUBMIT_CSM: 'SUBMIT_CSM'
+} as const
+
+export type Action = (typeof Action)[keyof typeof Action]
+
+
 export const Role = {
   USER: 'USER',
-  ADMIN: 'ADMIN'
+  ADMIN: 'ADMIN',
+  IDO_OFFICER: 'IDO_OFFICER',
+  IDO_CHAIRPERSON: 'IDO_CHAIRPERSON',
+  DIRECTOR: 'DIRECTOR',
+  BUDGET_OFFICER: 'BUDGET_OFFICER'
 } as const
 
 export type Role = (typeof Role)[keyof typeof Role]

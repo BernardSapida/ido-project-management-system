@@ -88,8 +88,19 @@ const LONG_USER = {
 };
 
 const ROLES: { label: string; value: UserRole }[] = [
-	{ label: "User", value: "USER" },
+	{ label: "Requestor", value: "USER" },
 	{ label: "Admin", value: "ADMIN" },
+	{ label: "IDO Officer", value: "IDO_OFFICER" },
+	{ label: "IDO Chair", value: "IDO_CHAIRPERSON" },
+	{ label: "Budget", value: "BUDGET_OFFICER" },
+	{ label: "Director", value: "DIRECTOR" },
+];
+
+// The four staff roles share one destination, so they share one path list.
+const STAFF_PATHS = [
+	{ href: "/staff/dashboard", label: "/staff/dashboard" },
+	{ href: "/requests/42", label: "…/requests/42" },
+	{ href: "/requests/42/review", label: "…/42/review" },
 ];
 
 const PATHS: Record<UserRole, { href: string; label: string }[]> = {
@@ -99,10 +110,14 @@ const PATHS: Record<UserRole, { href: string; label: string }[]> = {
 		{ href: "/admin/sample/42", label: "…/sample/42" },
 	],
 	USER: [
-		{ href: "/dashboard", label: "/dashboard" },
-		{ href: "/reports", label: "/reports" },
-		{ href: "/sample/42", label: "…/sample/42" },
+		{ href: "/requests", label: "/requests" },
+		{ href: "/requests/new", label: "/requests/new" },
+		{ href: "/requests/42", label: "…/requests/42" },
 	],
+	IDO_OFFICER: STAFF_PATHS,
+	IDO_CHAIRPERSON: STAFF_PATHS,
+	BUDGET_OFFICER: STAFF_PATHS,
+	DIRECTOR: STAFF_PATHS,
 };
 
 /**

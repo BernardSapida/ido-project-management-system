@@ -1,0 +1,98 @@
+model Request {
+  id                        String    @id @default(cuid())
+  documentNumber            String?   @unique
+  title                     String
+  finalTitle                String?
+  typeOfRequest             String
+  priority                  String
+  requestedBy               String
+  position                  String
+  targetOrg                 String    @default("IDO")
+  responsibleOrg            String    @default("IDO")
+  processor                 String?
+  details                   String
+  justification             String
+  workScope                 String
+  reference                 String?
+  approverNote              String?
+
+  // The five *Status columns are deliberately separate. masterStatus is what the
+  // requestor sees; the others are per-stage state a reviewer's guard reads, so a
+  // stage can record its own outcome without overwriting the headline status.
+  masterStatus              String    @default("DRAFT")
+  idoEvaluationStatus       String?
+  directorReviewStatus      String?
+  idoFinalStatus            String?
+  finalDirectorStatus       String?
+  completionStatus          String?
+
+  requestStartAt            DateTime?
+  requestEndAt              DateTime?
+
+  budgetOfficerSignatureUrl String?
+  budgetOfficerSignedAt     DateTime?
+  directorSignatureUrl      String?
+  directorSignedAt          DateTime?
+  idoFinalSignatureUrl      String?
+  idoFinalSignedAt          DateTime?
+  finalDirectorSignatureUrl String?
+  finalDirectorSignedAt     DateTime?
+
+  attachments               Json      @default("[]")
+
+  userId                    String
+  user                      User      @relation("UserRequests", fields: [userId], references: [id])
+
+  auditLogs                 AuditLog[]       @relation("RequestAuditLogs")
+  comments                  RequestComment[] @relation("RequestComments")
+  csm                       Csm?             @relation("RequestCsm")
+
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+
+  @@map("requests")
+}
+
+/// One row per action taken on a request. It is the only history the app has;
+/// nothing overwrites it.
+model AuditLog {
+  id         String   @id @default(cuid())
+  requestId  String
+  request    Request  @relation("RequestAuditLogs", fields: [requestId], references: [id])
+  actorId    String
+  actor      User     @relation("UserAuditLogs", fields: [actorId], references: [id])
+  action     String
+  fromStatus String?
+  toStatus   String?
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("audit_logs")
+}
+
+model RequestComment {
+  id        String   @id @default(cuid())
+  requestId String
+  request   Request  @relation("RequestComments", fields: [requestId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation("UserRequestComments", fields: [userId], references: [id])
+  message   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("request_comments")
+}
+
+/// One row per calendar year, holding the last issued sequence. The upsert +
+/// increment that reads it runs inside a transaction, which is what stops two
+/// simultaneous submits from sharing a document number.
+model DocumentSequence {
+  id           String   @id @default(cuid())
+  year         Int      @unique
+  lastSequence Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("document_sequences")
+}

@@ -1,6 +1,7 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { auth } from "@/features/auth/utils/better-auth";
+import { prisma } from "@/lib/prisma";
 import type { Role } from "../../../prisma/generated/enums.ts";
 
 interface TRPCContext {
@@ -14,6 +15,18 @@ const t = initTRPC.context<TRPCContext>().create({
 export const createTRPCRouter = t.router;
 export const publicProcedure = t.procedure;
 
+/**
+ * Authenticated, and holding an ACTIVE account.
+ *
+ * The status read is a second round trip on every protected call, and it is
+ * worth it: Better Auth's session hook only refuses to MINT a session for a
+ * suspended user, so an account suspended mid-session keeps a valid cookie until
+ * it expires. Checking here means the suspension takes effect on the next call
+ * rather than next week.
+ *
+ * The row is also where `status` and the IRMS profile fields live at all - the
+ * session user carries only the Better Auth `additionalFields`.
+ */
 export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
 	const session = await auth.api.getSession({ headers: ctx.headers });
 
@@ -21,7 +34,19 @@ export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
 		throw new TRPCError({ code: "UNAUTHORIZED", message: "Not authenticated" });
 	}
 
-	return next({ ctx: { ...ctx, user: session.user, session } });
+	const account = await prisma.user.findUnique({
+		where: { id: session.user.id },
+		select: { position: true, profileComplete: true, role: true, signatureUrl: true, status: true },
+	});
+
+	if (!account || account.status !== "active") {
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: "Your account is not active. Please contact an administrator.",
+		});
+	}
+
+	return next({ ctx: { ...ctx, user: { ...session.user, ...account }, session } });
 });
 
 /**
@@ -40,7 +65,7 @@ export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
  */
 export const roleProcedure = (...roles: Role[]) =>
 	protectedProcedure.use(async ({ ctx, next }) => {
-		if (!roles.includes(ctx.user.role as Role)) {
+		if (!roles.includes(ctx.user.role)) {
 			throw new TRPCError({ code: "FORBIDDEN", message: "Insufficient permissions" });
 		}
 

@@ -1,0 +1,12 @@
+/// The satisfaction record: created by the final director approval and completed
+/// by the requestor. `submittedAt` is null until they fill it in.
+model Csm {
+  id          String    @id @default(cuid())
+  requestId   String    @unique
+  request     Request   @relation("RequestCsm", fields: [requestId], references: [id])
+  submittedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("csm")
+}

@@ -7,7 +7,7 @@ import {
 	type NavGroup as UiNavGroup,
 	type NavItem as UiNavItem,
 } from "@bernardsapida/web-ui";
-import { LayoutDashboard, Settings, ShieldCheck, UserCircle, Users } from "lucide-react";
+import { FilePlus, FileText, LayoutDashboard, UserCircle, Users } from "lucide-react";
 import type { UserRole } from "@/utils/config";
 
 // --- Types ---
@@ -30,42 +30,33 @@ export { filterNavItems, groupNavItems, isNavItemActive, splitForTabBar, TAB_BAR
 
 export const navigationItems: NavItem[] = [
 	{
-		href: "/dashboard",
-		title: "Dashboard",
-		description: "Overview and summary",
-		icon: LayoutDashboard,
-		roles: ["ADMIN", "USER"],
+		href: "/requests",
+		title: "My Requests",
+		description: "View and track your requests",
+		icon: FileText,
+		roles: ["USER"],
 		exact: true,
 	},
 	{
-		href: "/dashboard/admin",
-		title: "Admin",
-		description: "Admin controls and settings",
-		icon: ShieldCheck,
-		roles: ["ADMIN"],
-		children: [
-			{
-				href: "/dashboard/admin/users",
-				title: "Users",
-				description: "Manage user accounts",
-				icon: Users,
-				roles: ["ADMIN"],
-			},
-			{
-				href: "/dashboard/admin/settings",
-				title: "Settings",
-				description: "App-wide configuration",
-				icon: Settings,
-				roles: ["ADMIN"],
-			},
-		],
+		href: "/requests/new",
+		title: "New Request",
+		description: "Create a new request",
+		icon: FilePlus,
+		roles: ["USER"],
 	},
 	{
-		href: "/profile",
-		title: "Profile",
-		description: "Your account and preferences",
-		icon: UserCircle,
-		roles: ["ADMIN", "USER"],
+		href: "/staff/dashboard",
+		title: "Dashboard",
+		description: "Review and process requests",
+		icon: LayoutDashboard,
+		roles: ["IDO_OFFICER", "IDO_CHAIRPERSON", "BUDGET_OFFICER", "DIRECTOR"],
+	},
+	{
+		href: "/admin",
+		title: "Accounts",
+		description: "Manage user accounts",
+		icon: Users,
+		roles: ["ADMIN"],
 	},
 ];
 
@@ -90,8 +81,12 @@ export const getNavigation = (role: UserRole): NavItem[] => {
 // Used after login, signup, and as fallback on not-found pages.
 
 const DEFAULT_ROUTES: Record<UserRole, string> = {
-	ADMIN: "/dashboard/admin",
-	USER: "/dashboard",
+	ADMIN: "/admin",
+	USER: "/requests",
+	IDO_OFFICER: "/staff/dashboard",
+	IDO_CHAIRPERSON: "/staff/dashboard",
+	BUDGET_OFFICER: "/staff/dashboard",
+	DIRECTOR: "/staff/dashboard",
 };
 
 export const getDefaultRoute = (role: UserRole): string => DEFAULT_ROUTES[role];
@@ -102,11 +97,11 @@ export const getDefaultRoute = (role: UserRole): string => DEFAULT_ROUTES[role];
 
 export const secondaryNavigationItems: NavItem[] = [
 	{
-		href: "/dashboard/profile",
+		href: "/profile",
 		title: "Profile",
 		description: "Your account and preferences",
 		icon: UserCircle,
-		roles: ["USER", "ADMIN"],
+		roles: ["USER", "ADMIN", "IDO_OFFICER", "IDO_CHAIRPERSON", "BUDGET_OFFICER", "DIRECTOR"],
 	},
 ];
 
@@ -115,9 +110,15 @@ export const getSecondaryNavigation = (role: UserRole): NavItem[] =>
 
 // --- Helper: the label under the wordmark in the sidebar ---
 
+// What the person IS, not what the enum says. "Campus Director" is a job;
+// "DIRECTOR" is a database value, and nobody reads their own title in caps.
 const ROLE_LABELS: Record<UserRole, string> = {
-	ADMIN: "Admin",
-	USER: "User",
+	ADMIN: "Administrator",
+	USER: "Requestor",
+	IDO_OFFICER: "IDO Officer",
+	IDO_CHAIRPERSON: "IDO Chairperson",
+	BUDGET_OFFICER: "Budget Officer",
+	DIRECTOR: "Campus Director",
 };
 
 export const getRoleLabel = (role: UserRole): string => ROLE_LABELS[role];

@@ -4,7 +4,7 @@ import { getNavigation, getRoleLabel, getSecondaryNavigation, isNavItemActive } 
 import { assertAuthenticatedFn } from "@/features/auth/functions/auth.functions";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { authClient } from "@/features/auth/utils/auth-client";
-import { useRouteBreadcrumbs } from "@/hooks/useRouteBreadcrumbs";
+import { useRouteBreadcrumbs, useRouteMainWidth } from "@/hooks/useRouteBreadcrumbs";
 import { useUIStore } from "@/store/ui.store";
 import { USER_ROLES } from "@/utils/config";
 
@@ -44,6 +44,7 @@ function SignedInLayout() {
 	const { isSidebarCollapsed, setSidebarCollapsed } = useUIStore();
 	const pathname = useRouterState({ select: (state) => state.location.pathname });
 	const breadcrumbs = useRouteBreadcrumbs();
+	const mainWidth = useRouteMainWidth();
 
 	const currentUser = user || { name: "User", email: "", role: USER_ROLES.USER };
 	const navigation = getNavigation(currentUser.role);
@@ -73,6 +74,11 @@ function SignedInLayout() {
 		<AppLayout
 			data-cy="app-frame"
 			defaultSidebarOpen={!isSidebarCollapsed}
+			// The measure belongs to the PAGE, not the frame: a dashboard of tiles and
+			// a request detail want different answers on the same screen. The route
+			// declares it in `staticData.mainWidth`, the same way it declares its
+			// breadcrumb, so no page has to wrap itself in a container to get one.
+			mainWidth={mainWidth}
 			// No logo here: the column beside this bar already carries the brand, and
 			// two marks on one screen is the failure that prop exists to prevent.
 			navbar={

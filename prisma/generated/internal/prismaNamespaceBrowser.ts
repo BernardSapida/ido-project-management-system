@@ -54,7 +54,13 @@ export const ModelName = {
   Session: 'Session',
   Account: 'Account',
   Verification: 'Verification',
+  Csm: 'Csm',
   Post: 'Post',
+  Request: 'Request',
+  AuditLog: 'AuditLog',
+  RequestComment: 'RequestComment',
+  DocumentSequence: 'DocumentSequence',
+  UserPermission: 'UserPermission',
   User: 'User'
 } as const
 
@@ -119,6 +125,17 @@ export const VerificationScalarFieldEnum = {
 export type VerificationScalarFieldEnum = (typeof VerificationScalarFieldEnum)[keyof typeof VerificationScalarFieldEnum]
 
 
+export const CsmScalarFieldEnum = {
+  id: 'id',
+  requestId: 'requestId',
+  submittedAt: 'submittedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type CsmScalarFieldEnum = (typeof CsmScalarFieldEnum)[keyof typeof CsmScalarFieldEnum]
+
+
 export const PostScalarFieldEnum = {
   id: 'id',
   title: 'title',
@@ -131,12 +148,106 @@ export const PostScalarFieldEnum = {
 export type PostScalarFieldEnum = (typeof PostScalarFieldEnum)[keyof typeof PostScalarFieldEnum]
 
 
+export const RequestScalarFieldEnum = {
+  id: 'id',
+  documentNumber: 'documentNumber',
+  title: 'title',
+  finalTitle: 'finalTitle',
+  typeOfRequest: 'typeOfRequest',
+  priority: 'priority',
+  requestedBy: 'requestedBy',
+  position: 'position',
+  targetOrg: 'targetOrg',
+  responsibleOrg: 'responsibleOrg',
+  processor: 'processor',
+  details: 'details',
+  justification: 'justification',
+  workScope: 'workScope',
+  reference: 'reference',
+  approverNote: 'approverNote',
+  masterStatus: 'masterStatus',
+  idoEvaluationStatus: 'idoEvaluationStatus',
+  directorReviewStatus: 'directorReviewStatus',
+  idoFinalStatus: 'idoFinalStatus',
+  finalDirectorStatus: 'finalDirectorStatus',
+  completionStatus: 'completionStatus',
+  requestStartAt: 'requestStartAt',
+  requestEndAt: 'requestEndAt',
+  budgetOfficerSignatureUrl: 'budgetOfficerSignatureUrl',
+  budgetOfficerSignedAt: 'budgetOfficerSignedAt',
+  directorSignatureUrl: 'directorSignatureUrl',
+  directorSignedAt: 'directorSignedAt',
+  idoFinalSignatureUrl: 'idoFinalSignatureUrl',
+  idoFinalSignedAt: 'idoFinalSignedAt',
+  finalDirectorSignatureUrl: 'finalDirectorSignatureUrl',
+  finalDirectorSignedAt: 'finalDirectorSignedAt',
+  attachments: 'attachments',
+  userId: 'userId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type RequestScalarFieldEnum = (typeof RequestScalarFieldEnum)[keyof typeof RequestScalarFieldEnum]
+
+
+export const AuditLogScalarFieldEnum = {
+  id: 'id',
+  requestId: 'requestId',
+  actorId: 'actorId',
+  action: 'action',
+  fromStatus: 'fromStatus',
+  toStatus: 'toStatus',
+  note: 'note',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type AuditLogScalarFieldEnum = (typeof AuditLogScalarFieldEnum)[keyof typeof AuditLogScalarFieldEnum]
+
+
+export const RequestCommentScalarFieldEnum = {
+  id: 'id',
+  requestId: 'requestId',
+  userId: 'userId',
+  message: 'message',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type RequestCommentScalarFieldEnum = (typeof RequestCommentScalarFieldEnum)[keyof typeof RequestCommentScalarFieldEnum]
+
+
+export const DocumentSequenceScalarFieldEnum = {
+  id: 'id',
+  year: 'year',
+  lastSequence: 'lastSequence',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type DocumentSequenceScalarFieldEnum = (typeof DocumentSequenceScalarFieldEnum)[keyof typeof DocumentSequenceScalarFieldEnum]
+
+
+export const UserPermissionScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  action: 'action',
+  grantedAt: 'grantedAt',
+  grantedBy: 'grantedBy'
+} as const
+
+export type UserPermissionScalarFieldEnum = (typeof UserPermissionScalarFieldEnum)[keyof typeof UserPermissionScalarFieldEnum]
+
+
 export const UserScalarFieldEnum = {
   id: 'id',
   name: 'name',
   firstname: 'firstname',
   lastname: 'lastname',
   role: 'role',
+  position: 'position',
+  signatureUrl: 'signatureUrl',
+  profileComplete: 'profileComplete',
   email: 'email',
   emailVerified: 'emailVerified',
   image: 'image',
@@ -156,6 +267,13 @@ export const SortOrder = {
 export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
 
 
+export const JsonNullValueInput = {
+  JsonNull: JsonNull
+} as const
+
+export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
+
+
 export const QueryMode = {
   default: 'default',
   insensitive: 'insensitive'
@@ -170,4 +288,13 @@ export const NullsOrder = {
 } as const
 
 export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
+
+
+export const JsonNullValueFilter = {
+  DbNull: DbNull,
+  JsonNull: JsonNull,
+  AnyNull: AnyNull
+} as const
+
+export type JsonNullValueFilter = (typeof JsonNullValueFilter)[keyof typeof JsonNullValueFilter]
 

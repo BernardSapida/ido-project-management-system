@@ -33,10 +33,46 @@ export type Account = Prisma.AccountModel
  */
 export type Verification = Prisma.VerificationModel
 /**
+ * Model Csm
+ * The satisfaction record: created by the final director approval and completed
+ * by the requestor. `submittedAt` is null until they fill it in.
+ */
+export type Csm = Prisma.CsmModel
+/**
  * Model Post
  * 
  */
 export type Post = Prisma.PostModel
+/**
+ * Model Request
+ * 
+ */
+export type Request = Prisma.RequestModel
+/**
+ * Model AuditLog
+ * One row per action taken on a request. It is the only history the app has;
+ * nothing overwrites it.
+ */
+export type AuditLog = Prisma.AuditLogModel
+/**
+ * Model RequestComment
+ * 
+ */
+export type RequestComment = Prisma.RequestCommentModel
+/**
+ * Model DocumentSequence
+ * One row per calendar year, holding the last issued sequence. The upsert +
+ * increment that reads it runs inside a transaction, which is what stops two
+ * simultaneous submits from sharing a document number.
+ */
+export type DocumentSequence = Prisma.DocumentSequenceModel
+/**
+ * Model UserPermission
+ * A per-user grant of one Action. Role decides the DEFAULTS; this table is the
+ * truth. `assertPermission` reads only this - never the role - so an admin can
+ * revoke a capability from one person without inventing a role for them.
+ */
+export type UserPermission = Prisma.UserPermissionModel
 /**
  * Model User
  * 

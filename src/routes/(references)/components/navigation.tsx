@@ -97,8 +97,12 @@ const LONG_USER = {
  * without signing in as each of them in turn.
  */
 const ROLES: { label: string; value: UserRole }[] = [
-	{ label: "User", value: "USER" },
+	{ label: "Requestor", value: "USER" },
 	{ label: "Admin", value: "ADMIN" },
+	{ label: "IDO Officer", value: "IDO_OFFICER" },
+	{ label: "IDO Chair", value: "IDO_CHAIRPERSON" },
+	{ label: "Budget", value: "BUDGET_OFFICER" },
+	{ label: "Director", value: "DIRECTOR" },
 ];
 
 /**
@@ -107,6 +111,14 @@ const ROLES: { label: string; value: UserRole }[] = [
  * interesting rows. They do not all have to be real routes; `isNavItemActive`
  * is a pure function of the pathname.
  */
+// The four staff roles share one destination, so they share one path list.
+const STAFF_PATHS = [
+	{ href: "/staff/dashboard", label: "/staff/dashboard" },
+	{ href: "/profile", label: "/profile" },
+	{ href: "/requests/42", label: "…/requests/42" },
+	{ href: "/requests/42/review", label: "…/42/review" },
+];
+
 const PATHS: Record<UserRole, { href: string; label: string }[]> = {
 	ADMIN: [
 		{ href: "/admin", label: "/admin" },
@@ -115,11 +127,15 @@ const PATHS: Record<UserRole, { href: string; label: string }[]> = {
 		{ href: "/admin/users/42/sessions", label: "…/42/sessions" },
 	],
 	USER: [
-		{ href: "/dashboard", label: "/dashboard" },
+		{ href: "/requests", label: "/requests" },
 		{ href: "/profile", label: "/profile" },
-		{ href: "/profile/security", label: "/profile/security" },
-		{ href: "/dashboard/reports/7", label: "…/reports/7" },
+		{ href: "/requests/new", label: "/requests/new" },
+		{ href: "/requests/42/edit", label: "…/42/edit" },
 	],
+	IDO_OFFICER: STAFF_PATHS,
+	IDO_CHAIRPERSON: STAFF_PATHS,
+	BUDGET_OFFICER: STAFF_PATHS,
+	DIRECTOR: STAFF_PATHS,
 };
 
 /**

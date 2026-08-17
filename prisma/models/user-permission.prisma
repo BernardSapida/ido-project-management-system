@@ -1,0 +1,25 @@
+enum Action {
+  CREATE_REQUEST
+  SUBMIT_REQUEST
+  ADD_COMMENT
+  REVIEW_REQUEST
+  APPROVE_BUDGET
+  APPROVE_DIRECTOR
+  SUBMIT_CSM
+}
+
+/// A per-user grant of one Action. Role decides the DEFAULTS; this table is the
+/// truth. `assertPermission` reads only this - never the role - so an admin can
+/// revoke a capability from one person without inventing a role for them.
+model UserPermission {
+  id        String   @id @default(cuid())
+  userId    String
+  action    Action
+  grantedAt DateTime @default(now())
+  grantedBy String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, action])
+  @@map("user_permissions")
+}
