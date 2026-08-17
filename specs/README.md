@@ -6,7 +6,11 @@ One strict-JSON file per page or slice of the **IRMS → IPMS migration**. A spe
 ```
 specs/
   001-foundation-schema-roles-permissions.json    NNN-<feature-slug>.json
+  PROMPT.md                                       copy-paste prompts, one per spec
 ```
+
+[PROMPT.md](./PROMPT.md) has a ready prompt for every spec below, plus the order to run them
+in. One spec per session.
 
 The source system is `../../Projects/IRMS-old` (TanStack Start monolith, HeroUI v2-era
 hand-rolled components, Cloudinary uploads). The target is this repo: same stack, but the
