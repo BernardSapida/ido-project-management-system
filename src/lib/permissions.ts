@@ -50,14 +50,34 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, Action[]> = {
 };
 
 /**
+ * The slice of the client this module writes through.
+ *
+ * Typed as a slice rather than as `PrismaClient` so a `$transaction` callback's
+ * client - which is a `PrismaClient` minus `$transaction` and friends - is
+ * accepted without a cast. That is what lets an account creation and its grants
+ * commit or fail together; see `authSignup.signUp`.
+ */
+type PermissionWriter = Pick<typeof prisma, "userPermission">;
+
+/**
  * Grant a new account its role defaults. Additive and duplicate-safe, so calling
  * it twice on the same user is a no-op rather than a unique-constraint error.
+ *
+ * Pass `client` to run inside an open transaction. Left out, it writes on its
+ * own connection - which is correct only where a user with no permissions is
+ * recoverable, because every action they attempt will 403 until somebody grants
+ * them by hand.
  */
-export async function seedUserPermissions(userId: string, role: string, grantedBy: string): Promise<void> {
+export async function seedUserPermissions(
+	userId: string,
+	role: string,
+	grantedBy: string,
+	client: PermissionWriter = prisma,
+): Promise<void> {
 	const actions = ROLE_DEFAULT_PERMISSIONS[role] ?? [];
 	if (actions.length === 0) return;
 
-	await prisma.userPermission.createMany({
+	await client.userPermission.createMany({
 		data: actions.map((action) => ({ action, grantedBy, userId })),
 		skipDuplicates: true,
 	});

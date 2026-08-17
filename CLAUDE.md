@@ -290,6 +290,30 @@ exempted by glob in `biome.json`; a new exemption needs a comment in the file sa
 - Auth store: `src/store/auth.store.ts` (Zustand)
 - Protected routes check session in loader, redirect to `/sign-in` if unauthenticated
 
+### Self sign-ups are marked verified — decided in spec 002
+
+`authSignup.signUp` writes `emailVerified: true` on every account it creates.
+**This is deliberate, and it is a stopgap.**
+
+There is no mail provider. `emailVerification.sendOnSignUp` is `false` and
+`sendVerificationEmail` only `console.log`s the link to the **server** console.
+`assertAuthenticatedFn` redirects anyone with `emailVerified: false` to
+`/verify-email`, whose Resend button prints another link the user cannot see. So
+a self-registered requestor left unverified is locked out of the app they just
+registered for, with no way back in — the verification gate protects nothing and
+costs everything, because nothing is being verified.
+
+The same procedure also sets `status: "active"`. The `User.status` default is
+`inactive` (spec 001, so an admin activates staff deliberately), and
+`protectedProcedure` refuses a non-active account — a self sign-up left inactive
+signs in and then 403s on every call.
+
+**Reverse this the moment a provider exists:** wire Resend/Nodemailer/SES into
+`sendVerificationEmail`, set `sendOnSignUp: true`, and drop `emailVerified` from
+that `user.update` in `src/integrations/trpc/routers/auth-signup.router.ts`.
+Nothing else depends on the flag being pre-set. Staff accounts (spec 017) are
+created by an admin who is the verification, so they are unaffected either way.
+
 ## Skills
 
 - **HeroUI v3:** `.claude/skills/heroui-react/` — use scripts to fetch component docs before implementing

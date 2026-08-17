@@ -1,8 +1,8 @@
 import { AppAuthPageShell } from "@bernardsapida/web-ui";
 import { createFileRoute } from "@tanstack/react-router";
 import { seo } from "@/config/seo.config";
-import { SignUpForm } from "@/features/auth/components/SignUpForm";
 import { redirectAuthenticatedUserFn } from "@/features/auth/functions/auth.functions";
+import { SignUpForm } from "@/features/auth-signup/components/SignUpForm";
 
 export const Route = createFileRoute("/sign-up")({
 	beforeLoad: async () => {
