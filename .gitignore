@@ -1,0 +1,20 @@
+node_modules
+.DS_Store
+dist
+dist-ssr
+*.local
+.env
+.nitro
+.tanstack
+.wrangler
+.output
+.vinxi
+__unconfig*
+src/routeTree.gen.ts
+todos.json
+
+# Local Netlify folder
+.netlify
+
+# heroui-agents-md
+.heroui-docs/

@@ -1,0 +1,423 @@
+/* ---------------------------------------------------------------------------
+ * This project's raw theme values.
+ * :root, .dark and the font stacks - everything the package's tokens.css maps
+ * ONTO. This file and styles/palettes.css are what a fork edits to rebrand; the
+ * package supplies no values of its own.
+ * ------------------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------------------
+ * Semantic variables
+ * These are HeroUI v3's own contract (--accent drives variant="primary",
+ * --surface drives Card, --danger/--success/--warning drive status variants).
+ * Overriding them here is what makes every HeroUI component wear the brand
+ * without passing a raw colour anywhere.
+ *
+ * This app has TWO independent axes, and keeping them independent is the whole
+ * design:
+ *
+ *   MODE   light / dark. routes/__root.tsx resolves it before first paint and
+ *          stamps both `class` and `data-theme` on <html>. HeroUI publishes its
+ *          own dark palette under [data-theme='dark'], so that value is spoken
+ *          for and must never be repurposed.
+ *   PALETTE which of the eight brand colours. It rides on its own attribute,
+ *          `data-palette`, written from src/config/theme.config.ts - so a
+ *          palette cannot disturb the pre-paint script, and toggling the mode
+ *          cannot change the palette.
+ *
+ * Everything that moves with the PALETTE - the whole brand ramp, and the ground
+ * it is tinted against - is generated into styles/palettes.css and is NOT here.
+ * What is left in this block is the part of the palette that is deliberately
+ * fixed: the status hues, the star, and the recipes composed from tokens above.
+ * ------------------------------------------------------------------------- */
+
+:root {
+	/* Cards, menus, dialogs, tiles. Overridden inline by theme.config.ts. */
+	--radius: 1rem;
+	/* Inputs, selects, textareas - HeroUI reads this through --radius-field. Its
+     own default is calc(--radius * 1.5), which on our 1rem base rounds a 36px
+     input to a stadium; 0.75rem keeps a field reading as a field. */
+	--field-radius: 0.75rem;
+
+	--accent: var(--brand-primary);
+	--accent-foreground: var(--brand-primary-foreground);
+	/* A plain, bright red, and it stays red on all eight palettes. Status hues are
+     the conventional ones because a user meets them in every other app they own
+     and reads them in half a second; that is not the place to teach a private
+     palette.
+
+     What DOES change with the palette is how much work the colour can do on its
+     own. On a cool accent - sky, indigo, teal - nothing else on the page is red,
+     so destruction gets the full-strength signal and the separation from
+     --accent is most of the hue circle. On `rose` the accent IS red, and on
+     `amber` it is close enough to warning to matter. Those palettes are not
+     forbidden; they simply move the whole weight onto the second signal, which
+     was always meant to carry it anyway - the verb, the glyph and the
+     type-to-confirm gate are all a colour-blind reader ever had. Under rose,
+     "Delete" reading red is a coincidence rather than a warning.
+     --danger-hover is color-mixed from this by HeroUI, so it follows. */
+	--danger: oklch(0.58 0.22 25);
+	--danger-foreground: oklch(0.99 0.0047 25);
+	/* Success and warning are the two HeroUI semantics a brand palette most often
+     forgets, which leaves every success Chip, Badge and Button on HeroUI's
+     defaults. That is not merely "a different green": HeroUI derives the soft
+     pair as `color-mix(--success 15%, transparent)` over a `color-mix(--success
+     80%, --foreground 30%)` text colour - so the "green" is mixed against
+     whatever `--foreground` happens to be, and a "Done" chip comes out muddy
+     and inconsistent depending on what is behind it.
+
+     The soft pair is therefore set explicitly and OPAQUE rather than left to
+     that derivation. Translucent chip fills change colour with whatever surface
+     they land on, which is why a row of identical Done chips could read grey on
+     one card and green on another. Opaque means a Done chip is the same green
+     everywhere. Add a status here and you set all four lines.
+
+     (The derivation is less hostile with a blue-grey --foreground than it was
+     with a dark red one, but it is still translucent, so the pair stays.) */
+	/* Their OWN values, no longer `var(--rail-*-tint)`, and that indirection was
+     a real WCAG failure rather than a tidiness question.
+
+     A rail is a graphic carrying a glyph - it answers to 3:1. These are chip and
+     badge FILLS carrying a label - they answer to 4.5:1. Pointing both at one
+     token made the stricter bar invisible, and it was being missed: white ink on
+     the old shared tint measured 4.47:1 on success and 3.96:1 on warning.
+
+     Worse, --warning-foreground is near-white here and near-black in .dark, and
+     no single fill can clear 4.5:1 against both - the pale ink needs the fill
+     below 0.172 luminance, the dark ink needs it above 0.198. Disjoint. So the
+     fill is per-theme now, exactly as --danger already was. */
+	--success: oklch(0.54 0.1186 160);
+	--success-foreground: oklch(0.99 0.01 160);
+	--success-soft: oklch(0.95 0.045 160);
+	--success-soft-foreground: oklch(0.42 0.0923 160);
+	--warning: oklch(0.562 0.1256 62);
+	--warning-foreground: oklch(0.99 0.0059 60);
+	--warning-soft: oklch(0.96 0.0313 75);
+	--warning-soft-foreground: oklch(0.45 0.1006 62);
+	/* The text you TYPE, and the caret beside it.
+
+     HeroUI freezes this to --eclipse, a hard-coded near-black, and reads it as
+     `-webkit-text-fill-color` and `caret-color` on every input. It is the one
+     colour token in the library that does not follow a theme: 159 semantic
+     tokens are read across HeroUI, 113 of them chase ours through var() and
+     color-mix chains, and of the twenty frozen to literals every other one is a
+     Tailwind internal, a black-or-white primitive, or a shadow. This is the
+     single one that paints something a reader looks at.
+
+     Left alone it means input text and the caret stay near-black whatever the
+     palette says - fine on a light ground and unreadable on a dark one, which is
+     exactly the case a designer-supplied palette can produce. */
+	--field-foreground: var(--foreground);
+	--focus: var(--brand-primary);
+
+	/* Gold, and its OWN token rather than --warning.
+     A filled star is not a warning about anything, and the two want opposite
+     things: --warning is held down at 0.6 lightness because it has to carry
+     small text and meet contrast on white, which is exactly what makes it read
+     as brown when it is used as a large solid fill. A star is a filled shape
+     with no text on it, so it is free to go light and saturated - which is what
+     "gold" is. Sharing the token made every rating look tarnished. */
+	--rating-star: oklch(0.8 0.16 85);
+
+	/* ---------------------------------------------------------------------
+   * Brand gradients - there are TWO, and the rule for picking one is:
+   *
+   *     is the gradient the SURFACE, or is the gradient the WORDS?
+   *
+   * `--gradient-brand`     the surface. Icon tiles, the active nav pill, the
+   *                        active page number, the date-filter presets, the
+   *                        stepper's completed marker, the initials avatar, a
+   *                        primary empty-state button. Whatever sits ON it -
+   *                        text or a glyph - is --gradient-brand-foreground,
+   *                        and the `gradient-brand` utility sets that colour
+   *                        for you. Do not pair it with a text class by hand;
+   *                        doing that is what produced the 1.98:1 failures this
+   *                        replaced, because the paired foreground flips
+   *                        between themes and the hand-written class did not.
+   *
+   * `--gradient-brand-ink` the words. Painted through `background-clip: text`
+   *                        by the `text-gradient` utility - the logo wordmark
+   *                        is the only consumer today. It answers to the PAGE
+   *                        behind the glyphs, not to ink on top of a fill, so
+   *                        it is a second ramp rather than a reuse. Painting a
+   *                        wordmark in the surface ramp is how it ended up at
+   *                        1.4:1 on a dark page.
+   *
+   * There were five of these. `warm` was a second voice nobody needed and a
+   * second thing to keep passing; `avatar` existed only because neither of the
+   * other two could carry white initials, which the paired foreground now
+   * solves for every brand surface at once; `soft` had no consumers at all.
+   *
+   * Both ramps travel HUE, not just lightness - a gradient between two
+   * lightnesses of one hue reads as a badly printed flat colour, and the hue
+   * movement is the whole effect. Both are generated per palette and per theme
+   * into styles/palettes.css, where the endpoints and the composed image are
+   * declared together on one element. That is not tidiness: a `var()` inside a
+   * custom property is substituted where it is DECLARED, so an image composed
+   * once at `:root` carries the light stops into every dark descendant no
+   * matter what the dark block does to the endpoints.
+   *
+   * The stops are named separately as well as composed, because a
+   * `linear-gradient()` is a CSS image and an SVG `<stop stop-color>` needs the
+   * colour itself. The progress ring's arc is a stroke, so it reads the three.
+   * ------------------------------------------------------------------- */
+	/* Mixed from the brand rather than pinned to a blue, so the glow under a
+     gradient tile is that tile's own colour on every palette. */
+	/* oklch WITH ALPHA, not color-mix, and that is a correctness fix rather than
+     a style. Tailwind wraps a color-mix in a custom property in
+     `@supports (color: color-mix(...))` and emits a stripped fallback outside
+     it - which for `color-mix(--foreground 4%, transparent)` is a bare
+     `var(--foreground)`, i.e. a SOLID near-black shadow on any engine without
+     color-mix. A shadow that degrades to opaque is worse than no shadow.
+
+     Baking the alpha into oklch has no fallback to get wrong, and the hue still
+     follows the palette through --base-hue, so these stay tinted with the
+     ground rather than being a fixed grey. The lightnesses and alphas are the
+     template's originals: mixing from --foreground (L 0.23) at the old
+     percentages had doubled the weight of every soft shadow in the app,
+     because the colour it replaced was L 0.5. */
+	--shadow-glow: 0 20px 60px -20px oklch(0.56 0.22 var(--base-hue, 258) / 0.45);
+	--shadow-soft:
+		0 1px 2px oklch(0.5 0.04 var(--base-hue, 258) / 0.06),
+		0 10px 28px -14px oklch(0.5 0.06 var(--base-hue, 258) / 0.18);
+
+	/* ---------------------------------------------------------------------
+   * Status palette
+   * The five severity gradients, and each one's midpoint as a flat colour.
+   * Every feedback surface reads from here, at different volumes: the toast
+   * paints the gradient as a rail, the banner mixes the tint down into a
+   * wash, the dialog puts it on a single icon tile. Defining the hues once
+   * is what keeps a warning toast and a warning banner recognisably the
+   * same warning.
+   *
+   * Every rail runs dark in the upper start corner to light in the lower
+   * end corner, so the light falls the same way on all five.
+   *
+   * A gradient cannot be color-mixed or used as a text colour, hence the
+   * paired `-tint`: anything that has to agree with the rail without being
+   * it - a glyph, body copy, a hover halo - reads that instead. Add a
+   * status and you set both.
+   *
+   * The hues are the conventional ones - green success, blue info, amber
+   * warning, red error - rather than the brand hue throughout. A user meets
+   * these five in every other app they own; a status surface is read in
+   * half a second, and that is not the place to teach a private palette.
+   *
+   * These are the one part of the palette that does NOT change between
+   * light and dark. A status is a status; re-tuning green per theme is how
+   * the two themes end up disagreeing about what "success" looks like.
+   *
+   * FOUR of the five are here. `accent` is generated per palette instead -
+   * it is the brand wearing a status hat, so an amber app cannot have a blue
+   * "info" toast. It stays theme-stable like its siblings, and its light end
+   * is solved against the white glyph it carries so it clears the 3:1 non-text
+   * bar on every hue. Left at a fixed lightness it passes on blue and fails on
+   * amber, which is the hue-versus-luminance trap in one line.
+   * ------------------------------------------------------------------- */
+	/* The endpoints are named separately because a `linear-gradient()` value can
+     only be used where CSS expects an image - an SVG `<stop stop-color>` needs
+     the colours themselves. The error state's mark is an SVG fill, so it reads
+     the pair; every other consumer keeps using the composed gradient below.
+     Splitting them is what stops the mark drifting off the rail it is meant to
+     match. */
+	--rail-default-from: oklch(0.27 0.03 265);
+	--rail-default-to: oklch(0.44 0.03 265);
+	--rail-default: linear-gradient(
+		135deg,
+		var(--rail-default-from) 0%,
+		var(--rail-default-to) 100%
+	);
+	--rail-default-tint: oklch(0.36 0.03 265);
+	/* The light END of each ramp is the stop that matters, because it is the one
+     a white glyph has the least to stand on. Both of these used to run brighter
+     than a glyph could survive: white measured 2.69:1 on success and 2.35:1 on
+     warning, under even the 3:1 non-text floor of SC 1.4.11. They are solved to
+     3.25:1 now - the same margin the generated --rail-accent already carries -
+     which costs the ramps some of their range at the top. That is the trade:
+     a duller sweep that a glyph reads on, rather than a brighter one it does
+     not. --rail-*-from was always dark enough and is untouched. */
+	--rail-success-from: oklch(0.5 0.1021 165);
+	--rail-success-to: oklch(0.63 0.1511 155);
+	--rail-success: linear-gradient(
+		135deg,
+		var(--rail-success-from) 0%,
+		var(--rail-success-to) 100%
+	);
+	--rail-success-tint: oklch(0.5361 0.1177 160);
+	--rail-warning-from: oklch(0.57 0.137 55);
+	--rail-warning-to: oklch(0.652 0.1335 75);
+	--rail-warning: linear-gradient(
+		135deg,
+		var(--rail-warning-from) 0%,
+		var(--rail-warning-to) 100%
+	);
+	--rail-warning-tint: oklch(0.5845 0.1306 62);
+	--rail-danger-from: oklch(0.47 0.1824 12);
+	--rail-danger-to: oklch(0.62 0.23 25);
+	--rail-danger: linear-gradient(
+		135deg,
+		var(--rail-danger-from) 0%,
+		var(--rail-danger-to) 100%
+	);
+	--rail-danger-tint: oklch(0.54 0.21 18);
+
+	/* Glass recipe. --glass-tint and the two opaque fallbacks are tinted with the
+     ground and so are generated per palette; only the STRENGTHS live here,
+     because how much of the backdrop shows through is a property of the effect
+     rather than of the colour.
+     The fill is translucent because the landing and auth pages put glass over
+     animated blobs. The signed-in app has no blobs, so there the same recipe
+     resolves to a plain surface and the border does the separating - which is
+     why the border is its own colour and not a tint of the fill. */
+	--glass-fill: 55%;
+	--glass-fill-strong: 75%;
+	--glass-border-color: var(--border);
+
+	font-family: var(--font);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	color: var(--foreground);
+	color-scheme: light;
+}
+
+/* ---------------------------------------------------------------------------
+ * Dark theme
+ * Same palette, re-lit. What is left here is only what the PALETTE does not
+ * own: the status pairs, the star, the field's border width and the shadows.
+ * The brand ramp and the ground are in styles/palettes.css, per palette, and
+ * the reasoning behind their lightnesses is in src/config/theme/palette.build.ts
+ * beside the values it produces.
+ *
+ * The one thing worth restating here, because it is counter-intuitive and it is
+ * why the two themes cannot share a brand fill: the brand INVERTS. In light it
+ * is a deep fill under near-white ink; in dark it is a pale fill under
+ * near-black ink. That is not a stylistic choice. 7:1 under white ink needs
+ * relative luminance at or below ~0.10 and 7:1 under black ink needs it at or
+ * above ~0.44, and no colour is both - so a design that pins the brand fill to
+ * one lightness in both themes cannot reach AAA and must not be attempted.
+ *
+ * --danger moves up too, for the ordinary dark-theme reason: on a dark ground
+ * the darker red is the one that disappears.
+ * ------------------------------------------------------------------------- */
+
+.dark {
+	--accent: var(--brand-primary);
+	--accent-foreground: var(--brand-primary-foreground);
+	/* Lightened from the light theme's 0.58, not darkened - on a dark ground the
+     darker red is the one that disappears. It stays a full hue away from the
+     blue accent either way. */
+	--danger: oklch(0.66 0.19 25);
+	--danger-foreground: oklch(0.16 0.03 25);
+	/* The soft pairs invert: a dark opaque fill under bright status text. Still
+     opaque, for the same reason they are opaque in light - a translucent chip
+     takes the colour of whatever card it landed on. */
+	/* Per-theme fills, see the note in :root. Success takes the same value as
+     light because its ink is near-white in both themes, so one fill genuinely
+     serves both. Warning does not: the ink here is near-black, so this fill has
+     to be the LIGHTER of the two - it is the old shared tint, pinned, which
+     measures 4.76:1 against that ink and would have broken had it kept
+     following the rail down. */
+	--success: oklch(0.54 0.1186 160);
+	--success-foreground: oklch(0.99 0.01 160);
+	--success-soft: oklch(0.28 0.06 160);
+	--success-soft-foreground: oklch(0.82 0.13 160);
+	--warning: oklch(0.6 0.134 62);
+	--warning-foreground: oklch(0.16 0.02 60);
+	--warning-soft: oklch(0.3 0.06 70);
+	--warning-soft-foreground: oklch(0.85 0.1253 75);
+	/* Fields are RECESSED here and carry a real border - the inverse of the light
+     theme, where a white field on a white card is separated by --field-shadow
+     alone. HeroUI sets --field-shadow to a transparent inset in dark
+     (deliberately, so the focus ring can use the shadow slot) and defaults
+     --field-border to transparent at width 0, so without this an input had
+     nothing at all to delineate it. The two colours are generated per palette;
+     only the width is a constant, and it is the half of the fix that HeroUI's
+     own default undoes. */
+	--field-border-width: 1px;
+	/* Same reason as the light block above, and this is the theme where it
+     matters: HeroUI's frozen near-black on a dark field is invisible. */
+	--field-foreground: var(--foreground);
+	--focus: var(--brand-primary);
+
+	/* Lifted a little on a dark ground, where the light-theme gold starts to look
+     bronze against the surface behind it. */
+	--rating-star: oklch(0.85 0.15 88);
+
+	/* Shadows on a dark ground do almost nothing - there is no lighter surface
+     for them to darken. They are kept, deepened, because they still separate a
+     raised element from the page at its edges, but the glow does the work that
+     the drop shadow does in light. Deepened here means BLACK rather than a mix
+     of --foreground, which in dark is nearly white and would cast a highlight. */
+	--shadow-soft:
+		0 1px 2px oklch(0 0 0 / 0.4), 0 10px 28px -14px oklch(0 0 0 / 0.6);
+
+	/* Glass is heavier on a dark ground: the same 55% of a near-black tint over a
+     near-black page is barely a panel. The tint itself is generated. */
+	--glass-fill: 60%;
+	--glass-fill-strong: 80%;
+	--glass-border-color: var(--border);
+
+	color-scheme: dark;
+}
+
+/* ---------------------------------------------------------------------------
+ * Font stacks
+ * Chosen by `data-font` on <html>, written from src/config/theme.config.ts.
+ *
+ * Four options, and the shortness of that list is the point. A picker may only
+ * offer a face the template SHIPS or a stack the operating system already has,
+ * because anything else previews as a silent fallback: you choose "Söhne", the
+ * preview renders in Inter, you ship, and the difference shows up on the first
+ * machine that is not yours. Inter is the one self-hosted face
+ * (public/fonts/inter, one @font-face with a weight RANGE - five fixed-weight
+ * rules pointing at the same file made the browser download and register it
+ * five times over).
+ *
+ * `--font-mono` is not switchable and does not appear here. It is used for IDs,
+ * generated credentials and machine payloads, where a disambiguating face is
+ * functional rather than decorative.
+ * ------------------------------------------------------------------------- */
+
+[data-font="inter"] {
+	--font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+[data-font="system"] {
+	--font-family:
+		ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+[data-font="serif"] {
+	--font-family: ui-serif, Georgia, Cambria, "Times New Roman", serif;
+}
+
+[data-font="mono"] {
+	--font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* ---------------------------------------------------------------------------
+ * Base
+ * ------------------------------------------------------------------------- */
+
+@layer base {
+	/* Flat page. The brand hue is carried by the components that sit on it - the
+     gradient icon tiles, the active nav pill - not by the surface behind them.
+     Marketing and auth pages still get their colour from AppBackdrop, which
+     paints on top of this. */
+	body {
+		min-height: 100vh;
+		color: var(--foreground);
+		background: var(--background);
+	}
+
+	/* Headings are Inter too - the hierarchy is carried by size, weight and the
+     tightened tracking, not by switching typeface. */
+	h1,
+	h2,
+	h3,
+	h4,
+	.display-title {
+		font-family: var(--font);
+		font-weight: 700;
+		letter-spacing: -0.02em;
+	}
+}

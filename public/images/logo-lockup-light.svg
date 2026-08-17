@@ -1,0 +1,13 @@
+<!--
+  The same lockup as logo-lockup.svg, in light ink, for AppSiteHeader's brand tone.
+
+  Two files rather than one, because there is no third option. An <img> is a
+  replaced element: the page cannot reach inside it, so no class, token or `tone`
+  prop on AppLogo can turn the dark lockup light. A brand that wants to sit on a
+  dark bar ships a second asset, and `logo.src` is where it goes.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 76" width="256" height="76" role="img" aria-label="Lockup">
+  <circle cx="34" cy="38" r="24" fill="none" stroke="#dff0e6" stroke-width="7" />
+  <circle cx="34" cy="38" r="8" fill="#dff0e6" />
+  <text x="76" y="50" font-family="ui-sans-serif, system-ui, sans-serif" font-size="34" font-weight="700" letter-spacing="-0.5" fill="#dff0e6">LOCKUP</text>
+</svg>

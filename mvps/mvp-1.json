@@ -1,0 +1,456 @@
+{
+  "mvp_number": "B1",
+  "mvp_title": "Backend Alignment — Mobile API Surface",
+  "feature_name": "TanStack Start Monolith — Mobile Integration",
+  "description": "Aligns the existing TanStack Start monolith to serve the mobile template. This is a backend-only spec. No mobile code changes. The monolith already has better-auth, Prisma/Postgres, tRPC, and most auth routes. This spec documents exactly what exists, what is broken for mobile, and what needs to be added or changed. Work is done entirely in the TanStack Start repo.",
+  "repo": "tanstack-start-monolith-template",
+  "depends_on_mvp": null,
+
+  "existing_audit": {
+    "what_works_for_mobile": [
+      "better-auth handles /api/auth/* routes via catch-all handler — POST sign-in, sign-up, forgot-password, reset-password all work out of the box",
+      "User model has all required fields: id, email, firstname, lastname, role, emailVerified, status, createdAt, updatedAt",
+      "Session model has token and expiresAt — mobile can use token as Bearer",
+      "tRPC router exists at /trpc with superjson transformer — mobile already calls this",
+      "user.updateProfile tRPC procedure exists and works",
+      "admin.listUsers tRPC procedure exists with role check",
+      "Role enum exists on User — maps to mobile tab config",
+      "Status enum exists on User — maps to mobile account locked detection",
+      "emailVerification plugin active — mobile OTP/verify flow maps to this"
+    ],
+    "what_is_broken_for_mobile": [
+      {
+        "issue": "Cookie-based auth only — tanstackStartCookies plugin sets httpOnly cookies",
+        "impact": "CRITICAL — React Native cannot use httpOnly cookies. Mobile gets 401 on all authenticated calls.",
+        "fix": "Add bearerAuth plugin to better-auth config. Mobile sends Authorization: Bearer <token>. Web continues using cookies."
+      },
+      {
+        "issue": "protectedProcedure reads session from cookie headers only",
+        "impact": "CRITICAL — tRPC calls from mobile with Bearer token fail auth check",
+        "fix": "Update protectedProcedure to check Authorization header first, fall back to cookie session"
+      },
+      {
+        "issue": "No CORS configuration",
+        "impact": "HIGH — Mobile dev client on physical device (different IP) gets CORS errors",
+        "fix": "Add CORS headers in TanStack Start server config for mobile dev IPs and production domain"
+      },
+      {
+        "issue": "Password reset uses email link, not 6-digit OTP code",
+        "impact": "MEDIUM — Mobile MVP 2 spec assumes OTP code entry screen. Email link opens a browser, not the app.",
+        "fix": "Two options: (A) Use better-auth's built-in reset link — mobile opens browser to reset, then returns to app. (B) Add custom OTP endpoint. Recommendation: Option A for template simplicity — document in spec."
+      },
+      {
+        "issue": "No /api/app/config endpoint",
+        "impact": "HIGH — Mobile MVP 4 boot sequence calls this for maintenance mode and force update check",
+        "fix": "Add new TanStack Start API route at /api/app/config"
+      },
+      {
+        "issue": "No delete account tRPC procedure",
+        "impact": "MEDIUM — Mobile MVP 3 delete account screen has no backend",
+        "fix": "Add user.deleteAccount procedure to user router"
+      },
+      {
+        "issue": "No change password tRPC procedure",
+        "impact": "MEDIUM — Mobile MVP 3 change password screen has no backend",
+        "fix": "Add user.changePassword procedure to user router — uses better-auth changePassword API"
+      },
+      {
+        "issue": "No Pusher auth endpoint",
+        "impact": "LOW — Only needed for private channels in MVP 5",
+        "fix": "Add /api/pusher/auth TanStack Start route"
+      },
+      {
+        "issue": "Seed file is empty (only reads users)",
+        "impact": "LOW — No test data with different roles to verify mobile role-based nav",
+        "fix": "Update prisma/seed.ts to create USER, ADMIN, MODERATOR test accounts"
+      },
+      {
+        "issue": "emailVerified check in assertAuthenticatedFn redirects to /verify-email (web route)",
+        "impact": "MEDIUM — Mobile has its own verify email flow. Backend must not block token issuance on emailVerified.",
+        "fix": "better-auth issues the session token regardless of emailVerified. The emailVerified check is only in web server functions (assertAuthenticatedFn) — not in the auth handler itself. Mobile handles this client-side by checking emailVerified in the session response."
+      }
+    ]
+  },
+
+  "password_reset_decision": {
+    "recommendation": "Option A — Email link reset (keep existing better-auth behavior)",
+    "rationale": [
+      "better-auth's built-in reset link is secure, tested, and zero additional code",
+      "Mobile flow: user taps forgot password → enters email → receives link → taps link → opens browser → resets password → returns to app",
+      "This is standard practice for mobile apps (Spotify, Notion, Linear all do this)",
+      "Option B (custom OTP) requires: custom DB table, OTP generation, expiry logic, rate limiting — significant scope for a template",
+      "Mobile MVP 2 spec OTP screen should be scoped to email verification only, not password reset"
+    ],
+    "mobile_spec_impact": "MVP 2 OTP screen is removed from password reset flow. Forgot password → email link → browser reset. Mobile only shows forgot-password email entry screen, then a success message 'Check your email for a reset link'.",
+    "otp_screen_remains_for": "Email verification after sign-up — better-auth sends verification email, user taps link, emailVerified becomes true. Mobile can show a 'Check your email' screen after sign-up."
+  },
+
+  "files_to_modify": [
+    {
+      "path": "src/features/auth/utils/better-auth.ts",
+      "changes": [
+        {
+          "what": "Add bearerAuth plugin",
+          "why": "Enables mobile to authenticate via Authorization: Bearer <token> header",
+          "how": "Import { bearer } from 'better-auth/plugins' and add to plugins array alongside tanstackStartCookies"
+        },
+        {
+          "what": "Add trustedOrigins for mobile dev",
+          "why": "Physical Android device on same network hits CORS. Dev IP must be trusted.",
+          "how": "Add env.MOBILE_DEV_URL to trustedOrigins array. Example: 'http://192.168.1.x:3000'"
+        },
+        {
+          "what": "Add deleteUser plugin or configure user deletion",
+          "why": "better-auth does not expose delete account by default",
+          "how": "Use auth.api.deleteUser in the tRPC procedure — no plugin needed, it is a built-in API method"
+        }
+      ],
+      "code_after": {
+        "imports_to_add": ["import { bearer } from 'better-auth/plugins'"],
+        "plugins_array": ["tanstackStartCookies()", "bearer()"],
+        "trustedOrigins": ["env.VITE_BASE_URL", "env.MOBILE_DEV_URL ?? 'http://localhost:8081'"]
+      }
+    },
+    {
+      "path": "src/integrations/trpc/init.ts",
+      "changes": [
+        {
+          "what": "Update protectedProcedure to support Bearer token from Authorization header",
+          "why": "Mobile sends Bearer token in header. Current implementation only reads cookie session.",
+          "how": "In protectedProcedure middleware: check ctx.headers for Authorization header. If present, call auth.api.getSession with those headers. better-auth bearer plugin handles extraction automatically — no manual token parsing needed."
+        }
+      ],
+      "note": "The bearer plugin patches auth.api.getSession to recognize Authorization headers automatically. No change to protectedProcedure logic needed IF the bearer plugin is added to better-auth config. Verify this works with a test call after adding the plugin."
+    },
+    {
+      "path": "src/integrations/trpc/routers/user.router.ts",
+      "changes": [
+        {
+          "what": "Add changePassword procedure",
+          "why": "Mobile MVP 3 change password screen",
+          "endpoint_logic": "Call auth.api.changePassword({ body: { currentPassword, newPassword }, headers: ctx.headers })",
+          "input_schema": "z.object({ currentPassword: z.string().min(8), newPassword: z.string().min(8) })",
+          "error_handling": "Catch better-auth error for wrong current password — return 400 with INVALID_CURRENT_PASSWORD code"
+        },
+        {
+          "what": "Add deleteAccount procedure",
+          "why": "Mobile MVP 3 delete account screen",
+          "endpoint_logic": "1. Verify password via auth.api.signInWithEmailAndPassword first. 2. If valid: call auth.api.deleteUser({ headers: ctx.headers }). 3. This invalidates all sessions automatically.",
+          "input_schema": "z.object({ password: z.string().min(1) })",
+          "error_handling": "Catch wrong password — return 400 with INVALID_PASSWORD code"
+        }
+      ]
+    },
+    {
+      "path": "src/env.ts",
+      "changes": [
+        {
+          "what": "Add MOBILE_DEV_URL and APP_VERSION env vars",
+          "why": "CORS trusted origin for physical Android device. APP_VERSION for /api/app/config response.",
+          "additions": {
+            "server": {
+              "MOBILE_DEV_URL": "z.string().optional()",
+              "APP_VERSION": "z.string().default('1.0.0')",
+              "MINIMUM_APP_VERSION": "z.string().default('1.0.0')",
+              "MAINTENANCE_MODE": "z.string().default('false')",
+              "MAINTENANCE_MESSAGE": "z.string().optional()",
+              "PUSHER_APP_SECRET": "z.string().optional()",
+              "PUSHER_APP_ID": "z.string().optional()"
+            },
+            "client": {
+              "VITE_PUSHER_KEY": "z.string().optional()",
+              "VITE_PUSHER_CLUSTER": "z.string().default('ap1')"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "path": "prisma/seed.ts",
+      "changes": [
+        {
+          "what": "Add seeded test users with all roles",
+          "why": "Mobile needs to test role-based tab navigation. Currently no seed data.",
+          "users_to_create": [
+            {
+              "email": "user@test.com",
+              "password": "Password123!",
+              "firstname": "Test",
+              "lastname": "User",
+              "role": "USER",
+              "emailVerified": true,
+              "status": "ACTIVE"
+            },
+            {
+              "email": "admin@test.com",
+              "password": "Password123!",
+              "firstname": "Test",
+              "lastname": "Admin",
+              "role": "ADMIN",
+              "emailVerified": true,
+              "status": "ACTIVE"
+            },
+            {
+              "email": "moderator@test.com",
+              "password": "Password123!",
+              "firstname": "Test",
+              "lastname": "Moderator",
+              "role": "MODERATOR",
+              "emailVerified": true,
+              "status": "ACTIVE"
+            },
+            {
+              "email": "locked@test.com",
+              "password": "Password123!",
+              "firstname": "Locked",
+              "lastname": "User",
+              "role": "USER",
+              "emailVerified": true,
+              "status": "INACTIVE",
+              "note": "Tests mobile account locked screen"
+            }
+          ],
+          "how": "Use auth.api.signUpEmail to create users so better-auth properly hashes passwords and creates sessions. Then update role and status via prisma.user.update after creation."
+        }
+      ]
+    }
+  ],
+
+  "files_to_create": [
+    {
+      "path": "src/routes/api/app/config.ts",
+      "description": "App config endpoint. Called by mobile on cold start before auth bootstrap. Returns maintenance mode, version info. No auth required.",
+      "method": "GET",
+      "auth_required": false,
+      "response_shape": {
+        "maintenanceMode": "boolean — from MAINTENANCE_MODE env var",
+        "maintenanceMessage": "string | null — from MAINTENANCE_MESSAGE env var",
+        "minimumVersion": "string — from MINIMUM_APP_VERSION env var",
+        "currentVersion": "string — from APP_VERSION env var"
+      },
+      "implementation": "TanStack Start createFileRoute at '/api/app/config' with GET server handler. Read env vars, return JSON response.",
+      "note": "MAINTENANCE_MODE env var is string 'true'/'false' — parse to boolean in response"
+    },
+    {
+      "path": "src/routes/api/pusher/auth.ts",
+      "description": "Pusher private channel auth endpoint. Called by mobile Pusher client to authenticate private-user-{userId} channels.",
+      "method": "POST",
+      "auth_required": true,
+      "request_body": { "socket_id": "string", "channel_name": "string" },
+      "response_shape": "Pusher auth signature object",
+      "implementation": [
+        "Import Pusher server SDK: import Pusher from 'pusher'",
+        "Initialize Pusher with PUSHER_APP_ID, VITE_PUSHER_KEY, PUSHER_APP_SECRET, VITE_PUSHER_CLUSTER from env",
+        "Verify session from Authorization header (bearer plugin)",
+        "Validate channel_name starts with 'private-user-' + session.user.id — prevent subscribing to other users' channels",
+        "Return pusher.authorizeChannel(socket_id, channel_name)",
+        "If channel_name doesn't match user's channel: return 403"
+      ],
+      "package": "pusher (server SDK)",
+      "installation": "npm install pusher"
+    },
+    {
+      "path": "src/routes/api/dev/seed.ts",
+      "description": "Dev-only endpoint to trigger seed. Only active when NODE_ENV=development. Returns 404 in production.",
+      "method": "POST",
+      "auth_required": false,
+      "implementation": "Check NODE_ENV — if production return 404. Run seed logic and return created user list.",
+      "guard": "if (env.NODE_ENV !== 'development') return new Response('Not found', { status: 404 })"
+    },
+    {
+      "path": "src/routes/api/dev/toggle-maintenance.ts",
+      "description": "Dev-only endpoint to toggle maintenance mode without env restart. Stores state in memory (process-level). Resets on server restart.",
+      "method": "POST",
+      "auth_required": false,
+      "guard": "NODE_ENV !== development → 404",
+      "note": "In-memory toggle only — not persisted. For real maintenance, set MAINTENANCE_MODE env var and restart."
+    }
+  ],
+
+  "mobile_adapter_alignment": {
+    "description": "How the mobile better-auth adapter maps to the monolith endpoints after these changes",
+    "endpoint_mapping": [
+      {
+        "mobile_call": "adapter.login({ email, password })",
+        "monolith_endpoint": "POST /api/auth/sign-in/email",
+        "response_mobile_needs": "{ token, user: { id, email, firstname, lastname, role } }",
+        "response_monolith_returns": "better-auth returns session with token field",
+        "gap": "better-auth sign-in response includes token in session object — mobile adapter must extract session.token",
+        "mobile_adapter_note": "In better-auth.adapter.ts: response.token comes from response.session?.token or response.token depending on better-auth version. Log the raw response during development to confirm shape."
+      },
+      {
+        "mobile_call": "adapter.getSession(token)",
+        "monolith_endpoint": "GET /api/auth/get-session",
+        "headers": "Authorization: Bearer <token>",
+        "response_mobile_needs": "{ user: { id, email, firstname, lastname, role } }",
+        "gap": "None — bearer plugin enables this"
+      },
+      {
+        "mobile_call": "adapter.logout(token)",
+        "monolith_endpoint": "POST /api/auth/sign-out",
+        "headers": "Authorization: Bearer <token>",
+        "gap": "None — better-auth sign-out invalidates the session token"
+      },
+      {
+        "mobile_call": "adapter.forgotPassword(email)",
+        "monolith_endpoint": "POST /api/auth/forget-password",
+        "note": "better-auth endpoint is forget-password (no 't') — confirm exact path from better-auth docs",
+        "gap": "Returns email link, not OTP. Mobile shows success message only — no OTP entry screen for password reset."
+      },
+      {
+        "mobile_call": "adapter.refresh(refreshToken)",
+        "monolith_endpoint": "No explicit refresh endpoint in better-auth",
+        "gap": "IMPORTANT — better-auth sessions are long-lived (7 days) with cookieCache (1 hour). For mobile Bearer tokens, the token IS the session token and expires in 7 days. No refresh needed. Mobile should store token expiry (expiresAt from session) and treat 401 as re-login signal rather than attempting refresh.",
+        "mobile_spec_impact": "Remove TOKEN_REFRESH_KEY from secureStore. Simplify session lifecycle: token valid → use it. Token 401 → SessionExpiredModal → re-login. No silent refresh."
+      },
+      {
+        "mobile_call": "trpc.user.updateProfile()",
+        "monolith_endpoint": "tRPC /trpc — user.updateProfile",
+        "headers": "Authorization: Bearer <token>",
+        "gap": "None — works after bearer plugin addition"
+      },
+      {
+        "mobile_call": "trpc.user.changePassword()",
+        "monolith_endpoint": "tRPC /trpc — user.changePassword (to be created)",
+        "gap": "Procedure does not exist yet — created in this spec"
+      },
+      {
+        "mobile_call": "trpc.user.deleteAccount()",
+        "monolith_endpoint": "tRPC /trpc — user.deleteAccount (to be created)",
+        "gap": "Procedure does not exist yet — created in this spec"
+      }
+    ]
+  },
+
+  "account_locked_mapping": {
+    "description": "Mobile MVP 2 detects account locked from a specific error code. Map monolith's STATUS enum to mobile error.",
+    "monolith_status_enum": "ACTIVE | INACTIVE (presumed — confirm from prisma/generated/enums.ts)",
+    "mobile_detection": "When sign-in returns status INACTIVE/LOCKED: better-auth returns 403 or custom error. Mobile checks response status/error code.",
+    "implementation": "Add custom error in better-auth config or handle in the sign-in flow. Alternatively: if user.status !== 'ACTIVE', better-auth can be configured to reject sign-in. Check better-auth docs for account status hooks.",
+    "simplest_approach": "In better-auth config, add account.accountLinking or use the databaseHooks.session.create hook to check user.status before creating session. Return error if status is not ACTIVE."
+  },
+
+  "cors_configuration": {
+    "description": "TanStack Start uses Vinxi/H3 under the hood. CORS must be configured at the server level.",
+    "file_to_check": "vite.config.ts or server entry file",
+    "implementation": {
+      "package": "h3 (already a dependency via TanStack Start)",
+      "approach": "Add CORS headers via TanStack Start's server config in vite.config.ts",
+      "allowed_origins": [
+        "env.VITE_BASE_URL (web)",
+        "env.MOBILE_DEV_URL (mobile dev physical device)",
+        "null (Expo Go sends null origin)"
+      ],
+      "allowed_headers": ["Content-Type", "Authorization", "Origin"],
+      "allowed_methods": ["GET", "POST", "PATCH", "DELETE", "OPTIONS"]
+    }
+  },
+
+  "env_additions": {
+    "description": "New env vars to add to .env file in monolith repo",
+    "development": {
+      "MOBILE_DEV_URL": "http://192.168.1.x:3000 — replace with your local network IP",
+      "APP_VERSION": "1.0.0",
+      "MINIMUM_APP_VERSION": "1.0.0",
+      "MAINTENANCE_MODE": "false",
+      "MAINTENANCE_MESSAGE": "",
+      "PUSHER_APP_ID": "your-pusher-app-id",
+      "PUSHER_APP_SECRET": "your-pusher-secret",
+      "VITE_PUSHER_KEY": "your-pusher-key",
+      "VITE_PUSHER_CLUSTER": "ap1"
+    }
+  },
+
+  "session_lifetime_decision": {
+    "description": "Critical alignment between monolith session config and mobile expectations",
+    "monolith_config": {
+      "expiresIn": "7 days",
+      "updateAge": "1 day",
+      "cookieCache_maxAge": "1 hour"
+    },
+    "mobile_impact": [
+      "Token (= session token) expires in 7 days — mobile stores this as TOKEN_EXPIRY_KEY",
+      "No refresh token needed — token is valid for 7 days, then user must re-login",
+      "cookieCache is irrelevant for mobile Bearer auth",
+      "Mobile boot sequence: if token exists and not expired (< 7 days old) → call /api/auth/get-session to validate → if 401 → re-login"
+    ],
+    "mobile_spec_change": "Remove REFRESH_TOKEN_KEY from secureStore spec. Remove adapter.refresh() from AuthAdapter interface. Session expiry = 7 days. 401 = full re-login via SessionExpiredModal."
+  },
+
+  "acceptance_criteria": [
+    {
+      "given": "Mobile sends POST /api/auth/sign-in/email with email and password",
+      "when": "Credentials are correct",
+      "then": "Response includes token and user with id, email, firstname, lastname, role"
+    },
+    {
+      "given": "Mobile sends GET /api/auth/get-session with Authorization: Bearer <token>",
+      "when": "Token is valid",
+      "then": "Response includes user object with role field"
+    },
+    {
+      "given": "Mobile sends tRPC call to user.updateProfile with Authorization: Bearer <token>",
+      "when": "Token is valid",
+      "then": "Profile is updated and new user data returned — no cookie required"
+    },
+    {
+      "given": "Mobile sends GET /api/app/config",
+      "when": "MAINTENANCE_MODE=false and APP_VERSION=1.0.0",
+      "then": "Response: { maintenanceMode: false, maintenanceMessage: null, minimumVersion: '1.0.0', currentVersion: '1.0.0' }"
+    },
+    {
+      "given": "Mobile sends GET /api/app/config",
+      "when": "MAINTENANCE_MODE=true",
+      "then": "Response: { maintenanceMode: true, maintenanceMessage: '...', ... } — mobile shows MaintenanceModeScreen"
+    },
+    {
+      "given": "Mobile signs in as admin@test.com after seed",
+      "when": "Session is retrieved",
+      "then": "user.role = 'ADMIN' — mobile renders admin tab in bottom nav"
+    },
+    {
+      "given": "Mobile signs in as locked@test.com",
+      "when": "Sign-in is attempted",
+      "then": "Response returns error that maps to account locked — mobile shows AccountLockedScreen"
+    },
+    {
+      "given": "Mobile sends tRPC user.deleteAccount with correct password",
+      "when": "Password is verified",
+      "then": "User and all sessions deleted. Subsequent calls with old token return 401."
+    },
+    {
+      "given": "Physical Android device on local network sends request to monolith",
+      "when": "MOBILE_DEV_URL is set to the device's network IP",
+      "then": "No CORS error — request succeeds"
+    }
+  ],
+
+  "out_of_scope": [
+    "Email provider integration (Resend, Nodemailer) — dev uses console.log logging of links, production setup is app-level",
+    "Rate limiting on auth endpoints — important for production but not in template scope. Add note in SECURITY_CHECKLIST.md",
+    "SSL/HTTPS setup — handled at deployment level (Railway, Fly.io, etc.)",
+    "WebSocket/Pusher server events — template provides the auth endpoint. Apps add their own event triggers.",
+    "Web session behavior changes — tanstackStartCookies remains for web. Bearer is additive only.",
+    "Role management UI — admin.listUsers already exists. Role assignment is direct DB operation for now."
+  ],
+
+  "testing_sequence": {
+    "description": "Step-by-step sequence to verify mobile ↔ monolith integration works after applying this spec",
+    "steps": [
+      "1. Run prisma/seed.ts — verify 4 test users created in DB",
+      "2. Start monolith: npm run dev",
+      "3. Update mobile .env: EXPO_PUBLIC_API_URL=http://<your-local-ip>:3000",
+      "4. Start mobile: npx expo start",
+      "5. Test: sign in as user@test.com — verify home screen loads with 'Hello, Test 👋'",
+      "6. Test: sign in as admin@test.com — verify admin tab appears in bottom nav",
+      "7. Test: sign in as locked@test.com — verify AccountLockedScreen appears",
+      "8. Test: GET http://<ip>:3000/api/app/config in browser — verify JSON response",
+      "9. Test: set MAINTENANCE_MODE=true in .env, restart monolith — verify mobile shows MaintenanceModeScreen",
+      "10. Test: turn off monolith server — verify mobile shows ServerErrorScreen",
+      "11. Test: turn off wifi on device — verify mobile shows NoInternetScreen on launch",
+      "12. Test: update profile from mobile — verify name changes in DB",
+      "13. Test: change password from mobile — verify new password works on next sign-in",
+      "14. Test: delete account from mobile — verify user removed from DB"
+    ]
+  }
+}

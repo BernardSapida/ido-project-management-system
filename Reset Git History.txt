@@ -1,0 +1,17 @@
+# Create a new orphan branch (no history)
+git checkout --orphan latest_branch
+
+# Add all your current files
+git add -A
+
+# Commit as your new initial commit
+git commit -m "Initial Commit"
+
+# Delete the old main branch
+git branch -D main
+
+# Rename the current branch to main
+git branch -m main
+
+# Force push to overwrite the remote repo
+git push origin main --force

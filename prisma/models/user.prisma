@@ -1,0 +1,29 @@
+enum Role {
+  USER
+  ADMIN
+}
+
+enum STATUS {
+  active
+  inactive
+  suspended
+}
+
+model User {
+  id            String   @id
+  name          String
+  firstname     String
+  lastname      String
+  role          Role
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  status        STATUS   @default(active)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  session Session[]
+  account Account[]
+
+  @@map("users")
+}
