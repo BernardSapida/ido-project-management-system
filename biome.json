@@ -58,7 +58,18 @@
 			},
 			"recommended": true,
 			"style": {
-				"noNonNullAssertion": "off"
+				"noNonNullAssertion": "off",
+				"noRestrictedImports": {
+					"level": "error",
+					"options": {
+						"paths": {
+							"react-hook-form": {
+								"importNames": ["useForm"],
+								"message": "Use useAppForm from @/hooks/use-app-form — it carries this project's validation timing (onBlur, re-validate onChange) and attaches the resolver. Bare useForm is only for lab specimens and preview boards, which are exempted by glob below."
+							}
+						}
+					}
+				}
 			},
 			"suspicious": {
 				"noArrayIndexKey": "off",
@@ -68,6 +79,22 @@
 			}
 		}
 	},
+	"overrides": [
+		{
+			"includes": [
+				"**/src/hooks/use-app-form.ts",
+				"**/src/routes/(references)/**",
+				"**/src/features/theme-customizer/components/ThemePreviewBoard.tsx"
+			],
+			"linter": {
+				"rules": {
+					"style": {
+						"noRestrictedImports": "off"
+					}
+				}
+			}
+		}
+	],
 	"vcs": {
 		"clientKind": "git",
 		"enabled": false,

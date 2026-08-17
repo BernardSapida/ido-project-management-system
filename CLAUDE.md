@@ -207,6 +207,51 @@ import { Typography } from "@heroui/react";
 
 **Status chips:** Use `StatusChip` with a `statusMap` from `src/lib/status-maps/`
 
+## Forms
+
+**Every form starts with `useAppForm`** (`@/hooks/use-app-form`). Never call `useForm`
+directly for a form a user submits — `useAppForm` is `useForm` with this project's validation
+timing already applied (`mode: "onBlur"`, `reValidateMode: "onChange"`) and the resolver
+already attached. Biome enforces it: `style/noRestrictedImports` bans the `useForm` import
+outside the exemptions in `biome.json`.
+
+```ts
+const { control, handleSubmit } = useAppForm<SignInInput>(signInSchema, {
+  defaultValues: { email: "", password: "" },
+});
+```
+
+**Editing an existing record?** Pass `values` and let RHF reset when it changes. Never write a
+`useEffect` that calls `reset` — `defaultValues` is still required alongside it, because
+`values` is undefined until the query resolves and the fields must be controlled before then.
+
+```ts
+values: user && { firstname: user.firstname || "", lastname: user.lastname || "" },
+```
+
+**Fields are `App*` wrappers from `@bernardsapida/web-ui`, bound with `control` + `name`.** No
+`Controller`, no `register`, no raw `<Input>`. The binding is a two-mode union — `{ control,
+name }` or `{ value, onChange, errorMessage }` — mutually exclusive in the types, so a
+half-wired field is a compile error rather than a field that silently ignores what you typed.
+
+```tsx
+<AppInputGroup control={control} label="Email" name="email" placeholder="you@example.com" />
+```
+
+**Never add your own error element.** The wrappers render the RHF error. A hand-rolled
+`<p className="text-danger">` duplicates it and drifts.
+
+The value prop and change handler differ per wrapper — `AppComboBox` is
+`selectedKey`/`onSelectionChange`, `AppSwitch` is `isSelected`/`onValueChange`. The table at
+the top of `src/routes/(references)/components/form-reference.tsx` is the list; read it rather
+than guessing. That lab is the canonical reference for form work — not
+`agent-resources/skills/rhf-heroui-form`, which is a redirect stub.
+
+**The one place bare `useForm` is right** is a lab specimen or a preview board — somewhere a
+`control` is needed to render a field and nothing is ever submitted. `useAppForm` requires a
+schema, so using it there would mean inventing validation for a specimen. Those paths are
+exempted by glob in `biome.json`; a new exemption needs a comment in the file saying why.
+
 ## HeroUI v3 Rules
 
 - **Compound components always:** `<Card><Card.Header>` not `<Card title="x">`

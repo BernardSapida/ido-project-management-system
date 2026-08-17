@@ -1,12 +1,11 @@
 import { AppInputGroup } from "@bernardsapida/web-ui";
 import { Button, Card } from "@heroui/react";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle2, Lock } from "lucide-react";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ERROR_MESSAGES } from "@/errors/error-messages";
 import { authClient } from "@/features/auth/utils/auth-client";
+import { useAppForm } from "@/hooks/use-app-form";
 
 const resetPasswordSchema = z
 	.object({
@@ -30,11 +29,8 @@ export function ResetPasswordForm({ onSuccess, token }: ResetPasswordFormProps) 
 	const [error, setError] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(false);
 
-	const { control, handleSubmit } = useForm<ResetPasswordInput>({
+	const { control, handleSubmit } = useAppForm<ResetPasswordInput>(resetPasswordSchema, {
 		defaultValues: { confirmPassword: "", password: "" },
-		mode: "onBlur",
-		resolver: zodResolver(resetPasswordSchema),
-		reValidateMode: "onChange",
 	});
 
 	const onSubmit = async (data: ResetPasswordInput) => {

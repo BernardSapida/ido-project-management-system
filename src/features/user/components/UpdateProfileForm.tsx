@@ -1,12 +1,10 @@
 import { AppInputGroup } from "@bernardsapida/web-ui";
 import { Button, Card, Input, Label, TextField } from "@heroui/react";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, Mail, User } from "lucide-react";
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useUserProfileMutations } from "@/features/user/hooks/use-user-profile-mutations";
 import { type UpdateProfileInput, UpdateProfileSchema } from "@/features/user/validations/schema/update-profile.schema";
+import { useAppForm } from "@/hooks/use-app-form";
 
 export function UpdateProfileForm() {
 	const { user } = useAuth();
@@ -16,23 +14,14 @@ export function UpdateProfileForm() {
 		control,
 		formState: { isDirty },
 		handleSubmit,
-		reset,
-	} = useForm<UpdateProfileInput>({
-		defaultValues: {
-			firstname: user?.firstname ?? "",
-			lastname: user?.lastname ?? "",
-		},
-		resolver: zodResolver(UpdateProfileSchema),
+	} = useAppForm<UpdateProfileInput>(UpdateProfileSchema, {
+		defaultValues: { firstname: "", lastname: "" },
+		// The edit-form pattern: RHF resets when `values` changes, so the record
+		// lands in the fields as soon as the session resolves. `defaultValues` is
+		// still required — `values` is undefined until then, and the fields have to
+		// be controlled before the first render.
+		values: user && { firstname: user.firstname || "", lastname: user.lastname || "" },
 	});
-
-	useEffect(() => {
-		if (user) {
-			reset({
-				firstname: user.firstname || "",
-				lastname: user.lastname || "",
-			});
-		}
-	}, [user, reset]);
 
 	const onSubmit = (data: UpdateProfileInput) => {
 		updateProfile.mutate(data);

@@ -1,11 +1,10 @@
 import { AppInputGroup, AppToast } from "@bernardsapida/web-ui";
 import { Button, Card } from "@heroui/react";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, CheckCircle2, KeyRound, TriangleAlert } from "lucide-react";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { authClient } from "@/features/auth/utils/auth-client";
+import { useAppForm } from "@/hooks/use-app-form";
 
 const ChangePasswordSchema = z
 	.object({
@@ -28,11 +27,8 @@ export function ChangePasswordCard() {
 		handleSubmit,
 		reset,
 		formState: { isDirty, isSubmitting },
-	} = useForm<ChangePasswordInput>({
+	} = useAppForm<ChangePasswordInput>(ChangePasswordSchema, {
 		defaultValues: { confirmPassword: "", currentPassword: "", newPassword: "" },
-		mode: "onBlur",
-		resolver: zodResolver(ChangePasswordSchema),
-		reValidateMode: "onChange",
 	});
 
 	const onSubmit = async (data: ChangePasswordInput) => {

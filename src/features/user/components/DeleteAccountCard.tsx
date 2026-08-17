@@ -1,13 +1,12 @@
 import { AppInputGroup, AppModal, AppToast } from "@bernardsapida/web-ui";
 import { Button, Card } from "@heroui/react";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, TriangleAlert } from "lucide-react";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { authClient } from "@/features/auth/utils/auth-client";
+import { useAppForm } from "@/hooks/use-app-form";
 import { useTRPC } from "@/integrations/trpc/react";
 
 const DeleteAccountSchema = z.object({
@@ -26,9 +25,8 @@ export function DeleteAccountCard() {
 		handleSubmit,
 		reset,
 		formState: { isSubmitting },
-	} = useForm<DeleteAccountInput>({
+	} = useAppForm<DeleteAccountInput>(DeleteAccountSchema, {
 		defaultValues: { password: "" },
-		resolver: zodResolver(DeleteAccountSchema),
 	});
 
 	const deleteAccount = useMutation(

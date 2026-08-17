@@ -1,13 +1,12 @@
 import { AppInputGroup } from "@bernardsapida/web-ui";
 import { Button, Card } from "@heroui/react";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Layout, Mail } from "lucide-react";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ERROR_MESSAGES } from "@/errors/error-messages";
 import { authClient } from "@/features/auth/utils/auth-client";
+import { useAppForm } from "@/hooks/use-app-form";
 
 const forgotPasswordSchema = z.object({
 	email: z.string().min(1, "Email is required").email("Enter a valid email"),
@@ -20,11 +19,8 @@ export function ForgotPasswordForm() {
 	const [isLoading, setIsLoading] = useState(false);
 	const [sent, setSent] = useState(false);
 
-	const { control, handleSubmit } = useForm<ForgotPasswordInput>({
+	const { control, handleSubmit } = useAppForm<ForgotPasswordInput>(forgotPasswordSchema, {
 		defaultValues: { email: "" },
-		mode: "onBlur",
-		resolver: zodResolver(forgotPasswordSchema),
-		reValidateMode: "onChange",
 	});
 
 	const onSubmit = async (data: ForgotPasswordInput) => {

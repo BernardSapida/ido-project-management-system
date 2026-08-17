@@ -1,13 +1,12 @@
 import { AppInputGroup } from "@bernardsapida/web-ui";
 import { Button, Card, Checkbox, Label } from "@heroui/react";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Layout, Lock, Mail } from "lucide-react";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ERROR_MESSAGES } from "@/errors/error-messages";
 import { authClient } from "@/features/auth/utils/auth-client";
+import { useAppForm } from "@/hooks/use-app-form";
 
 const signInSchema = z.object({
 	email: z.string().min(1, "Email is required").email("Enter a valid email"),
@@ -24,11 +23,8 @@ export function SignInForm({ onSuccess }: SignInFormProps) {
 	const [authError, setAuthError] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(false);
 
-	const { control, handleSubmit } = useForm<SignInInput>({
+	const { control, handleSubmit } = useAppForm<SignInInput>(signInSchema, {
 		defaultValues: { email: "", password: "" },
-		mode: "onBlur",
-		resolver: zodResolver(signInSchema),
-		reValidateMode: "onChange",
 	});
 
 	const onSubmit = async (data: SignInInput) => {
