@@ -958,9 +958,9 @@
   --gradient-brand-ink: linear-gradient(135deg, var(--gradient-brand-ink-from) 0%, var(--gradient-brand-ink-to) 100%);
 }
 
-/* irms - accent hue 28, base tint 0
+/* ipms - accent hue 28, base tint 0
  * Supplied by a designer - measured, not solved. */
-:root[data-palette="irms"] {
+:root[data-palette="ipms"] {
   --base-hue: 28;
   --base-tint: 0;
   --background: oklch(1 0 0);
@@ -1018,7 +1018,7 @@
   --rail-foreground: oklch(0.99 0 0);
 }
 
-.dark[data-palette="irms"] {
+.dark[data-palette="ipms"] {
   --background: oklch(0.1186 0 0);
   --border: oklch(0.32 0 0);
   --brand-accent: oklch(0.455 0.12 22);

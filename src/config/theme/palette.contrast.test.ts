@@ -295,7 +295,7 @@ describe("the shipped palettes", () => {
 		 * acknowledged here rather than noticed later on a screen where the brand
 		 * button and the success toast are the same green.
 		 */
-		expect(colliding.sort()).toEqual(["airbnb", "irms", "netflix", "rabbit", "revolve", "spotify"]);
+		expect(colliding.sort()).toEqual(["airbnb", "ipms", "netflix", "rabbit", "revolve", "spotify"]);
 	});
 
 	/*

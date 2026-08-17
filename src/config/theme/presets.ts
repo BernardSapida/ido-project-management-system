@@ -147,7 +147,7 @@ export const PALETTE_PRESETS = [
 		accentHue: 28,
 		baseTint: 0,
 		description: "Supplied by a designer - measured, not solved.",
-		name: "irms",
+		name: "ipms",
 		supplied: { background: "#ffffff", brand: "#b20d0e", foreground: "#111111", surface: "#ffffff" },
 	},
 ] as const satisfies readonly PalettePreset[];

@@ -67,7 +67,7 @@ export interface ThemeConfig {
 
 // ---- The line. This is what the customizer's copy action hands you. --------
 export const THEME: ThemeConfig = {
-	palette: "irms",
+	palette: "ipms",
 	font: "inter",
 	uiRadius: "md",
 	formRadius: "sm",

@@ -7004,7 +7004,7 @@ export const GENERATED_PALETTES: Readonly<Record<PaletteName, GeneratedPalette>>
 			}
 		}
 	},
-	"irms": {
+	"ipms": {
 		"accentHue": 28,
 		"baseTint": 0,
 		"dark": {
