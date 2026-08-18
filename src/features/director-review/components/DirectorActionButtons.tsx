@@ -8,6 +8,7 @@ import {
 	type DirectorRejectFormValues,
 	directorRejectFormSchema,
 } from "@/features/director-review/validations/schema/director-approver.schema";
+import { StampedSignature } from "@/features/request-detail/components/StampedSignature";
 import { useAppForm } from "@/hooks/use-app-form";
 import { isDirectorApprovableStatus, isDirectorRejectableStatus } from "@/lib/status-maps/request-status";
 
@@ -160,24 +161,11 @@ export function DirectorActionButtons({
 					    approval carries, which is the one thing the copy-on-approve rule
 					    exists to prevent. */}
 					{directorSignatureUrl ? (
-						<div className="flex flex-col gap-2">
-							<Typography
-								color="muted"
-								type="body-xs"
-							>
-								The signature stamped on this request
-							</Typography>
-
-							{/* A white plate regardless of theme: a signature is black ink on
-							    paper and disappears entirely on a dark surface. */}
-							<div className="flex min-h-24 items-center justify-center rounded-xl border border-default-200 bg-white p-4">
-								<img
-									alt="The signature stamped on this request"
-									className="max-h-20 object-contain"
-									src={directorSignatureUrl}
-								/>
-							</div>
-						</div>
+						<StampedSignature
+							data-cy="director-stamped-signature"
+							label="The signature stamped on this request"
+							url={directorSignatureUrl}
+						/>
 					) : null}
 				</div>
 			</AppCard>

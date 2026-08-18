@@ -270,3 +270,45 @@ export function isDirectorApprovableStatus(directorReviewStatus?: string | null)
 export function isDirectorRejectableStatus(directorReviewStatus?: string | null): boolean {
 	return directorReviewStatus === DIRECTOR_REJECTABLE_STATUS;
 }
+
+/**
+ * The `idoFinalStatus` column - the IDO Chairperson's own stage.
+ *
+ * A THIRD status vocabulary beside `masterStatus` and `directorReviewStatus`,
+ * and it earns its place the same way that one did: `masterStatus` reads
+ * `UNDER_IDO_FINAL_REVIEW` while the chairperson holds the request and
+ * `UNDER_FINAL_DIRECTOR_REVIEW` once they have signed, so it can say where the
+ * request IS but never what this desk DECIDED. `IDO_FINAL_APPROVED` has no
+ * `masterStatus` twin at all - the headline moves to the director's stage
+ * instead - which is why a chip for this desk has to come from here.
+ *
+ * It is also what tells the chairperson's two appearances apart. They review at
+ * the first stage as well, and `resolveReviewRoute` keys on the PRESENCE of this
+ * column to decide which of their two pages a queue row opens.
+ */
+export const idoFinalStatusMap: Record<string, StatusMapEntry> = {
+	UNDER_IDO_FINAL_REVIEW: { icon: ClipboardCheck, label: "IDO Final Review", tone: "warning" },
+	IDO_FINAL_APPROVED: { icon: CheckCircle2, label: "Approved by IDO", tone: "success" },
+	IDO_FINAL_REJECTED: { icon: XCircle, label: "IDO Final Rejected", tone: "danger" },
+};
+
+/**
+ * The ONE `idoFinalStatus` in which the chairperson may act.
+ *
+ * Written by the DIRECTOR's approval (`approveByDirector`), never here - which
+ * is the coupling to watch: move that write and this stage's guard has nothing
+ * left to match, and the symptom is a queue that fills with requests no
+ * procedure will accept.
+ *
+ * A single value rather than a list, unlike `DIRECTOR_APPROVABLE_STATUSES`.
+ * There is no race at this stage - one desk holds the request and the two
+ * outcomes are both terminal for it - so both procedures read the same constant
+ * and the approval's extra guard is the signature rather than a second status.
+ */
+export const IDO_FINAL_ACTIONABLE_STATUS = "UNDER_IDO_FINAL_REVIEW";
+
+/** `null` - a request that has not reached the chairperson's final desk - is NOT
+ *  actionable. */
+export function isIdoFinalActionableStatus(idoFinalStatus?: string | null): boolean {
+	return idoFinalStatus === IDO_FINAL_ACTIONABLE_STATUS;
+}

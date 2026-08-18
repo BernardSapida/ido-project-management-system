@@ -177,10 +177,7 @@ function DirectorReviewPage() {
 			    taken here - it is read first and read longest. The same two-column
 			    rhythm as the IDO and budget review pages. */}
 			<div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_340px]">
-				<ApprovalTrail
-					isBudgetPending={isBudgetPending}
-					request={request}
-				/>
+				<ApprovalTrail request={request} />
 
 				<DirectorActionButtons
 					canApprove={request.canApproveDirector}

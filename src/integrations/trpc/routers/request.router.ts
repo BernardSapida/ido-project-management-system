@@ -9,10 +9,15 @@ import {
 	directorRejectSchema,
 } from "@/features/director-review/validations/schema/director-approver.schema";
 import {
+	idoFinalApproveSchema,
+	idoFinalRejectSchema,
+} from "@/features/ido-final-review/validations/schema/ido-final-approver.schema";
+import {
 	idoDeferSchema,
 	idoRecommendSchema,
 	idoRejectSchema,
 	idoReturnSchema,
+	optionalText,
 } from "@/features/ido-review/validations/schema/ido-approver.schema";
 import {
 	createRequestSchema,
@@ -25,10 +30,12 @@ import { assertCanReadRequest } from "@/lib/request-access";
 import {
 	BUDGET_ACTIONABLE_DIRECTOR_STATUS,
 	directorReviewStatusMap,
+	idoFinalStatusMap,
 	isDirectorApprovableStatus,
 	isDirectorRejectableStatus,
 	isEditableStatus,
 	isIdoActionableStatus,
+	isIdoFinalActionableStatus,
 	masterStatusMap,
 	PENDING_STATUSES,
 	REJECTED_STATUSES,
@@ -626,6 +633,60 @@ async function loadDirectorActionableRequest(id: string, userId: string, mode: "
 	return existing;
 }
 
+/* -------------------------------------------------------------------------- */
+/* The IDO chairperson's FINAL review - spec 013                               */
+
+/**
+ * The final IDO stage's guard, shared by both of its actions.
+ *
+ * ## The role gate is somewhere else, and that is the point
+ *
+ * This function checks `REVIEW_REQUEST`, which BOTH IDO desks hold - an officer
+ * who can do the first review holds exactly the same grant. What closes this
+ * stage to them is `roleProcedure("IDO_CHAIRPERSON")` on the two procedures, and
+ * it is the only place in the app where the role and the permission genuinely
+ * decide different things. A refactor that "simplifies" the pair by gating on
+ * the permission alone opens the final review to every officer in the office,
+ * silently, and the audit log would record it as a legitimate approval.
+ *
+ * ## Why it reads `idoFinalStatus` and never `masterStatus`
+ *
+ * The same reason the two stages before it read their own columns.
+ * `masterStatus` says where the request IS, and it is written by whichever desk
+ * moved it - it cannot say whether THIS desk has already decided. The column
+ * this reads is set by `approveByDirector`, never here, which is the coupling
+ * `IDO_FINAL_ACTIONABLE_STATUS` documents.
+ *
+ * The refusal NAMES the stage, because this error is what a page left open on a
+ * request a colleague has since acted on gets back.
+ *
+ * `finalTitle` is selected because the approval needs it to tell a real rename
+ * from an override that retyped the title already there.
+ */
+async function loadIdoFinalActionableRequest(id: string, userId: string) {
+	await assertPermission(userId, "REVIEW_REQUEST");
+
+	const existing = await prisma.request.findUnique({
+		where: { id },
+		select: { finalTitle: true, idoFinalStatus: true, masterStatus: true },
+	});
+
+	if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Request not found" });
+
+	if (!isIdoFinalActionableStatus(existing.idoFinalStatus)) {
+		const label = existing.idoFinalStatus
+			? (idoFinalStatusMap[existing.idoFinalStatus]?.label ?? existing.idoFinalStatus)
+			: (masterStatusMap[existing.masterStatus]?.label ?? existing.masterStatus);
+
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: `This request is not at the IDO final review stage (${label})`,
+		});
+	}
+
+	return existing;
+}
+
 export const requestRouter = {
 	generateDocumentNumber: protectedProcedure.mutation(async () => {
 		const documentNumber = await generateDocumentNumber();
@@ -794,23 +855,33 @@ export const requestRouter = {
 		const { user } = ctx;
 
 		/*
-		 * Who is told about the sub-stage, in two flags rather than one.
+		 * Who is told about which sub-stage, in one rule applied three times.
 		 *
-		 * `directorReviewStatus` and the budget desk's stamp go to BOTH approver
-		 * desks: the budget officer acts on them, and the director has to be told
-		 * whether the budget officer has signed before approving past them - that is
-		 * the whole subject of spec 012's approval trail. The REQUESTOR is told
-		 * neither. `masterStatus` says "Director Review" for both sub-stages, which
-		 * is the design, and putting these in `REQUEST_DETAIL_SELECT` would hand the
-		 * requestor the distinction the column exists to hide.
+		 * A desk is sent the stage columns it ACTS on, plus the stamps of the desks
+		 * BEFORE it that its own page has to draw - and nothing else. That is what
+		 * makes the matrix below readable rather than a list of exceptions:
 		 *
-		 * The director's own stamp is narrower still - only their desk draws it.
-		 * Everything guarded by these two is REDACTED below rather than left out of
-		 * the query, so there is one place that decides who sees what.
+		 * - the budget desk gets `directorReviewStatus` and its own stamp;
+		 * - the director gets both of those, because approving past an open budget
+		 *   stage is a choice they have to be able to see, plus their own stamp;
+		 * - the chairperson's final review gets all of the above (its approval trail
+		 *   shows who has signed so far) plus the IDO-final stage and stamp.
+		 *
+		 * The REQUESTOR gets none of it, and that is the whole reason these are
+		 * redacted here rather than added to `REQUEST_DETAIL_SELECT`: `masterStatus`
+		 * says "Director Review" for both approver sub-stages by design, and the
+		 * shared select would hand the requestor the distinction those columns exist
+		 * to hide - along with four reviewers' signature URLs, in a payload for a
+		 * page that never draws one.
+		 *
+		 * The columns are SELECTED for everybody and nulled on the way out, so there
+		 * is one place that decides who sees what.
 		 */
 		const isBudgetDesk = user.role === "BUDGET_OFFICER";
 		const isDirectorDesk = user.role === "DIRECTOR";
-		const isApproverDesk = isBudgetDesk || isDirectorDesk;
+		const isChairDesk = user.role === "IDO_CHAIRPERSON";
+		const isApproverDesk = isBudgetDesk || isDirectorDesk || isChairDesk;
+		const isSignedTrailDesk = isDirectorDesk || isChairDesk;
 
 		const [request, canReview, canApproveBudget, canApproveDirector] = await Promise.all([
 			prisma.request.findUnique({
@@ -833,6 +904,9 @@ export const requestRouter = {
 					directorReviewStatus: true,
 					directorSignatureUrl: true,
 					directorSignedAt: true,
+					idoFinalSignatureUrl: true,
+					idoFinalSignedAt: true,
+					idoFinalStatus: true,
 					auditLogs: {
 						select: {
 							action: true,
@@ -887,6 +961,9 @@ export const requestRouter = {
 			directorReviewStatus,
 			directorSignatureUrl,
 			directorSignedAt,
+			idoFinalSignatureUrl,
+			idoFinalSignedAt,
+			idoFinalStatus,
 			...rest
 		} = request;
 
@@ -895,7 +972,7 @@ export const requestRouter = {
 			/*
 			 * `null` for everybody else, not absent: an optional key would make the
 			 * inferred type a union the review pages would have to narrow, and a
-			 * requestor's page reads none of these five.
+			 * requestor's page reads none of these eight.
 			 */
 			budgetOfficerSignatureUrl: isApproverDesk ? budgetOfficerSignatureUrl : null,
 			budgetOfficerSignedAt: isApproverDesk ? budgetOfficerSignedAt : null,
@@ -903,8 +980,11 @@ export const requestRouter = {
 			canApproveDirector,
 			canReview,
 			directorReviewStatus: isApproverDesk ? directorReviewStatus : null,
-			directorSignatureUrl: isDirectorDesk ? directorSignatureUrl : null,
-			directorSignedAt: isDirectorDesk ? directorSignedAt : null,
+			directorSignatureUrl: isSignedTrailDesk ? directorSignatureUrl : null,
+			directorSignedAt: isSignedTrailDesk ? directorSignedAt : null,
+			idoFinalSignatureUrl: isChairDesk ? idoFinalSignatureUrl : null,
+			idoFinalSignedAt: isChairDesk ? idoFinalSignedAt : null,
+			idoFinalStatus: isChairDesk ? idoFinalStatus : null,
 		};
 	}),
 
@@ -1534,6 +1614,162 @@ export const requestRouter = {
 						note,
 						requestId: id,
 						toStatus: "DIRECTOR_REJECTED",
+					},
+				});
+
+				return request;
+			});
+		}),
+	/**
+	 * The IDO Chairperson signs off, and the request goes to the Campus Director
+	 * for the last approval.
+	 *
+	 * ## `roleProcedure("IDO_CHAIRPERSON")`, not the two-role list
+	 *
+	 * Every other IDO procedure in this file takes `...IDO_REVIEW_ROLES`. This one
+	 * and its rejection take the chairperson alone, and that difference is the
+	 * whole authorization story of the stage: an officer holds `REVIEW_REQUEST`,
+	 * passes the permission check inside `loadIdoFinalActionableRequest`, and is
+	 * still refused here. Do not fold these into the shared list.
+	 *
+	 * ## The title is written ONLY when one was supplied
+	 *
+	 * `finalTitle` is an override, and the field is usually left empty. Spreading
+	 * the input into the `data` object is the failure this guards against: an
+	 * absent key leaves the column alone, while `finalTitle: ""` would blank a
+	 * title IDO set at the first review and the printed form is laid out around.
+	 * `optionalText` flattens `""` and a string of spaces to `undefined` first, so
+	 * "left empty" and "typed nothing but whitespace" are the same thing.
+	 *
+	 * `title` is never touched. The requestor wrote it, it is the string they will
+	 * search for, and `finalTitle` is a second column rather than a correction of
+	 * the first.
+	 *
+	 * ## Five columns and the audit entry, in ONE transaction
+	 *
+	 * The signature pair, `idoFinalStatus`, `finalDirectorStatus` and
+	 * `masterStatus`, plus the log. A partial failure would leave a request signed
+	 * by the chairperson but sitting in nobody's queue.
+	 *
+	 * ## The signature is COPIED, never joined
+	 *
+	 * Written from `ctx.user.signatureUrl` onto the row, for the reason the two
+	 * approvals before it give: a chairperson who replaces the image on their
+	 * profile must not rewrite what an approval already stamped.
+	 * `protectedProcedure` reads the ROW rather than the session, so a signature
+	 * uploaded two minutes ago is not refused by a stale cookie.
+	 */
+	idoFinalApprove: roleProcedure("IDO_CHAIRPERSON")
+		.input(idoFinalApproveSchema)
+		.mutation(async ({ ctx, input }) => {
+			const { id } = input;
+			const { user } = ctx;
+
+			const existing = await loadIdoFinalActionableRequest(id, user.id);
+
+			/*
+			 * The gate, not a courtesy. The page disables Approve & Sign when the
+			 * profile has no signature, and this is what makes that true rather than
+			 * merely displayed - this signature is printed in the RECOMMENDATION BY IDO
+			 * block of the form (spec 016), and an approval with no image stamps a blank
+			 * box onto a signed instrument.
+			 *
+			 * Rejecting deliberately does not check this: a refusal is not a signed
+			 * instrument, and a chairperson with no signature must still be able to stop
+			 * a request rather than being forced to approve it.
+			 */
+			if (!user.signatureUrl) {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message: "Your profile is missing a signature. Please complete your profile before approving.",
+				});
+			}
+
+			const finalTitle = optionalText(input.finalTitle);
+
+			return await prisma.$transaction(async (tx) => {
+				const request = await tx.request.update({
+					where: { id },
+					data: {
+						finalDirectorStatus: "UNDER_FINAL_DIRECTOR_APPROVAL",
+						idoFinalSignatureUrl: user.signatureUrl,
+						idoFinalSignedAt: new Date(),
+						idoFinalStatus: "IDO_FINAL_APPROVED",
+						masterStatus: "UNDER_FINAL_DIRECTOR_REVIEW",
+						// An ABSENT key when nothing was supplied, never the old value passed
+						// back: the two look identical in the row afterwards and only one of
+						// them is safe to write, and the unsafe one is what an accidental
+						// `finalTitle: ""` becomes.
+						...(finalTitle ? { finalTitle } : {}),
+					},
+					select: { id: true, finalDirectorStatus: true, idoFinalSignedAt: true, idoFinalStatus: true },
+				});
+
+				await tx.auditLog.create({
+					data: {
+						action: "IDO_FINAL_APPROVED",
+						actorId: user.id,
+						fromStatus: existing.masterStatus,
+						/*
+						 * The note records the title RENAME and nothing else, so the timeline
+						 * can answer "who changed the title, and when" - the only edit this
+						 * stage is allowed to make to the document. Null when the override was
+						 * left empty OR retyped the title that was already there, because
+						 * nothing was renamed in either case.
+						 */
+						note: finalTitle && finalTitle !== existing.finalTitle ? `Final title set to "${finalTitle}"` : null,
+						requestId: id,
+						toStatus: "UNDER_FINAL_DIRECTOR_REVIEW",
+					},
+				});
+
+				return request;
+			});
+		}),
+
+	/**
+	 * The IDO Chairperson refuses it at the final review. Terminal.
+	 *
+	 * Both columns move: `idoFinalStatus` records what this desk decided and
+	 * `masterStatus` tells the requestor the request has stopped. A requestor
+	 * whose headline status still read "IDO Final Review" would be waiting for a
+	 * reply that is never coming, and the note travels with the audit entry as the
+	 * reason their detail page shows them.
+	 *
+	 * The chairperson alone, for the reason the approval gives, and no signature
+	 * required, for the reason `rejectBudget` gives.
+	 */
+	idoFinalReject: roleProcedure("IDO_CHAIRPERSON")
+		.input(idoFinalRejectSchema)
+		.mutation(async ({ ctx, input }) => {
+			const { id, note } = input;
+			const { user } = ctx;
+
+			const existing = await loadIdoFinalActionableRequest(id, user.id);
+
+			/*
+			 * One transaction, for the reason `applyIdoOutcome` gives: the audit log is
+			 * the only history this app has, and a request that stopped with no entry
+			 * saying who stopped it is a record nobody can account for.
+			 */
+			return await prisma.$transaction(async (tx) => {
+				const request = await tx.request.update({
+					where: { id },
+					data: {
+						idoFinalStatus: "IDO_FINAL_REJECTED",
+						masterStatus: "IDO_FINAL_REJECTED",
+					},
+					select: { id: true, idoFinalStatus: true },
+				});
+
+				await tx.auditLog.create({
+					data: {
+						action: "IDO_FINAL_REJECTED",
+						actorId: user.id,
+						fromStatus: existing.masterStatus,
+						note,
+						requestId: id,
+						toStatus: "IDO_FINAL_REJECTED",
 					},
 				});
 
