@@ -122,6 +122,7 @@ import { Route as ApiDevToggleMaintenanceRouteImport } from './routes/api/dev/to
 import { Route as ApiPusherAuthRouteImport } from './routes/api/pusher/auth'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api.trpc.$'
 import { Route as AuthenticatedRequestsRequestIdIndexRouteImport } from './routes/_authenticated/requests/$requestId/index'
+import { Route as AuthenticatedRequestsRequestIdBudgetReviewRouteImport } from './routes/_authenticated/requests/$requestId/budget-review'
 import { Route as AuthenticatedRequestsRequestIdEditRouteImport } from './routes/_authenticated/requests/$requestId/edit'
 import { Route as AuthenticatedRequestsRequestIdReviewRouteImport } from './routes/_authenticated/requests/$requestId/review'
 import { Route as AuthenticatedStaffDashboardIndexRouteImport } from './routes/_authenticated/staff/dashboard/index'
@@ -777,6 +778,12 @@ const AuthenticatedRequestsRequestIdIndexRoute =
     path: '/requests/$requestId/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedRequestsRequestIdBudgetReviewRoute =
+  AuthenticatedRequestsRequestIdBudgetReviewRouteImport.update({
+    id: '/requests/$requestId/budget-review',
+    path: '/requests/$requestId/budget-review',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedRequestsRequestIdEditRoute =
   AuthenticatedRequestsRequestIdEditRouteImport.update({
     id: '/requests/$requestId/edit',
@@ -908,6 +915,7 @@ export interface FileRoutesByFullPath {
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/components/': typeof referencesComponentsIndexRoute
   '/requests/': typeof AuthenticatedRequestsIndexRoute
+  '/requests/$requestId/budget-review': typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
   '/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
   '/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
   '/requests/$requestId/': typeof AuthenticatedRequestsRequestIdIndexRoute
@@ -1024,6 +1032,7 @@ export interface FileRoutesByTo {
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/components': typeof referencesComponentsIndexRoute
   '/requests': typeof AuthenticatedRequestsIndexRoute
+  '/requests/$requestId/budget-review': typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
   '/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
   '/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
   '/requests/$requestId': typeof AuthenticatedRequestsRequestIdIndexRoute
@@ -1143,6 +1152,7 @@ export interface FileRoutesById {
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/(references)/components/': typeof referencesComponentsIndexRoute
   '/_authenticated/requests/': typeof AuthenticatedRequestsIndexRoute
+  '/_authenticated/requests/$requestId/budget-review': typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
   '/_authenticated/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
   '/_authenticated/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
   '/_authenticated/requests/$requestId/': typeof AuthenticatedRequestsRequestIdIndexRoute
@@ -1262,6 +1272,7 @@ export interface FileRouteTypes {
     | '/api/trpc/$'
     | '/components/'
     | '/requests/'
+    | '/requests/$requestId/budget-review'
     | '/requests/$requestId/edit'
     | '/requests/$requestId/review'
     | '/requests/$requestId/'
@@ -1378,6 +1389,7 @@ export interface FileRouteTypes {
     | '/api/trpc/$'
     | '/components'
     | '/requests'
+    | '/requests/$requestId/budget-review'
     | '/requests/$requestId/edit'
     | '/requests/$requestId/review'
     | '/requests/$requestId'
@@ -1496,6 +1508,7 @@ export interface FileRouteTypes {
     | '/api/trpc/$'
     | '/(references)/components/'
     | '/_authenticated/requests/'
+    | '/_authenticated/requests/$requestId/budget-review'
     | '/_authenticated/requests/$requestId/edit'
     | '/_authenticated/requests/$requestId/review'
     | '/_authenticated/requests/$requestId/'
@@ -2320,6 +2333,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRequestsRequestIdIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/requests/$requestId/budget-review': {
+      id: '/_authenticated/requests/$requestId/budget-review'
+      path: '/requests/$requestId/budget-review'
+      fullPath: '/requests/$requestId/budget-review'
+      preLoaderRoute: typeof AuthenticatedRequestsRequestIdBudgetReviewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/requests/$requestId/edit': {
       id: '/_authenticated/requests/$requestId/edit'
       path: '/requests/$requestId/edit'
@@ -2350,6 +2370,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedRequestsNewRoute: typeof AuthenticatedRequestsNewRoute
   AuthenticatedRequestsIndexRoute: typeof AuthenticatedRequestsIndexRoute
+  AuthenticatedRequestsRequestIdBudgetReviewRoute: typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
   AuthenticatedRequestsRequestIdEditRoute: typeof AuthenticatedRequestsRequestIdEditRoute
   AuthenticatedRequestsRequestIdReviewRoute: typeof AuthenticatedRequestsRequestIdReviewRoute
   AuthenticatedRequestsRequestIdIndexRoute: typeof AuthenticatedRequestsRequestIdIndexRoute
@@ -2362,6 +2383,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedRequestsNewRoute: AuthenticatedRequestsNewRoute,
   AuthenticatedRequestsIndexRoute: AuthenticatedRequestsIndexRoute,
+  AuthenticatedRequestsRequestIdBudgetReviewRoute:
+    AuthenticatedRequestsRequestIdBudgetReviewRoute,
   AuthenticatedRequestsRequestIdEditRoute:
     AuthenticatedRequestsRequestIdEditRoute,
   AuthenticatedRequestsRequestIdReviewRoute:

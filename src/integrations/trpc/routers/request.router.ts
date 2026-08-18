@@ -1,6 +1,10 @@
 import { TRPCError, type TRPCRouterRecord } from "@trpc/server";
 import { z } from "zod";
 import {
+	budgetApproveSchema,
+	budgetRejectSchema,
+} from "@/features/budget-review/validations/schema/budget-approver.schema";
+import {
 	idoDeferSchema,
 	idoRecommendSchema,
 	idoRejectSchema,
@@ -15,6 +19,8 @@ import { assertPermission, hasPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { assertCanReadRequest } from "@/lib/request-access";
 import {
+	BUDGET_ACTIONABLE_DIRECTOR_STATUS,
+	directorReviewStatusMap,
 	isEditableStatus,
 	isIdoActionableStatus,
 	masterStatusMap,
@@ -484,6 +490,67 @@ async function applyIdoOutcome(
 	});
 }
 
+/* -------------------------------------------------------------------------- */
+/* The budget officer review - spec 011                                        */
+
+/**
+ * The conditional stage's guard, shared by both of its actions.
+ *
+ * ## Why it reads `directorReviewStatus` and never `masterStatus`
+ *
+ * `masterStatus` is `UNDER_DIRECTOR_REVIEW` for the budget desk AND for the
+ * director's own desk - the requestor is told "the approvers have it" and
+ * nothing finer, which is the whole reason `recommend` sets it once and this
+ * stage leaves it alone. Guarding on it would therefore make the two stages
+ * indistinguishable, and the concrete failure is not theoretical: a budget
+ * officer would still be able to stamp a signature onto a request the Campus
+ * Director had already approved and moved on.
+ *
+ * ## Why exactly one status, when the director's guard takes two
+ *
+ * The two-approver race is intended. `approveByDirector` (spec 012) accepts
+ * `UNDER_BUDGET_OFFICER_REVIEW` OR `UNDER_DIRECTOR_REVIEW`, so the director can
+ * approve past an open budget stage; this accepts only the first, so once the
+ * director has acted the budget desk cannot. The asymmetry IS the rule - see
+ * `BUDGET_ACTIONABLE_DIRECTOR_STATUS`.
+ *
+ * ## The grant, and why it is checked here rather than by the role
+ *
+ * `roleProcedure("BUDGET_OFFICER")` says what the caller IS. `APPROVE_BUDGET` is
+ * a per-user grant an admin can revoke without touching the role, so the role
+ * alone is not the answer - see `ROLE_DEFAULT_PERMISSIONS`. Checked first, for
+ * the reason `loadIdoActionableRequest` gives: `roleProcedure` has already
+ * established this is a budget desk and every budget desk may read every
+ * request, so the order leaks nothing and the cheaper check runs first.
+ *
+ * The refusal NAMES the stage, because this error is what a page left open on a
+ * request the director has since approved gets back, and "not at the budget
+ * review stage" leaves the officer with no idea where it went.
+ */
+async function loadBudgetActionableRequest(id: string, userId: string) {
+	await assertPermission(userId, "APPROVE_BUDGET");
+
+	const existing = await prisma.request.findUnique({
+		where: { id },
+		select: { directorReviewStatus: true, masterStatus: true },
+	});
+
+	if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Request not found" });
+
+	if (existing.directorReviewStatus !== BUDGET_ACTIONABLE_DIRECTOR_STATUS) {
+		const label = existing.directorReviewStatus
+			? (directorReviewStatusMap[existing.directorReviewStatus]?.label ?? existing.directorReviewStatus)
+			: (masterStatusMap[existing.masterStatus]?.label ?? existing.masterStatus);
+
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: `This request is not at the budget review stage (${label})`,
+		});
+	}
+
+	return existing;
+}
+
 export const requestRouter = {
 	generateDocumentNumber: protectedProcedure.mutation(async () => {
 		const documentNumber = await generateDocumentNumber();
@@ -651,11 +718,32 @@ export const requestRouter = {
 	getById: protectedProcedure.input(z.object({ id: z.string().min(1) })).query(async ({ ctx, input }) => {
 		const { user } = ctx;
 
-		const [request, canReview] = await Promise.all([
+		/*
+		 * The budget desk, and only the budget desk, is told about the budget
+		 * sub-stage. Everything guarded by this flag is REDACTED below rather than
+		 * left out of the query, so there is one place that decides who sees it.
+		 */
+		const isBudgetDesk = user.role === "BUDGET_OFFICER";
+
+		const [request, canReview, canApproveBudget] = await Promise.all([
 			prisma.request.findUnique({
 				where: { id: input.id },
 				select: {
 					...REQUEST_DETAIL_SELECT,
+					/*
+					 * The three columns spec 011's page cannot be drawn without, and the
+					 * reason they are selected here rather than added to
+					 * `REQUEST_DETAIL_SELECT`: this payload also goes to the REQUESTOR,
+					 * and the budget sub-stage is deliberately invisible to them.
+					 * `masterStatus` says "Director Review" for both approver desks, which
+					 * is the whole design - putting `directorReviewStatus` in the shared
+					 * select would hand the requestor the distinction that column exists to
+					 * hide, and `budgetOfficerSignatureUrl` would put a reviewer's
+					 * signature into the payload of a page that never draws one.
+					 */
+					budgetOfficerSignatureUrl: true,
+					budgetOfficerSignedAt: true,
+					directorReviewStatus: true,
 					auditLogs: {
 						select: {
 							action: true,
@@ -685,11 +773,31 @@ export const requestRouter = {
 			 * It decides nothing. All four procedures re-check the grant themselves.
 			 */
 			isIdoReviewRole(user.role) ? hasPermission(user.id, "REVIEW_REQUEST") : Promise.resolve(false),
+			/*
+			 * The same courtesy for the budget desk's `APPROVE_BUDGET` grant, looked
+			 * up only for the one role that could ever act on it. It decides nothing -
+			 * `loadBudgetActionableRequest` re-checks it on both procedures.
+			 */
+			isBudgetDesk ? hasPermission(user.id, "APPROVE_BUDGET") : Promise.resolve(false),
 		]);
 
 		assertCanReadRequest(request, user);
 
-		return { ...request, canReview };
+		const { budgetOfficerSignatureUrl, budgetOfficerSignedAt, directorReviewStatus, ...rest } = request;
+
+		return {
+			...rest,
+			/*
+			 * `null` for everybody else, not absent: an optional key would make the
+			 * inferred type a union the review pages would have to narrow, and a
+			 * requestor's page reads none of these three.
+			 */
+			budgetOfficerSignatureUrl: isBudgetDesk ? budgetOfficerSignatureUrl : null,
+			budgetOfficerSignedAt: isBudgetDesk ? budgetOfficerSignedAt : null,
+			canApproveBudget,
+			canReview,
+			directorReviewStatus: isBudgetDesk ? directorReviewStatus : null,
+		};
 	}),
 
 	/**
@@ -1027,5 +1135,137 @@ export const requestRouter = {
 			const existing = await loadIdoActionableRequest(id, ctx.user.id);
 
 			return await applyIdoOutcome("defer", { actorId: ctx.user.id, fromStatus: existing.masterStatus, id, note });
+		}),
+
+	/**
+	 * The budget desk says yes, and the request moves to the Campus Director.
+	 *
+	 * ## `masterStatus` is deliberately NOT touched
+	 *
+	 * It is already `UNDER_DIRECTOR_REVIEW` and it stays there. The requestor's
+	 * view reads "Director Review" from the moment IDO recommends until the
+	 * director acts, and the budget sub-stage is invisible to them throughout -
+	 * which is why the audit entry below writes the SAME status into `fromStatus`
+	 * and `toStatus`. That looks like a bug and is not one: the entry records who
+	 * did what, and this action genuinely moved no headline status.
+	 *
+	 * ## The signature is COPIED, never joined
+	 *
+	 * `budgetOfficerSignatureUrl` is written from `ctx.user.signatureUrl` onto the
+	 * row. A join to the user would mean the officer replacing the image on their
+	 * profile next March silently changes what an approval stamped last year
+	 * prints as - the record has to keep the signature that was actually used.
+	 *
+	 * `ctx.user.signatureUrl` comes from `protectedProcedure`, which reads the ROW
+	 * rather than the session, so an officer who uploaded one two minutes ago is
+	 * not refused by a stale cookie.
+	 */
+	approveBudget: roleProcedure("BUDGET_OFFICER")
+		.input(budgetApproveSchema)
+		.mutation(async ({ ctx, input }) => {
+			const { id } = input;
+			const { user } = ctx;
+
+			const existing = await loadBudgetActionableRequest(id, user.id);
+
+			/*
+			 * The gate, not a courtesy. The page disables Approve when the profile has
+			 * no signature, and this is what makes that true rather than merely
+			 * displayed - an approval with no image stamps a blank box onto the
+			 * printed form (spec 016), which is a signed instrument that nobody signed.
+			 *
+			 * Rejecting deliberately does not check this. A refusal is not a signed
+			 * instrument, and an officer with no signature must still be able to stop
+			 * a request rather than being forced to approve it.
+			 */
+			if (!user.signatureUrl) {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message: "Your profile is missing a signature. Please complete your profile before approving.",
+				});
+			}
+
+			return await prisma.$transaction(async (tx) => {
+				const request = await tx.request.update({
+					where: { id },
+					data: {
+						budgetOfficerSignatureUrl: user.signatureUrl,
+						budgetOfficerSignedAt: new Date(),
+						directorReviewStatus: "UNDER_DIRECTOR_REVIEW",
+					},
+					select: { id: true, budgetOfficerSignedAt: true, directorReviewStatus: true },
+				});
+
+				await tx.auditLog.create({
+					data: {
+						action: "APPROVED_BY_BUDGET_OFFICER",
+						actorId: user.id,
+						// Same status on both sides, on purpose - see the note above.
+						fromStatus: existing.masterStatus,
+						note: null,
+						requestId: id,
+						toStatus: existing.masterStatus,
+					},
+				});
+
+				return request;
+			});
+		}),
+
+	/**
+	 * The budget desk says no. Terminal.
+	 *
+	 * ## This one DOES set `masterStatus`
+	 *
+	 * The asymmetry with `approveBudget` is the whole point. An approval is
+	 * internal - the request carries on to the next desk and the requestor has
+	 * nothing to do about it. A rejection stops the request dead, and a requestor
+	 * whose headline status still read "Director Review" would be waiting for a
+	 * reply that is never coming. So both columns go to `BUDGET_OFFICER_REJECTED`,
+	 * and the note travels with the audit entry as the reason their detail page
+	 * shows them.
+	 *
+	 * ## No signature required
+	 *
+	 * A refusal is not a signed instrument, and an officer who has not yet
+	 * uploaded a signature must still be able to stop a request.
+	 */
+	rejectBudget: roleProcedure("BUDGET_OFFICER")
+		.input(budgetRejectSchema)
+		.mutation(async ({ ctx, input }) => {
+			const { id, note } = input;
+			const { user } = ctx;
+
+			const existing = await loadBudgetActionableRequest(id, user.id);
+
+			/*
+			 * One transaction, for the reason `applyIdoOutcome` gives: the audit log is
+			 * the only history this app has, and a request that stopped with no entry
+			 * saying who stopped it is a record nobody can account for. The reverse is
+			 * worse - an entry for a rejection that never committed.
+			 */
+			return await prisma.$transaction(async (tx) => {
+				const request = await tx.request.update({
+					where: { id },
+					data: {
+						directorReviewStatus: "BUDGET_OFFICER_REJECTED",
+						masterStatus: "BUDGET_OFFICER_REJECTED",
+					},
+					select: { id: true, directorReviewStatus: true },
+				});
+
+				await tx.auditLog.create({
+					data: {
+						action: "REJECTED_BY_BUDGET_OFFICER",
+						actorId: user.id,
+						fromStatus: existing.masterStatus,
+						note,
+						requestId: id,
+						toStatus: "BUDGET_OFFICER_REJECTED",
+					},
+				});
+
+				return request;
+			});
 		}),
 } satisfies TRPCRouterRecord;

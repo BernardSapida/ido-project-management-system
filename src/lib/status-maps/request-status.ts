@@ -10,6 +10,7 @@ import {
 	Search,
 	Send,
 	Undo2,
+	Wallet,
 	XCircle,
 } from "lucide-react";
 
@@ -183,3 +184,43 @@ export const STATUS_GROUPS: Record<string, readonly string[]> = {
 	PENDING: PENDING_STATUSES,
 	REJECTED: REJECTED_STATUSES,
 };
+
+/**
+ * The `directorReviewStatus` column - the sub-stage `masterStatus` deliberately
+ * cannot express.
+ *
+ * `masterStatus` reads `UNDER_DIRECTOR_REVIEW` for BOTH the budget desk and the
+ * director's own desk, because the requestor is told "the approvers have it" and
+ * nothing finer. Which of the two actually holds it lives here, and every guard
+ * at either stage reads this column rather than the headline one - reading
+ * `masterStatus` would make the two stages indistinguishable and let a budget
+ * officer act after the director has finished.
+ *
+ * `UNDER_BUDGET_OFFICER_REVIEW` has no `masterStatus` twin at all, which is why
+ * it is absent from `masterStatusMap` and why a chip for this stage has to come
+ * from here.
+ */
+export const directorReviewStatusMap: Record<string, StatusMapEntry> = {
+	UNDER_BUDGET_OFFICER_REVIEW: { icon: Wallet, label: "Budget Review", tone: "warning" },
+	UNDER_DIRECTOR_REVIEW: { icon: Gavel, label: "Director Review", tone: "warning" },
+	BUDGET_OFFICER_REJECTED: { icon: XCircle, label: "Budget Rejected", tone: "danger" },
+	DIRECTOR_APPROVED: { icon: CheckCircle2, label: "Approved by Director", tone: "success" },
+	DIRECTOR_REJECTED: { icon: XCircle, label: "Director Rejected", tone: "danger" },
+};
+
+/**
+ * The ONE `directorReviewStatus` in which the budget desk may still act.
+ *
+ * A single value rather than a list, and that is the pair spec 011 names: this
+ * accepts only `UNDER_BUDGET_OFFICER_REVIEW`, while the director's own approval
+ * (spec 012) accepts that value OR `UNDER_DIRECTOR_REVIEW`. The asymmetry is
+ * what encodes the intended race - the director may approve past an open budget
+ * stage, and the budget officer may not act once the director has. Widening
+ * either side breaks the other.
+ */
+export const BUDGET_ACTIONABLE_DIRECTOR_STATUS = "UNDER_BUDGET_OFFICER_REVIEW";
+
+/** `null` - a request that never reached the approvers - is NOT actionable. */
+export function isBudgetActionableStatus(directorReviewStatus?: string | null): boolean {
+	return directorReviewStatus === BUDGET_ACTIONABLE_DIRECTOR_STATUS;
+}
