@@ -11,8 +11,7 @@ import { RequestDetailSkeleton } from "@/features/request-detail/components/Requ
 import { requestStatusSubtitle } from "@/features/request-detail/lib/status-subtitle";
 import { RequestForm } from "@/features/request-form/components/RequestForm";
 import { useRequestById } from "@/features/request-form/hooks/use-user-request-queries";
-import type { Position } from "@/features/request-form/lib/request-options";
-import { type RequestFormValues, toFormAttachments } from "@/features/request-form/validations/schema/request.schema";
+import { toRequestFormValues } from "@/features/request-form/validations/schema/request.schema";
 import { latestNegativeLog, REQUESTOR_VISIBLE_ACTIONS } from "@/lib/status-maps/audit-action";
 import { isEditableStatus, isNegativeStatus, masterStatusMap } from "@/lib/status-maps/request-status";
 
@@ -92,30 +91,16 @@ function RequestDetailPage() {
 	// that complaint describes a document which no longer exists.
 	const negativeLog = isNegativeStatus(request.masterStatus) ? latestNegativeLog(request.auditLogs) : null;
 
-	const defaultValues: Partial<RequestFormValues> = {
-		attachments: toFormAttachments(request.attachments),
-		details: request.details,
-		justification: request.justification as RequestFormValues["justification"],
-		position: request.position as Position,
-		priority: request.priority as RequestFormValues["priority"],
-		requestedBy: request.requestedBy,
-		title: request.title,
-		typeOfRequest: request.typeOfRequest as RequestFormValues["typeOfRequest"],
-		workScope: request.workScope,
-	};
-
 	/*
-	 * `href`, not `to`, for both. `/requests/$requestId/edit` is spec 007 and
-	 * `/requests/$requestId/pdf` is spec 016; neither is in the route tree yet, so
-	 * a typed navigation to either would not compile today. Convert them when
-	 * those specs land - nothing fails if they are left, which is the reason they
-	 * are written down here.
+	 * Edit is a typed navigation now that spec 007 has put the route in the tree.
+	 * `/requests/$requestId/pdf` is still spec 016 and still an `href`, which will
+	 * not compile as a `to` until that route exists - convert it when it does.
 	 *
 	 * The PDF opens in a NEW TAB rather than replacing this page: it is a document
 	 * to be read or printed beside the request, and a router navigation would lose
 	 * the request behind it.
 	 */
-	const goToEdit = () => void router.navigate({ href: `/requests/${requestId}/edit` });
+	const goToEdit = () => void router.navigate({ params: { requestId }, to: "/requests/$requestId/edit" });
 	const openPdf = () => window.open(`/requests/${requestId}/pdf`, "_blank", "noopener,noreferrer");
 
 	return (
@@ -188,7 +173,7 @@ function RequestDetailPage() {
 
 			<RequestForm
 				canSubmit={canAct}
-				defaultValues={defaultValues}
+				defaultValues={toRequestFormValues(request)}
 				forceReadOnly
 				idoEvaluationStatus={request.idoEvaluationStatus}
 				masterStatus={request.masterStatus}

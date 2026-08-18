@@ -7,7 +7,13 @@ import {
 } from "@/features/request-form/validations/schema/request.schema";
 import { assertPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
-import { isEditableStatus, PENDING_STATUSES, REJECTED_STATUSES, STATUS_GROUPS } from "@/lib/status-maps/request-status";
+import {
+	isEditableStatus,
+	masterStatusMap,
+	PENDING_STATUSES,
+	REJECTED_STATUSES,
+	STATUS_GROUPS,
+} from "@/lib/status-maps/request-status";
 import { protectedProcedure } from "../init";
 
 /**
@@ -135,9 +141,17 @@ async function loadOwnEditableRequest(id: string, userId: string, verb: "edited"
 	if (existing.userId !== userId) throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
 
 	if (!isEditableStatus(existing.masterStatus)) {
+		// The status is NAMED, not merely refused. This error is what an edit page
+		// left open on a request somebody else has since acted on gets back (spec
+		// 007), and it is shown there as a banner - "cannot be edited in its
+		// current status" leaves the requestor with no idea what happened, while
+		// "(IDO Review)" tells them who has it now. `masterStatusMap` is the same
+		// label the chip shows, so the banner and the page agree.
+		const label = masterStatusMap[existing.masterStatus]?.label ?? existing.masterStatus;
+
 		throw new TRPCError({
 			code: "FORBIDDEN",
-			message: `Request cannot be ${verb} in its current status`,
+			message: `Request cannot be ${verb} in its current status (${label})`,
 		});
 	}
 
@@ -250,6 +264,13 @@ export const requestRouter = {
 	 * and time of filing (spec 016), which is why it is written here rather than
 	 * derived from the row's `updatedAt` - that moves every time anybody touches
 	 * the request afterwards.
+	 *
+	 * `idoEvaluationStatus` is CLEARED on the way through, and the only status it
+	 * can be holding here is `RETURNED_TO_REQUESTOR` - the other three are
+	 * terminal and none of them leave the request editable. Leaving it set puts
+	 * the request back in IDO's queue still flagged as returned: the officer
+	 * opens a fresh submission and reads their own three-week-old verdict on it,
+	 * and the stepper draws a stage the request has already left.
 	 */
 	submit: protectedProcedure.input(submitRequestSchema).mutation(async ({ ctx, input }) => {
 		const { id } = input;
@@ -264,7 +285,7 @@ export const requestRouter = {
 		return await prisma.$transaction(async (tx) => {
 			const request = await tx.request.update({
 				where: { id },
-				data: { documentNumber, masterStatus: "SUBMITTED" },
+				data: { documentNumber, idoEvaluationStatus: null, masterStatus: "SUBMITTED" },
 				select: { documentNumber: true, id: true, masterStatus: true },
 			});
 

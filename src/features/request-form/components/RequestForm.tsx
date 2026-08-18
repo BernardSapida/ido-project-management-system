@@ -1,8 +1,17 @@
-import { AppButton, AppCard, AppInputGroup, AppReadOnlyField, AppSelect, AppTextArea } from "@bernardsapida/web-ui";
+import {
+	AppButton,
+	AppCard,
+	AppDialog,
+	AppInputGroup,
+	AppReadOnlyField,
+	AppSelect,
+	AppTextArea,
+} from "@bernardsapida/web-ui";
 import { Card, Typography } from "@heroui/react";
-import { useRouter } from "@tanstack/react-router";
-import { FileText, Pencil, Save, Send } from "lucide-react";
-import { useRef, useState } from "react";
+import { useBlocker, useRouter } from "@tanstack/react-router";
+import { FileText, Pencil, Save, Send, TriangleAlert, X } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
+import type { DefaultValues } from "react-hook-form";
 import { useWatch } from "react-hook-form";
 import { AttachmentUploader } from "@/features/request-form/components/AttachmentUploader";
 import { WorkflowStepper } from "@/features/request-form/components/WorkflowStepper";
@@ -40,11 +49,54 @@ interface RequestFormProps {
 	idoEvaluationStatus?: string | null;
 	masterStatus?: string;
 	mode: "create" | "edit";
+	/** Leave without saving. Absent on the create page, where "back" is the sidebar. */
+	onCancel?: () => void;
 	onEdit?: () => void;
+	/**
+	 * A chance for the page to take a SAVE failure and show it in its own words.
+	 *
+	 * Returning `true` means "I have shown this" and the hook's toast is skipped -
+	 * see `SaveArgs.onError`. The edit page (spec 007) uses it for the one failure
+	 * a toast handles badly: the status changed while the page was open, which is
+	 * a banner naming the new status with a Reload beside it, not a line that
+	 * fades out telling the user to try again.
+	 */
+	onSaveError?: (error: unknown) => boolean;
 	onViewPdf?: () => void;
 	processor?: string | null;
 	requestId?: string;
 }
+
+/**
+ * The empty form, before anything has been typed or loaded into it.
+ *
+ * A module constant rather than an object literal in the hook call, because
+ * there are now two places that need it: `defaultValues`, which is what an
+ * untouched create page shows, and `values`, which is what an existing request
+ * is merged INTO. A saved request carries no `targetOrg`/`responsibleOrg` - the
+ * server writes both from a constant and the detail select never reads them
+ * back - so binding a request without this underneath would reset those two
+ * fields to undefined and fail the schema on save, on a field the user cannot
+ * see, let alone fix.
+ */
+const EMPTY_VALUES = {
+	title: "",
+	// The three selects with no sensible default start UNSET rather than at
+	// their first option: a pre-picked "New Construction" is a value the user
+	// never chose that arrives on the printed form as though they had.
+	// `AppSelect` normalises undefined to its own empty value, so the field is
+	// controlled from the first render.
+	typeOfRequest: undefined,
+	priority: "MEDIUM",
+	requestedBy: "",
+	position: undefined,
+	targetOrg: "IDO",
+	responsibleOrg: "IDO",
+	details: "",
+	justification: undefined,
+	workScope: "",
+	attachments: [],
+} satisfies DefaultValues<RequestFormValues>;
 
 /**
  * The request itself — the one component every request page renders.
@@ -78,7 +130,9 @@ export function RequestForm({
 	idoEvaluationStatus,
 	masterStatus,
 	mode,
+	onCancel,
 	onEdit,
+	onSaveError,
 	onViewPdf,
 	processor,
 	requestId,
@@ -105,26 +159,36 @@ export function RequestForm({
 	 */
 	const [pendingAction, setPendingAction] = useState<"draft" | "submit" | null>(null);
 
-	const { control, handleSubmit, setValue } = useAppForm<RequestFormValues>(requestFormSchema, {
-		defaultValues: {
-			title: "",
-			// The three selects with no sensible default start UNSET rather than at
-			// their first option: a pre-picked "New Construction" is a value the user
-			// never chose that arrives on the printed form as though they had.
-			// `AppSelect` normalises undefined to its own empty value, so the field is
-			// controlled from the first render.
-			typeOfRequest: undefined,
-			priority: "MEDIUM",
-			requestedBy: "",
-			position: undefined,
-			targetOrg: "IDO",
-			responsibleOrg: "IDO",
-			details: "",
-			justification: undefined,
-			workScope: "",
-			attachments: [],
-			...defaultValues,
-		},
+	/**
+	 * An existing request, BOUND rather than seeded.
+	 *
+	 * `values` is RHF's own option for editing a record: the form follows it, so a
+	 * request that resolves after the first render lands in the fields with no
+	 * `useEffect(() => reset(...))` to write - and that effect is the bug this
+	 * avoids, because it fires on every new object identity and would wipe what
+	 * the user was typing on any refetch at all. RHF instead compares the incoming
+	 * values DEEPLY against the last set it applied, so a refetch that comes back
+	 * the same is a no-op. A refetch that comes back DIFFERENT does still replace
+	 * the form, which is why the edit page turns off refetch-on-focus (see
+	 * `useRequestById`) - the two decisions are one decision.
+	 *
+	 * The cast is the one place this file lies to itself, and only about a request
+	 * that predates an enum value: `defaultValues` is a `Partial`, so nothing
+	 * proves the three enum fields are set. If one genuinely is not, the select
+	 * renders empty and the schema stops the save, which is the same thing that
+	 * happens to a create page nobody has filled in.
+	 */
+	const boundValues =
+		mode === "edit" && defaultValues ? ({ ...EMPTY_VALUES, ...defaultValues } as RequestFormValues) : undefined;
+
+	const {
+		control,
+		formState: { isDirty },
+		handleSubmit,
+		setValue,
+	} = useAppForm<RequestFormValues>(requestFormSchema, {
+		defaultValues: { ...EMPTY_VALUES, ...defaultValues },
+		values: boundValues,
 	});
 
 	/*
@@ -137,7 +201,44 @@ export function RequestForm({
 	const values = useWatch({ control });
 	const attachments = useWatch({ control, name: "attachments" }) ?? [];
 
+	/**
+	 * Whether leaving right now would lose something, read at the moment somebody
+	 * tries to leave rather than at the moment this component last rendered.
+	 *
+	 * Two refs and not two pieces of state, because the reader is a router blocker
+	 * registered outside React's render: `leavingRef` is set in the same tick as
+	 * the navigation that follows a successful save, and a `setState` there would
+	 * not have flushed in time - the user would be asked to discard the changes
+	 * they had just saved. `isDirty` is mirrored for the same reason, so the
+	 * blocker never answers from a stale closure.
+	 */
+	const isGuarded = !isReadOnly && isDirty;
+	const guardRef = useRef(isGuarded);
+	guardRef.current = isGuarded;
+
+	/** Set immediately before a navigation this component is itself performing. */
+	const leavingRef = useRef(false);
+
+	const hasUnsavedChanges = useCallback(() => guardRef.current && !leavingRef.current, []);
+
+	/*
+	 * A request takes ten minutes to write and a back button takes none. The
+	 * blocker covers router navigations - the sidebar, Cancel, the browser's back
+	 * - and `enableBeforeUnload` covers the tab being closed or reloaded, where
+	 * the browser draws its own dialog and this one never appears.
+	 */
+	const blocker = useBlocker({
+		enableBeforeUnload: hasUnsavedChanges,
+		shouldBlockFn: hasUnsavedChanges,
+		withResolver: true,
+	});
+
 	const goToRequest = (id: string) => {
+		// Saved. What is on screen is what is in the database, so the guard above
+		// has nothing left to protect and must not stand in front of the navigation
+		// that proves the save worked.
+		leavingRef.current = true;
+
 		void router.navigate({ params: { requestId: id }, to: "/requests/$requestId" });
 	};
 
@@ -146,6 +247,7 @@ export function RequestForm({
 
 		try {
 			const id = await saveRequestDraft({
+				onError: onSaveError,
 				onSaved: (saved) => {
 					savedIdRef.current = saved;
 				},
@@ -170,11 +272,23 @@ export function RequestForm({
 	const handleSubmitRequest = handleSubmit(async (submitted) => {
 		setPendingAction("submit");
 
+		/*
+		 * Whether the SAVE half landed in THIS attempt, which is not the same
+		 * question as whether `savedIdRef` holds an id. On the edit page it holds
+		 * one from the first render, so reading it in the catch below would take a
+		 * requestor whose save was just REFUSED - the status changed under them -
+		 * away from the form and lose everything they had typed, on their way to a
+		 * page that would tell them nothing about why.
+		 */
+		let didSave = false;
+
 		try {
 			goToRequest(
 				await submitRequest({
+					onError: onSaveError,
 					onSaved: (saved) => {
 						savedIdRef.current = saved;
+						didSave = true;
 					},
 					requestId: savedIdRef.current,
 					values: submitted,
@@ -184,7 +298,7 @@ export function RequestForm({
 			// The save half may still have succeeded. If it did, the draft exists and
 			// the user belongs on it — staying on a form whose contents are already in
 			// the database is how a request gets filed twice.
-			if (savedIdRef.current) goToRequest(savedIdRef.current);
+			if (didSave && savedIdRef.current) goToRequest(savedIdRef.current);
 		} finally {
 			setPendingAction(null);
 		}
@@ -431,6 +545,22 @@ export function RequestForm({
 										>
 											{pendingAction === "draft" ? (pendingLabel ?? "Saving...") : "Save Draft"}
 										</AppButton>
+
+										{/* Last, and the quietest of the three. It is the only one of
+										    them that throws work away, and the unsaved-changes guard is
+										    what stands between it and a form somebody has typed in. */}
+										{onCancel ? (
+											<AppButton
+												data-cy="cancel-edit"
+												fullWidth
+												icon={X}
+												isDisabled={isSaving}
+												onPress={onCancel}
+												variant="tertiary"
+											>
+												Cancel
+											</AppButton>
+										) : null}
 									</div>
 
 									<Typography
@@ -446,6 +576,23 @@ export function RequestForm({
 					</Card>
 				</div>
 			</div>
+
+			{/* A dialog rather than the browser's own confirm, which can only offer
+			    OK and Cancel over a sentence it writes itself. Both answers here are
+			    labelled with what they DO: `blocker.reset` puts the user back in the
+			    form, `proceed` lets the navigation they asked for through. */}
+			<AppDialog
+				cancelLabel="Keep editing"
+				confirmLabel="Discard changes"
+				data-cy="unsaved-changes-dialog"
+				description="This request has changes that have not been saved. Leaving now throws them away — Save Draft keeps them without sending anything to IDO."
+				icon={TriangleAlert}
+				isOpen={blocker.status === "blocked"}
+				onClose={() => blocker.reset?.()}
+				onConfirm={() => blocker.proceed?.()}
+				title="Leave without saving?"
+				tone="danger"
+			/>
 		</div>
 	);
 }

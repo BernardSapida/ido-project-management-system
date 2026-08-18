@@ -156,3 +156,52 @@ export function toFormAttachments(stored: unknown): FormAttachment[] {
 		return [{ id: `${index}-${parsed.data.url}`, name: parsed.data.name, size: 0, type: "", url: parsed.data.url }];
 	});
 }
+
+/**
+ * The saved row, as far as the form cares about it.
+ *
+ * Structural rather than Prisma's `Request`: the two pages that call this select
+ * different column sets, and the form's nine fields are the intersection. It is
+ * also the list a new field has to be added to, which is the point of the type
+ * being here rather than inferred.
+ */
+interface StoredRequestFields {
+	attachments: unknown;
+	details: string;
+	justification: string;
+	position: string;
+	priority: string;
+	requestedBy: string;
+	title: string;
+	typeOfRequest: string;
+	workScope: string;
+}
+
+/**
+ * A saved request as the form's values - the detail page's read-only rendering
+ * and the edit page's bound fields both start here.
+ *
+ * One function because it is one mapping, and because the failure of writing it
+ * twice is a field that shows on one page and not the other: the columns are
+ * `String` in the database and enums in the schema, so every one of these casts
+ * is a promise that the value came out of the same closed list it went in
+ * through. A row that predates a list breaks that promise, and the cast is
+ * exactly where it surfaces - the select renders empty and the schema refuses
+ * the save, rather than the value reaching the printed form as free text.
+ *
+ * `targetOrg` and `responsibleOrg` are absent on purpose: they are constants the
+ * server writes, they are not read back, and the form supplies its own.
+ */
+export function toRequestFormValues(request: StoredRequestFields): Partial<RequestFormValues> {
+	return {
+		attachments: toFormAttachments(request.attachments),
+		details: request.details,
+		justification: request.justification as RequestFormValues["justification"],
+		position: request.position as RequestFormValues["position"],
+		priority: request.priority as RequestFormValues["priority"],
+		requestedBy: request.requestedBy,
+		title: request.title,
+		typeOfRequest: request.typeOfRequest as RequestFormValues["typeOfRequest"],
+		workScope: request.workScope,
+	};
+}

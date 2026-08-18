@@ -17,6 +17,22 @@ import { useUploadingSubmit } from "@/lib/use-uploading-submit";
  * in the database, no id in its hands, and a second press would file a duplicate.
  */
 interface SaveArgs {
+	/**
+	 * A chance to take the SAVE failure and show it somewhere better than a toast.
+	 *
+	 * Return `true` and the hook stays quiet about it. That exists for exactly one
+	 * failure: the status changed under an open edit page (spec 007), where the
+	 * answer is a banner naming the new status with a Reload beside it, and a
+	 * toast reading "Please try again" is wrong advice - trying again cannot work
+	 * until the page is reloaded.
+	 *
+	 * Consulted on the save half only. A failure in the SUBMIT half always toasts,
+	 * because the fact it carries - the draft is already in the database - is not
+	 * in the error and cannot be reconstructed by whoever handles it. That half is
+	 * also unreachable for a status change: `saveDraft` checks the same statuses
+	 * and runs first.
+	 */
+	onError?: (error: unknown) => boolean;
 	onSaved?: (id: string) => void;
 	/** Absent on the create page. Present once a draft exists - including a draft
 	 *  this hook created a moment ago on a submit that then failed. */
@@ -107,10 +123,12 @@ export function useUserRequestMutations() {
 			try {
 				id = await persist(args);
 			} catch (error) {
-				AppToast.error("Failed to save the request. Please try again.", {
-					description: reason(error, "Nothing was saved — your answers are still on this page."),
-					icon: CircleAlert,
-				});
+				if (!args.onError?.(error)) {
+					AppToast.error("Failed to save the request. Please try again.", {
+						description: reason(error, "Nothing was saved — your answers are still on this page."),
+						icon: CircleAlert,
+					});
+				}
 
 				throw error;
 			}
@@ -143,10 +161,12 @@ export function useUserRequestMutations() {
 			try {
 				id = await persist(args);
 			} catch (error) {
-				AppToast.error("Failed to save the request. Please try again.", {
-					description: reason(error, "Nothing was saved — your answers are still on this page."),
-					icon: CircleAlert,
-				});
+				if (!args.onError?.(error)) {
+					AppToast.error("Failed to save the request. Please try again.", {
+						description: reason(error, "Nothing was saved — your answers are still on this page."),
+						icon: CircleAlert,
+					});
+				}
 
 				throw error;
 			}
