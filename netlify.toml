@@ -1,7 +1,14 @@
 [build]
   command = "vite build"
   dir = "dist/client"
+
+[build.environment]
+  # Points pnpm at .npmrc.ci as its USER config. Credentials in the project .npmrc
+  # are never env-expanded by pnpm, so the GitHub Packages token can only reach the
+  # install through a user-level file. Pair with NPM_TOKEN in the Netlify UI.
+  NPM_CONFIG_USERCONFIG = "/opt/build/repo/.npmrc.ci"
+
 [dev]
-  command = "npm run dev"
+  command = "pnpm dev"
   targetPort = 4000
   port = 8888

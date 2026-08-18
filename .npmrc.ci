@@ -1,0 +1,9 @@
+# User-level npm config for CI ONLY. Never the project .npmrc: pnpm deliberately
+# ignores env-var expansion in credentials there, so ${NPM_TOKEN} would silently
+# do nothing and the install would 401.
+#
+# netlify.toml points NPM_CONFIG_USERCONFIG here, which makes pnpm treat this as the
+# user config - a trusted source where expansion IS allowed. Set NPM_TOKEN (a GitHub
+# PAT with read:packages) in Site configuration -> Environment variables.
+@bernardsapida:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${NPM_TOKEN}

@@ -2,6 +2,7 @@
   "name": "npm-tanstack-start-monolith-template",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@11.17.0",
   "scripts": {
     "dev": "vite dev --port 4000",
     "generate-routes": "tsr generate",
