@@ -31,6 +31,7 @@ function CommentsLabPage() {
 			/>
 			<LiveSection />
 			<FailureSection />
+			<DeskSection />
 			<HistorySection />
 			<ContentSection />
 			<StatesSection />
@@ -317,6 +318,82 @@ function FailureSection() {
 						throw new Error("The lab rejects every post in this section.");
 					}}
 					threadId="lab-fail"
+				/>
+			</Frame>
+		</LabSection>
+	);
+}
+
+/**
+ * The same people, doing a job.
+ *
+ * A `title` is what the person IS in THIS conversation, and it is the fact that
+ * changes how a sentence is read: "we will not fund the second unit" is one
+ * thing from a colleague and another from the Campus Director. It is the reason
+ * the field prints on the line rather than living in the popover behind the
+ * name - a fact a reader has to press for is a fact most readers never see.
+ */
+const DESK_SEEDS: Seed[] = [
+	{
+		author: {
+			...JOSEFA,
+			title: "Requestor",
+		},
+		body: "Attaching the revised quotation - the supplier moved the unit price after the site visit, so the total is 18,400 rather than the 21,000 in the original.",
+		offset: 6 * HOUR,
+	},
+	{
+		author: {
+			...BEN,
+			title: "IDO Chairperson",
+		},
+		body: "Received. I am recommending it at the new figure. @Aria Chen this is the one waiting on the budget certificate.",
+		offset: 3 * HOUR,
+	},
+	{
+		author: {
+			...ARIA,
+			title: "Budget Officer",
+		},
+		body: "Certificate is issued against this year's allocation. Nothing further needed from the requestor.",
+		offset: 40 * MINUTE,
+	},
+];
+
+/**
+ * The three settings a thread hanging off a RECORD usually needs, together -
+ * because they tend to be true at the same time and for the same reason.
+ */
+function DeskSection() {
+	const base = useLabClock();
+	const [posted, setPosted] = useState<CommentItem[]>([]);
+
+	return (
+		<LabSection
+			description="Every author carries a title, and it prints on the line beside the name - muted and small, because forty comments carry forty of them and only one of them is the 'You' the reader is scanning for. Replies are OFF: this thread's rows have nowhere to store a parent, and a Reply that silently posts at the bottom teaches people not to trust the button, so the control is not offered at all. And the composer is capped at 280 characters - the count stays out of the way until the last tenth of the allowance, then turns red and holds the Submit. It does NOT truncate what you type: paste six paragraphs in and every word is still there, refused rather than quietly cut, because a paste that loses its second half loses it invisibly."
+			title="Titles, a cap, and no replies"
+		>
+			<Frame>
+				<AppCommentSection
+					allowsReplies={false}
+					comments={[...toComments(DESK_SEEDS, base, "desk"), ...posted]}
+					currentUser={{ ...YOU, title: "Requestor" }}
+					data-cy="comments-desk"
+					heading="Discussion"
+					maxLength={280}
+					onSubmit={async ({ body }) => {
+						await delay(400);
+						setPosted((current) => [
+							...current,
+							{
+								author: { ...YOU, title: "Requestor" },
+								body,
+								createdAt: new Date(),
+								id: `desk-posted-${current.length}`,
+							},
+						]);
+					}}
+					threadId="lab-desk"
 				/>
 			</Frame>
 		</LabSection>

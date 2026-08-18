@@ -265,7 +265,7 @@ function AssemblySection() {
 
 			{isLocalBanner ? (
 				<AppAlert
-					description="This preview is an object URL - display only. It would not survive a reload and would fail the http/https rule the document schema enforces, which is exactly why a real banner is uploaded to Cloudinary from the edit form."
+					description="This preview is an object URL - display only. It would not survive a reload and would fail the http/https rule the document schema enforces, which is exactly why a real banner is uploaded to S3 from the edit form."
 					icon={ImageUp}
 					status="warning"
 					title="Local preview, not a stored image"
@@ -358,9 +358,7 @@ function ScopeSection() {
 		>
 			<ul className="space-y-2 text-sm text-muted">
 				<li>It does not fetch. The post arrives as a prop, from whatever the project already loaded.</li>
-				<li>
-					It does not author. The admin list, the edit form, the Cloudinary upload and the author default are yours.
-				</li>
+				<li>It does not author. The admin list, the edit form, the S3 upload and the author default are yours.</li>
 				<li>It does not route. Copy-link is a callback, because the project decides what a post's URL is.</li>
 				<li>
 					It does not accept comments. Displayed here; writable, and configurable between signed-in and guest authors,
