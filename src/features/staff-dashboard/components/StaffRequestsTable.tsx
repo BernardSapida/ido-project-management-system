@@ -1,15 +1,11 @@
 import {
 	AppChip,
-	AppFilterBar,
-	AppPagination,
-	AppSearchField,
-	AppTable,
-	AppTableEmptyState,
+	AppDataTable,
 	AppTableHighlight,
 	type ColumnDef,
+	type DataTableServer,
 	type FilterDef,
 } from "@bernardsapida/web-ui";
-import { Typography } from "@heroui/react";
 import { Flag, ListFilter } from "lucide-react";
 import {
 	PRIORITY_OPTIONS,
@@ -22,28 +18,16 @@ import { MASTER_STATUS_OPTIONS } from "@/lib/status-maps/request-status";
 import type { StaffRequestRow } from "../types";
 
 interface StaffRequestsTableProps {
-	/** A page/filter/search change in flight. Redraws the skeletons over stale rows. */
-	isFetching: boolean;
-	/** How many requests the desk can see at all, ignoring the filters. */
+	/** How many requests the desk can see at all, ignoring every filter. */
 	inScope: number;
 	isLoading: boolean;
-	onClearFilters: () => void;
-	onPageChange: (page: number) => void;
-	onPriorityChange: (priority: string | null) => void;
 	onRowAction: (row: StaffRequestRow) => void;
-	onSearchChange: (search: string) => void;
-	onStatusChange: (status: string | null) => void;
-	page: number;
-	pageSize: number;
-	priority?: string;
 	rows: StaffRequestRow[];
-	search: string;
-	/** Set by the counter tiles. Narrows the queue as much as the two selects do,
-	 *  so it has to count towards "filtered" for the empty state and the reset. */
-	stage?: string;
-	status?: string;
-	/** The server's count for the CURRENT filters, never `rows.length`. */
-	total: number;
+	/** The controlled contract: values in, edits out. Assembled by the page,
+	 *  which is the thing that owns the URL they live in. */
+	server: DataTableServer;
+	/** 1 while a counter tile is narrowing the queue, 0 otherwise. See below. */
+	stageFilterCount: number;
 }
 
 /**
@@ -87,6 +71,11 @@ const columns: ColumnDef<StaffRequestRow>[] = [
 		// An em dash rather than a blank cell. Nothing without a number should
 		// reach a staff queue - one is issued at submit - so a dash here is a
 		// visible oddity rather than a cell that failed to load.
+		//
+		// `AppTableHighlight` by hand, because a column with its own `render` is
+		// the one place the table cannot mark matches for you. Without it a desk
+		// searching for a document number gets the right row and no indication of
+		// why - and the number is the thing they searched BY.
 		render: (row) =>
 			row.documentNumber ? (
 				<AppTableHighlight>{row.documentNumber}</AppTableHighlight>
@@ -114,140 +103,72 @@ const columns: ColumnDef<StaffRequestRow>[] = [
 ];
 
 /**
- * The staff queue: two filters, search, rows and the page controls.
+ * The staff queue.
  *
- * ── Why the pieces and not `AppDataTable` ──
+ * `AppDataTable` in CONTROLLED server mode (web-ui 0.4.7), which is what lets
+ * this page keep every filter in the URL while the table still draws the bar, the
+ * search box, the column picker, the two empty states and the tracker. Before
+ * 0.4.7 the table owned those values and there was no way to hand them over, so
+ * this screen had to compose the six lab components by hand to get a queue view
+ * that was a link somebody could send.
  *
- * `AppDataTable` owns its search and filter state internally and restores it
- * from localStorage. This page needs the opposite twice over. The URL has to be
- * the source of truth, so a filtered queue is a link one desk can send another
- * and the back button walks the filters; and the counter tiles above are a
- * SECOND control that sets the same state the filter bar does, which there is no
- * way to push into `AppDataTable` from outside it. Composing the same lab
- * components it composes keeps one piece of state, in the URL, that both
- * controls edit.
+ * The page owns the state and passes it down; this file owns the columns and the
+ * two filter definitions. Nothing here holds a copy of anything.
  *
- * Everything below the state is still the package's: the bar, the search field,
- * the table, the empty states and the tracker. Same trade the requestor's list
- * made, and for the same reasons - see `UserRequestsTable`.
+ * ── `stageFilterCount` ──
+ *
+ * The counter tiles above the table narrow these same rows, and the table cannot
+ * see them - "waiting on you" is a different set of statuses at every desk and
+ * only the server knows which. Passing the count through
+ * `externalFilterCount` buys the one thing that matters: a desk that pressed a
+ * tile and got nothing back is told its FILTERS emptied the table, not that it
+ * has no work. "Your queue is clear" is the worst available answer to somebody
+ * who has forty rows sitting behind the tile they just pressed.
  */
 export function StaffRequestsTable({
 	inScope,
-	isFetching,
 	isLoading,
-	onClearFilters,
-	onPageChange,
-	onPriorityChange,
 	onRowAction,
-	onSearchChange,
-	onStatusChange,
-	page,
-	pageSize,
-	priority,
 	rows,
-	search,
-	stage,
-	status,
-	total,
+	server,
+	stageFilterCount,
 }: StaffRequestsTableProps) {
-	const hasQuery = search.trim().length > 0;
-	// The stage tiles count. A desk that pressed "Waiting on you" and got nothing
-	// has filtered its way to an empty table exactly as much as one that picked a
-	// status, and telling it the queue is clear would be a different - and wrong -
-	// piece of news.
-	const hasFilters = Boolean(status || priority || stage);
-	const isBusy = isLoading || isFetching;
-	const isNarrowed = hasFilters || hasQuery;
-
 	return (
-		<div
-			className="flex flex-col gap-4"
+		<AppDataTable
+			columns={columns}
 			data-cy="staff-requests-table"
-		>
-			<AppFilterBar
-				filters={{ priority: priority ?? null, status: status ?? null }}
-				onFilterChange={(key, value) => (key === "status" ? onStatusChange(value) : onPriorityChange(value))}
-				onReset={onClearFilters}
-				// The search term is counted in the bar's "N active" chip and cleared by
-				// its "Clear all", even though the box itself is below. A table narrowed
-				// to three rows under a chip reading "0 active" is the lie the chip
-				// exists to prevent.
-				searchTerm={search}
-				selects={[STATUS_FILTER, PRIORITY_FILTER]}
-			/>
-
-			<AppSearchField
-				className="sm:max-w-sm"
-				data-cy="staff-search"
-				debounceMs={300}
-				label="Search the queue"
-				onValueChange={onSearchChange}
-				placeholder="Search by title or document number"
-				value={search}
-			/>
-
-			{/*
-			 * How many are in scope, and how many are shown. The tracker under the
-			 * table counts the FILTERED set and cannot say what the desk holds in
-			 * total - which is the number that makes a queue of three read as three
-			 * out of forty rather than as a desk with nothing on it.
-			 */}
-			<Typography
-				aria-live="polite"
-				color="muted"
-				data-cy="staff-queue-count"
-				type="body-sm"
-			>
-				{isNarrowed
-					? `${total.toLocaleString("en-PH")} of ${inScope.toLocaleString("en-PH")} in your queue match these filters.`
-					: `${inScope.toLocaleString("en-PH")} in your queue, including what you have already handled.`}
-			</Typography>
-
-			<AppTable
-				columns={columns}
-				data-cy="staff-queue-table"
-				emptyContent={
-					<AppTableEmptyState
-						action={isNarrowed ? { label: "Clear filters", onPress: onClearFilters } : undefined}
-						// Two distinct empty states, and the distinction is the whole point.
-						// "Your queue is clear" to a desk whose filter matched nothing tells
-						// them there is no work when there may be forty rows behind the
-						// filter they just set.
-						description={
-							isNarrowed ? undefined : "Nothing is waiting on you, and nothing you have handled is on file yet."
-						}
-						query={search}
-						reason={hasFilters ? "filtered" : hasQuery ? "no-results" : "no-data"}
-						title={isNarrowed ? undefined : "Your queue is clear"}
-					/>
-				}
-				highlightQuery={search}
-				isLoading={isBusy}
-				label="Staff queue"
-				onRowAction={(id) => {
-					const row = rows.find((candidate) => candidate.id === String(id));
-					// The ROW, not the id. The destination depends on the request's stage
-					// columns, and the page has no other copy of them to look it up in.
-					if (row) onRowAction(row);
-				}}
-				rows={rows}
-				// The page size, so the skeleton is the height the rows will be and the
-				// content does not jump when they land.
-				skeletonRowCount={pageSize}
-			/>
-
-			{/* Nothing at zero: the empty state directly above has already said it, in
-			    a heading, a sentence and an action. */}
-			{total > 0 ? (
-				<AppPagination
-					data-cy="staff-queue-pagination"
-					noun="requests"
-					onPageChange={onPageChange}
-					page={page}
-					rowsPerPage={pageSize}
-					total={total}
-				/>
-			) : null}
-		</div>
+			/*
+			 * How many are in scope, not how many matched. The tracker under the table
+			 * counts the FILTERED set and cannot say what the desk holds in total -
+			 * which is the number that makes a queue of three read as three out of
+			 * forty rather than as a desk with nothing on it. It also warns the reader
+			 * that the list includes what they have already dealt with, so an
+			 * unexpectedly long queue is not a mystery.
+			 */
+			description={`${inScope.toLocaleString("en-PH")} in your queue, including what you have already handled.`}
+			externalFilterCount={stageFilterCount}
+			filters={[STATUS_FILTER, PRIORITY_FILTER]}
+			// Six columns, and a desk reads all six. The picker is here because a
+			// queue is looked at every day and the one column somebody never uses is
+			// worth letting them drop; `storageKey` is what makes that choice last.
+			hasColumnPicker
+			// h3: the page's AppPageHeader owns the h1 and this table sits under it
+			// with no section heading between, so h2 would be the level to take - but
+			// the KPI tiles above already occupy it.
+			headingLevel={3}
+			isLoading={isLoading}
+			noun="requests"
+			onRowAction={(id) => {
+				const row = rows.find((candidate) => candidate.id === String(id));
+				// The ROW, not the id. The destination depends on the request's stage
+				// columns, and the page has no other copy of them to look it up in.
+				if (row) onRowAction(row);
+			}}
+			rows={rows}
+			searchPlaceholder="Search by title or document number"
+			server={server}
+			storageKey="staff-queue"
+			title="Queue"
+		/>
 	);
 }

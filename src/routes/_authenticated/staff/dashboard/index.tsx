@@ -136,27 +136,41 @@ function StaffDashboardPage() {
 			) : (
 				<StaffRequestsTable
 					inScope={inScope}
-					isFetching={requests.isFetching}
 					isLoading={requests.isPending}
-					onClearFilters={() =>
-						setFilters({ priority: undefined, search: undefined, stage: undefined, status: undefined })
-					}
-					onPageChange={setPage}
-					onPriorityChange={(value) => setFilters({ priority: value ?? undefined })}
 					onRowAction={openReview}
-					// An empty box means "no search", not "search for nothing" - left as
-					// `""` the parameter stays in the URL and the query key changes for a
-					// filter that narrows nothing.
-					onSearchChange={(value) => setFilters({ search: value.trim() || undefined })}
-					onStatusChange={(value) => setFilters({ status: value ?? undefined })}
-					page={page}
-					pageSize={pageSize}
-					priority={priority}
 					rows={requests.data?.items ?? []}
-					search={search ?? ""}
-					stage={stage}
-					status={status}
-					total={requests.data?.total ?? 0}
+					/*
+					 * The controlled contract, assembled here because this is the thing
+					 * that owns the URL every one of these values lives in.
+					 *
+					 * `onPageChange` is the only handler that does NOT reset the page, for
+					 * the obvious reason. The other two do it in the same write that
+					 * changes the filter - controlled mode leaves the page reset to the
+					 * caller precisely so it is one navigation rather than two, and two
+					 * would be two history entries per filter change and a back button
+					 * that goes nowhere on the first press.
+					 */
+					server={{
+						filters: { priority: priority ?? null, status: status ?? null },
+						isFetching: requests.isFetching,
+						onFiltersChange: (next) =>
+							setFilters({ priority: next.priority ?? undefined, status: next.status ?? undefined }),
+						onPageChange: setPage,
+						// "Clear all" as ONE write, and the only handler that can reach the
+						// stage the counter tiles set - the table cannot see that filter, so
+						// nothing else it calls would clear it.
+						onReset: () => setFilters({ priority: undefined, search: undefined, stage: undefined, status: undefined }),
+						// Already trimmed by the table. Empty means "no search", not "search
+						// for nothing" - left as `""` the parameter stays in the URL and the
+						// query key changes for a filter that narrows nothing.
+						onSearchChange: (next) => setFilters({ search: next || undefined }),
+						page,
+						search: search ?? "",
+						total: requests.data?.total ?? 0,
+					}}
+					// 1 while a tile is pressed. It is what makes an empty queue say
+					// "filtered" rather than "your queue is clear".
+					stageFilterCount={stage ? 1 : 0}
 				/>
 			)}
 		</div>
