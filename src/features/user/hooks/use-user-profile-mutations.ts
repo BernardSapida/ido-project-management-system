@@ -25,7 +25,7 @@ export function useUserProfileMutations() {
 				description: "Your personal information has been synchronized across the platform.",
 			});
 
-			queryClient.invalidateQueries({ queryKey: trpc.admin.listUsers.queryKey() });
+			queryClient.invalidateQueries({ queryKey: trpc.adminAccounts.listAllUsers.queryKey() });
 			refetchSession();
 		},
 		onError: (error) => {

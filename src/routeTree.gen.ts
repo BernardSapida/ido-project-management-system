@@ -110,6 +110,7 @@ import { Route as referencesComponentsToggleButtonRouteImport } from './routes/(
 import { Route as referencesComponentsTooltipRouteImport } from './routes/(references)/components/tooltip'
 import { Route as referencesComponentsTrackingRouteImport } from './routes/(references)/components/tracking'
 import { Route as referencesComponentsUsersListRouteImport } from './routes/(references)/components/users-list'
+import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin/index'
 import { Route as AuthenticatedRequestsIndexRouteImport } from './routes/_authenticated/requests/index'
 import { Route as AuthenticatedRequestsNewRouteImport } from './routes/_authenticated/requests/new'
 import { Route as ApiAppConfigRouteImport } from './routes/api/app/config'
@@ -720,6 +721,11 @@ const referencesComponentsUsersListRoute =
     path: '/users-list',
     getParentRoute: () => referencesComponentsRoute,
   } as any)
+const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedAdminRoute,
+} as any)
 const AuthenticatedRequestsIndexRoute =
   AuthenticatedRequestsIndexRouteImport.update({
     id: '/requests/',
@@ -850,7 +856,7 @@ export interface FileRoutesByFullPath {
   '/verify-email': typeof VerifyEmailRoute
   '/components': typeof referencesComponentsRouteWithChildren
   '/form-reference': typeof referencesFormReferenceRoute
-  '/admin': typeof AuthenticatedAdminRoute
+  '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/api/posts': typeof ApiPostsRoute
@@ -949,6 +955,7 @@ export interface FileRoutesByFullPath {
   '/api/pusher/auth': typeof ApiPusherAuthRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/components/': typeof referencesComponentsIndexRoute
+  '/admin/': typeof AuthenticatedAdminIndexRoute
   '/requests/': typeof AuthenticatedRequestsIndexRoute
   '/requests/$requestId/budget-review': typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
   '/requests/$requestId/csm': typeof AuthenticatedRequestsRequestIdCsmRoute
@@ -972,7 +979,6 @@ export interface FileRoutesByTo {
   '/unauthorized': typeof UnauthorizedRoute
   '/verify-email': typeof VerifyEmailRoute
   '/form-reference': typeof referencesFormReferenceRoute
-  '/admin': typeof AuthenticatedAdminRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/api/posts': typeof ApiPostsRoute
@@ -1071,6 +1077,7 @@ export interface FileRoutesByTo {
   '/api/pusher/auth': typeof ApiPusherAuthRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/components': typeof referencesComponentsIndexRoute
+  '/admin': typeof AuthenticatedAdminIndexRoute
   '/requests': typeof AuthenticatedRequestsIndexRoute
   '/requests/$requestId/budget-review': typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
   '/requests/$requestId/csm': typeof AuthenticatedRequestsRequestIdCsmRoute
@@ -1097,7 +1104,7 @@ export interface FileRoutesById {
   '/verify-email': typeof VerifyEmailRoute
   '/(references)/components': typeof referencesComponentsRouteWithChildren
   '/(references)/form-reference': typeof referencesFormReferenceRoute
-  '/_authenticated/admin': typeof AuthenticatedAdminRoute
+  '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/api/posts': typeof ApiPostsRoute
@@ -1196,6 +1203,7 @@ export interface FileRoutesById {
   '/api/pusher/auth': typeof ApiPusherAuthRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/(references)/components/': typeof referencesComponentsIndexRoute
+  '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/requests/': typeof AuthenticatedRequestsIndexRoute
   '/_authenticated/requests/$requestId/budget-review': typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
   '/_authenticated/requests/$requestId/csm': typeof AuthenticatedRequestsRequestIdCsmRoute
@@ -1321,6 +1329,7 @@ export interface FileRouteTypes {
     | '/api/pusher/auth'
     | '/api/trpc/$'
     | '/components/'
+    | '/admin/'
     | '/requests/'
     | '/requests/$requestId/budget-review'
     | '/requests/$requestId/csm'
@@ -1344,7 +1353,6 @@ export interface FileRouteTypes {
     | '/unauthorized'
     | '/verify-email'
     | '/form-reference'
-    | '/admin'
     | '/dashboard'
     | '/profile'
     | '/api/posts'
@@ -1443,6 +1451,7 @@ export interface FileRouteTypes {
     | '/api/pusher/auth'
     | '/api/trpc/$'
     | '/components'
+    | '/admin'
     | '/requests'
     | '/requests/$requestId/budget-review'
     | '/requests/$requestId/csm'
@@ -1567,6 +1576,7 @@ export interface FileRouteTypes {
     | '/api/pusher/auth'
     | '/api/trpc/$'
     | '/(references)/components/'
+    | '/_authenticated/admin/'
     | '/_authenticated/requests/'
     | '/_authenticated/requests/$requestId/budget-review'
     | '/_authenticated/requests/$requestId/csm'
@@ -2314,6 +2324,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof referencesComponentsUsersListRouteImport
       parentRoute: typeof referencesComponentsRoute
     }
+    '/_authenticated/admin/': {
+      id: '/_authenticated/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AuthenticatedAdminIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/requests/': {
       id: '/_authenticated/requests/'
       path: '/requests'
@@ -2464,8 +2481,19 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedAdminRouteChildren {
+  AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
+}
+
+const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
+  AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
+}
+
+const AuthenticatedAdminRouteWithChildren =
+  AuthenticatedAdminRoute._addFileChildren(AuthenticatedAdminRouteChildren)
+
 interface AuthenticatedRouteChildren {
-  AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
+  AuthenticatedAdminRoute: typeof AuthenticatedAdminRouteWithChildren
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedRequestsNewRoute: typeof AuthenticatedRequestsNewRoute
@@ -2483,7 +2511,7 @@ interface AuthenticatedRouteChildren {
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
-  AuthenticatedAdminRoute: AuthenticatedAdminRoute,
+  AuthenticatedAdminRoute: AuthenticatedAdminRouteWithChildren,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedRequestsNewRoute: AuthenticatedRequestsNewRoute,
