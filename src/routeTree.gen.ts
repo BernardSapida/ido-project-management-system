@@ -121,6 +121,7 @@ import { Route as ApiDevSeedRouteImport } from './routes/api/dev/seed'
 import { Route as ApiDevToggleMaintenanceRouteImport } from './routes/api/dev/toggle-maintenance'
 import { Route as ApiPusherAuthRouteImport } from './routes/api/pusher/auth'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api.trpc.$'
+import { Route as AuthenticatedRequestsRequestIdIndexRouteImport } from './routes/_authenticated/requests/$requestId/index'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -767,6 +768,12 @@ const ApiTrpcSplatRoute = ApiTrpcSplatRouteImport.update({
   path: '/api/trpc/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedRequestsRequestIdIndexRoute =
+  AuthenticatedRequestsRequestIdIndexRouteImport.update({
+    id: '/requests/$requestId/',
+    path: '/requests/$requestId/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -880,6 +887,7 @@ export interface FileRoutesByFullPath {
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/components/': typeof referencesComponentsIndexRoute
   '/requests/': typeof AuthenticatedRequestsIndexRoute
+  '/requests/$requestId/': typeof AuthenticatedRequestsRequestIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -992,6 +1000,7 @@ export interface FileRoutesByTo {
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/components': typeof referencesComponentsIndexRoute
   '/requests': typeof AuthenticatedRequestsIndexRoute
+  '/requests/$requestId': typeof AuthenticatedRequestsRequestIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -1107,6 +1116,7 @@ export interface FileRoutesById {
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/(references)/components/': typeof referencesComponentsIndexRoute
   '/_authenticated/requests/': typeof AuthenticatedRequestsIndexRoute
+  '/_authenticated/requests/$requestId/': typeof AuthenticatedRequestsRequestIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -1222,6 +1232,7 @@ export interface FileRouteTypes {
     | '/api/trpc/$'
     | '/components/'
     | '/requests/'
+    | '/requests/$requestId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -1334,6 +1345,7 @@ export interface FileRouteTypes {
     | '/api/trpc/$'
     | '/components'
     | '/requests'
+    | '/requests/$requestId'
   id:
     | '__root__'
     | '/'
@@ -1448,6 +1460,7 @@ export interface FileRouteTypes {
     | '/api/trpc/$'
     | '/(references)/components/'
     | '/_authenticated/requests/'
+    | '/_authenticated/requests/$requestId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -2261,6 +2274,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiTrpcSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/requests/$requestId/': {
+      id: '/_authenticated/requests/$requestId/'
+      path: '/requests/$requestId'
+      fullPath: '/requests/$requestId/'
+      preLoaderRoute: typeof AuthenticatedRequestsRequestIdIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
 
@@ -2270,6 +2290,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedRequestsNewRoute: typeof AuthenticatedRequestsNewRoute
   AuthenticatedRequestsIndexRoute: typeof AuthenticatedRequestsIndexRoute
+  AuthenticatedRequestsRequestIdIndexRoute: typeof AuthenticatedRequestsRequestIdIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -2278,6 +2299,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedRequestsNewRoute: AuthenticatedRequestsNewRoute,
   AuthenticatedRequestsIndexRoute: AuthenticatedRequestsIndexRoute,
+  AuthenticatedRequestsRequestIdIndexRoute:
+    AuthenticatedRequestsRequestIdIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

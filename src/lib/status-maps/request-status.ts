@@ -105,6 +105,25 @@ export const REJECTED_STATUSES = [
 ] as const;
 
 /**
+ * The statuses in which the request is still SITTING on a bad answer.
+ *
+ * It is what decides whether the detail page shows the reviewer's note at all,
+ * and the reason is the resubmit: a request returned in March, fixed and sent
+ * back is under review again, and a banner still repeating March's complaint
+ * describes a document that no longer exists. Reading the current status rather
+ * than the presence of a returned audit entry is what makes the notice
+ * disappear the moment the request moves on - the entry stays in the log
+ * forever, which is the point of a log.
+ */
+export const NEGATIVE_STATUSES = ["RETURNED", "FOR_NEXT_YEAR_PPMP", ...REJECTED_STATUSES] as const;
+
+export function isNegativeStatus(masterStatus?: string | null): boolean {
+	if (!masterStatus) return false;
+
+	return (NEGATIVE_STATUSES as readonly string[]).includes(masterStatus);
+}
+
+/**
  * The only two statuses in which a requestor may still change the text.
  *
  * DRAFT has never been sent; RETURNED has been sent back to be fixed. Every

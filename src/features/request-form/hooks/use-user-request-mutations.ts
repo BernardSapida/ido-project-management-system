@@ -53,14 +53,21 @@ export function useUserRequestMutations() {
 	});
 
 	/**
-	 * The list and the counters, after any write.
+	 * The list, the counters and every open detail page, after any write.
 	 *
-	 * `request.getById` (spec 006) and the staff queue (spec 009) belong here too
-	 * the day those procedures exist - a submitted request has to leave the
-	 * requestor's pending count and appear in IDO's queue in the same beat.
+	 * `getById` is invalidated without an id - the key prefix, so every cached
+	 * request refetches rather than only the one just written. That is what makes
+	 * Submit-in-place on the detail page (spec 006) work at all: the page the user
+	 * is standing on is the one whose status chip, stepper and action buttons all
+	 * have to change, and it is reading from this cache.
+	 *
+	 * The staff queue (spec 009) belongs here too the day that procedure exists -
+	 * a submitted request has to leave the requestor's pending count and appear in
+	 * IDO's queue in the same beat.
 	 */
 	const invalidateLists = useCallback(async () => {
 		await Promise.all([
+			queryClient.invalidateQueries({ queryKey: trpc.request.getById.queryKey() }),
 			queryClient.invalidateQueries({ queryKey: trpc.request.myList.queryKey() }),
 			queryClient.invalidateQueries({ queryKey: trpc.request.mySummary.queryKey() }),
 		]);

@@ -1,0 +1,216 @@
+import { AppCard, AppChip, AppPageHeader, AppQueryError } from "@bernardsapida/web-ui";
+import { Typography } from "@heroui/react";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { seo } from "@/config/seo.config";
+import { assertAuthenticatedFn } from "@/features/auth/functions/auth.functions";
+import { useAuth } from "@/features/auth/hooks/useAuth";
+import { CsmPromptBanner } from "@/features/csm/components/CsmPromptBanner";
+import { RejectionNotice } from "@/features/request-detail/components/RejectionNotice";
+import { RequestActivityFeed } from "@/features/request-detail/components/RequestActivityFeed";
+import { RequestDetailSkeleton } from "@/features/request-detail/components/RequestDetailSkeleton";
+import { requestStatusSubtitle } from "@/features/request-detail/lib/status-subtitle";
+import { RequestForm } from "@/features/request-form/components/RequestForm";
+import { useRequestById } from "@/features/request-form/hooks/use-user-request-queries";
+import type { Position } from "@/features/request-form/lib/request-options";
+import { type RequestFormValues, toFormAttachments } from "@/features/request-form/validations/schema/request.schema";
+import { latestNegativeLog, REQUESTOR_VISIBLE_ACTIONS } from "@/lib/status-maps/audit-action";
+import { isEditableStatus, isNegativeStatus, masterStatusMap } from "@/lib/status-maps/request-status";
+
+export const Route = createFileRoute("/_authenticated/requests/$requestId/")({
+	/**
+	 * Signed in, and that is all.
+	 *
+	 * Deliberately NOT role-gated, unlike `/requests` and `/requests/new`: five
+	 * roles may legitimately open one request - its owner and the four review
+	 * desks - and a role list here would either lock a reviewer out of a link from
+	 * their own queue or let every requestor through to everybody else's requests.
+	 * `request.getById` is the gate that decides, per request, and it is the only
+	 * one that can: whether this page may be read depends on WHO OWNS the row, not
+	 * on what the reader is.
+	 */
+	beforeLoad: async () => {
+		return await assertAuthenticatedFn();
+	},
+	head: () => ({
+		meta: [{ title: seo.title("Request Detail") }, { content: "noindex", name: "robots" }],
+	}),
+	staticData: {
+		breadcrumb: "Request Detail",
+		mainWidth: "wide",
+	},
+	component: RequestDetailPage,
+});
+
+function RequestDetailPage() {
+	const { requestId } = Route.useParams();
+	const router = useRouter();
+	const { user } = useAuth();
+	const { data: request, error, isError, isPending, refetch } = useRequestById(requestId);
+
+	if (isPending) return <RequestDetailSkeleton />;
+
+	/*
+	 * The error state, not a blank form. FORBIDDEN on somebody else's id and
+	 * NOT_FOUND on a mistyped one are the two failures this query has, and
+	 * `AppQueryError` classifies them apart - "you are not allowed" and "there is
+	 * nothing here" are different things to be told, and only one of them is worth
+	 * pressing Retry over.
+	 */
+	if (isError) {
+		return (
+			<AppQueryError
+				data-cy="request-detail-error"
+				error={error}
+				onRetry={() => void refetch()}
+			/>
+		);
+	}
+
+	const status = masterStatusMap[request.masterStatus];
+
+	/*
+	 * Ownership decides every requestor control on this page, and none of them are
+	 * a gate. `request.submit` re-checks the owner and the status; the CSM route
+	 * and its procedures check ownership themselves (spec 015). Hiding a control
+	 * is about not offering somebody a button that can only answer FORBIDDEN.
+	 */
+	const isOwner = Boolean(user) && request.userId === user.id;
+	const canAct = isOwner && isEditableStatus(request.masterStatus);
+
+	/*
+	 * Anything past DRAFT has been sent, has a document number, and therefore has
+	 * a form worth printing - RETURNED included, which is a request that was
+	 * submitted and came back. Every role that can READ the request can open it,
+	 * which is an explicit IRMS-old fix: a reviewer following a link used to reach
+	 * the page and find the one control they wanted missing.
+	 */
+	const isSubmitted = request.masterStatus !== "DRAFT";
+
+	// Only while the request is STILL sitting on the bad answer. The audit entry
+	// stays in the log forever - that is what a log is - but a request returned in
+	// March, fixed and resubmitted is under review, and a banner still repeating
+	// that complaint describes a document which no longer exists.
+	const negativeLog = isNegativeStatus(request.masterStatus) ? latestNegativeLog(request.auditLogs) : null;
+
+	const defaultValues: Partial<RequestFormValues> = {
+		attachments: toFormAttachments(request.attachments),
+		details: request.details,
+		justification: request.justification as RequestFormValues["justification"],
+		position: request.position as Position,
+		priority: request.priority as RequestFormValues["priority"],
+		requestedBy: request.requestedBy,
+		title: request.title,
+		typeOfRequest: request.typeOfRequest as RequestFormValues["typeOfRequest"],
+		workScope: request.workScope,
+	};
+
+	/*
+	 * `href`, not `to`, for both. `/requests/$requestId/edit` is spec 007 and
+	 * `/requests/$requestId/pdf` is spec 016; neither is in the route tree yet, so
+	 * a typed navigation to either would not compile today. Convert them when
+	 * those specs land - nothing fails if they are left, which is the reason they
+	 * are written down here.
+	 *
+	 * The PDF opens in a NEW TAB rather than replacing this page: it is a document
+	 * to be read or printed beside the request, and a router navigation would lose
+	 * the request behind it.
+	 */
+	const goToEdit = () => void router.navigate({ href: `/requests/${requestId}/edit` });
+	const openPdf = () => window.open(`/requests/${requestId}/pdf`, "_blank", "noopener,noreferrer");
+
+	return (
+		<div className="flex flex-col gap-8">
+			<div className="flex flex-col gap-2">
+				<AppPageHeader
+					action={
+						status ? (
+							<div className="flex flex-wrap items-center gap-3">
+								<AppChip
+									data-cy="request-status"
+									icon={status.icon}
+									label={status.label}
+									tone={status.tone}
+								/>
+
+								{/* Nothing in its place before one is issued. A "Not yet
+								    assigned" placeholder next to the status would be a second
+								    fact to read that says nothing has happened. */}
+								{request.documentNumber ? (
+									<Typography
+										color="muted"
+										data-cy="request-document-number"
+										type="body-sm"
+									>
+										{request.documentNumber}
+									</Typography>
+								) : null}
+							</div>
+						) : null
+					}
+					subtitle={requestStatusSubtitle(request.masterStatus)}
+					title={request.finalTitle ?? request.title}
+				/>
+
+				{/* IDO may retitle a request. The requestor has to be able to see BOTH
+				    that it happened and what it was - the title they wrote is the one
+				    they will go looking for. Suppressed when the two are equal, where
+				    the line would be noise about a change nobody made. */}
+				{request.finalTitle && request.finalTitle !== request.title ? (
+					<Typography
+						color="muted"
+						data-cy="request-original-title"
+						type="body-sm"
+					>
+						Original title: <span className="italic">{request.title}</span>
+					</Typography>
+				) : null}
+			</div>
+
+			{isOwner ? (
+				<CsmPromptBanner
+					completionStatus={request.completionStatus}
+					requestId={requestId}
+				/>
+			) : null}
+
+			{/* Above the form, and a banner rather than a row in the feed below it.
+			    The reason a request stopped is the one thing the requestor opened this
+			    page for; making them read a timeline to find it is the defect this
+			    replaces. */}
+			{negativeLog ? (
+				<RejectionNotice
+					action={negativeLog.action}
+					actorName={`${negativeLog.actor.firstname} ${negativeLog.actor.lastname}`.trim()}
+					note={negativeLog.note}
+					occurredAt={negativeLog.createdAt}
+				/>
+			) : null}
+
+			<RequestForm
+				canSubmit={canAct}
+				defaultValues={defaultValues}
+				forceReadOnly
+				idoEvaluationStatus={request.idoEvaluationStatus}
+				masterStatus={request.masterStatus}
+				mode="edit"
+				onEdit={canAct ? goToEdit : undefined}
+				onViewPdf={isSubmitted ? openPdf : undefined}
+				processor={request.processor}
+				requestId={requestId}
+			/>
+
+			<AppCard
+				description="Every step this request has been through."
+				headingLevel={2}
+				title="Activity"
+			>
+				<RequestActivityFeed
+					auditLogs={request.auditLogs}
+					// Staff pass no filter and see everything; a requestor sees the
+					// actions that ask them for something. See the note on the component.
+					visibleActions={isOwner ? REQUESTOR_VISIBLE_ACTIONS : undefined}
+				/>
+			</AppCard>
+		</div>
+	);
+}

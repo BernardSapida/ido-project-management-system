@@ -103,24 +103,13 @@ function RequestsListPage() {
 	const activeGroup: string | null = status ?? null;
 
 	/**
-	 * `href`, not `to`, for the detail page.
-	 *
-	 * `/requests/$requestId` is spec 006 and is not in the route tree yet, and `to`
-	 * is typed against the routes that do exist - so a typed navigation to it is a
-	 * compile error today. Links running ahead of routes is the shape of a
-	 * spec-by-spec migration; `/requests/new` was the other one, and spec 005
-	 * landing is what let `goToNew` below become typed.
-	 *
-	 * **Convert this to `to` when spec 006 lands.** Nothing will fail if it is
-	 * left as `href` - which is the reason to write it down here.
-	 *
 	 * Through `router.navigate` rather than `Route.useNavigate()`: this route has
 	 * required search params, so its bound navigate demands a `search` for every
 	 * call - which is right for the four below that edit those params, and wrong
 	 * for a jump to a route that does not have them.
 	 */
-	const goTo = (href: string) => {
-		void router.navigate({ href });
+	const goToRequest = (requestId: string) => {
+		void router.navigate({ params: { requestId }, to: "/requests/$requestId" });
 	};
 
 	const goToNew = () => {
@@ -172,7 +161,7 @@ function RequestsListPage() {
 					onClearFilters={() => setFilters({ search: undefined, status: undefined })}
 					onNewRequest={goToNew}
 					onPageChange={setPage}
-					onRowAction={(id) => goTo(`/requests/${id}`)}
+					onRowAction={goToRequest}
 					// An empty box means "no search", not "search for nothing" - left as
 					// `""` the parameter stays in the URL and the query key changes for a
 					// filter that narrows nothing.

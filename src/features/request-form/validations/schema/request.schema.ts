@@ -128,3 +128,31 @@ export function toRequestInput(values: RequestFormValues): CreateRequestInput {
 
 	return { ...rest, attachments: attachments.map(({ name, url }) => ({ name, url })) };
 }
+
+/**
+ * The other direction: the `attachments` Json column as the form carries it.
+ *
+ * `size` comes back `0` and `type` empty, and neither is a placeholder waiting
+ * to be filled in - they are the browser's bookkeeping for a list of rows being
+ * dropped, and the stored shape deliberately keeps `{ name, url }` alone (see
+ * the note on `attachmentSchema` above). `AttachmentUploader`'s read-only list
+ * prints no size for `0`, so nothing on screen claims a file is empty.
+ *
+ * A row that does not parse is DROPPED rather than thrown on. The column is
+ * `Json`, so nothing in the database enforces its shape, and a single malformed
+ * row must not take the whole request's page down with it.
+ */
+export function toFormAttachments(stored: unknown): FormAttachment[] {
+	if (!Array.isArray(stored)) return [];
+
+	return stored.flatMap((row, index) => {
+		const parsed = attachmentSchema.safeParse(row);
+
+		if (!parsed.success) return [];
+
+		// The URL is the identity - it is what the read-only list opens - and the
+		// index disambiguates the same file attached twice, which `AppList` needs
+		// for its keys.
+		return [{ id: `${index}-${parsed.data.url}`, name: parsed.data.name, size: 0, type: "", url: parsed.data.url }];
+	});
+}

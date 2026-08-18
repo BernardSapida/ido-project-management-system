@@ -22,6 +22,17 @@ import { useAppForm } from "@/hooks/use-app-form";
 import { isEditableStatus } from "@/lib/status-maps/request-status";
 
 interface RequestFormProps {
+	/**
+	 * Whether the read-only side rail may offer Submit at all.
+	 *
+	 * Defaults to true, so the create page and the edit page are unaffected. The
+	 * detail page passes `false` for a STAFF reader: five roles can open a request
+	 * and only its owner may send it, and `requestId` plus an editable status -
+	 * which is all the rail knew before - is true for a reviewer looking at
+	 * somebody else's draft. `request.submit` refuses them either way; a button
+	 * that exists only to answer FORBIDDEN is not a gate, it is a lie.
+	 */
+	canSubmit?: boolean;
 	defaultValues?: Partial<RequestFormValues>;
 	/** Read-only regardless of status — the detail page (spec 006) viewing a draft. */
 	forceReadOnly?: boolean;
@@ -60,6 +71,7 @@ interface RequestFormProps {
  * leaving them on a form whose contents are already saved.
  */
 export function RequestForm({
+	canSubmit = true,
 	defaultValues,
 	forceReadOnly,
 	hideAttachments,
@@ -125,14 +137,8 @@ export function RequestForm({
 	const values = useWatch({ control });
 	const attachments = useWatch({ control, name: "attachments" }) ?? [];
 
-	/**
-	 * `href`, not `to`. `/requests/$requestId` is spec 006 and is not in the route
-	 * tree yet, so a typed navigation to it would not compile today. Convert this
-	 * when that spec lands; nothing fails if it is left, which is why it is
-	 * written down here.
-	 */
 	const goToRequest = (id: string) => {
-		void router.navigate({ href: `/requests/${id}` });
+		void router.navigate({ params: { requestId: id }, to: "/requests/$requestId" });
 	};
 
 	const handleSaveDraft = handleSubmit(async (submitted) => {
@@ -184,7 +190,7 @@ export function RequestForm({
 		}
 	});
 
-	const canSubmitDirectly = Boolean(requestId) && isEditableStatus(masterStatus);
+	const canSubmitDirectly = canSubmit && Boolean(requestId) && isEditableStatus(masterStatus);
 
 	return (
 		<div className="flex flex-col gap-6">

@@ -55,6 +55,52 @@ const REQUEST_ROW_SELECT = {
 	typeOfRequest: true,
 } as const;
 
+/**
+ * What one request's own page needs.
+ *
+ * Explicit for the reason `REQUEST_ROW_SELECT` is, and narrower than the model
+ * in one direction that matters: the eight reviewer signature columns are NOT
+ * here. They are stamped onto the printed form (spec 016) and belong to whatever
+ * renders it; a detail page that never draws a signature has no reason to hold
+ * four reviewers' signature URLs in a payload the browser keeps.
+ *
+ * `userId` IS here, and it is not decoration - the page decides whether to offer
+ * Edit, Submit and the CSM banner by comparing it to the session, and a staff
+ * reader must get none of them.
+ */
+const REQUEST_DETAIL_SELECT = {
+	approverNote: true,
+	attachments: true,
+	completionStatus: true,
+	createdAt: true,
+	details: true,
+	documentNumber: true,
+	finalTitle: true,
+	id: true,
+	idoEvaluationStatus: true,
+	justification: true,
+	masterStatus: true,
+	position: true,
+	priority: true,
+	processor: true,
+	requestedBy: true,
+	title: true,
+	typeOfRequest: true,
+	updatedAt: true,
+	userId: true,
+	workScope: true,
+} as const;
+
+/**
+ * Who may read somebody else's request.
+ *
+ * ADMIN is deliberately absent. An administrator manages accounts - they hold no
+ * `REVIEW_REQUEST` or `APPROVE_*` grant either (see `ROLE_DEFAULT_PERMISSIONS`),
+ * and letting the role that can reset anybody's password also read everybody's
+ * requests would make it the one account with no limit at all.
+ */
+const REQUEST_READER_ROLES = ["IDO_OFFICER", "IDO_CHAIRPERSON", "BUDGET_OFFICER", "DIRECTOR"] as const;
+
 const myListInputSchema = z.object({
 	masterStatus: z.string().optional(),
 	page: z.number().int().min(1).default(1),
@@ -234,6 +280,64 @@ export const requestRouter = {
 
 			return request;
 		});
+	}),
+
+	/**
+	 * One request, with its history, for the page that shows it.
+	 *
+	 * ## The order of the two checks, and what it costs
+	 *
+	 * Existence first, then access - so a missing id is `NOT_FOUND` and an id that
+	 * exists but is not yours is `FORBIDDEN`. Those two ARE distinguishable, and
+	 * that is a decision rather than an oversight: cuids are not guessable in bulk,
+	 * so the set of ids anybody can probe is the set they were already given, and
+	 * the alternative - answering `NOT_FOUND` to a reviewer whose grant was revoked
+	 * this morning - sends them to look for a request that is sitting right there.
+	 * What neither answer carries is anything ABOUT the request: no title, no
+	 * owner, no status. That is the part that would be a leak.
+	 *
+	 * ## Five roles read this and one does not
+	 *
+	 * The owner, plus the four desks in `REQUEST_READER_ROLES`. A staff member
+	 * following a link from their queue gets the same read the requestor gets, and
+	 * no action - the page offers Edit, Submit and the CSM banner to the owner
+	 * only, and `saveDraft`/`submit` re-check ownership themselves regardless.
+	 *
+	 * The audit logs come back OLDEST-FIRST, which the client relies on twice: the
+	 * feed renders a process moving forwards, and `latestNegativeLog` walks the
+	 * array backwards to find the complaint the requestor has to answer.
+	 */
+	getById: protectedProcedure.input(z.object({ id: z.string().min(1) })).query(async ({ ctx, input }) => {
+		const { user } = ctx;
+
+		const request = await prisma.request.findUnique({
+			where: { id: input.id },
+			select: {
+				...REQUEST_DETAIL_SELECT,
+				auditLogs: {
+					select: {
+						action: true,
+						actor: { select: { firstname: true, id: true, lastname: true, role: true } },
+						createdAt: true,
+						fromStatus: true,
+						id: true,
+						note: true,
+						toStatus: true,
+					},
+					orderBy: { createdAt: "asc" },
+				},
+			},
+		});
+
+		if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "Request not found" });
+
+		const isReader = (REQUEST_READER_ROLES as readonly string[]).includes(user.role);
+
+		if (!isReader && request.userId !== user.id) {
+			throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
+		}
+
+		return request;
 	}),
 
 	/**
