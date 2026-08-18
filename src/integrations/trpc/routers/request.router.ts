@@ -28,6 +28,7 @@ import {
 	saveDraftRequestSchema,
 	submitRequestSchema,
 } from "@/features/request-form/validations/schema/request.schema";
+import type { RequestPdfData, SignaturesBase64 } from "@/features/request-pdf/types/request-pdf.types";
 import { assertPermission, hasPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { assertCanReadRequest } from "@/lib/request-access";
@@ -771,6 +772,53 @@ function asAlreadyApprovedError(error: unknown): unknown {
 	}
 
 	return error;
+}
+
+/** How long one signature image gets before the printed form goes out without
+ *  it. Short on purpose: three of these run in parallel behind a page somebody
+ *  is watching, and a bucket that has stopped answering must not hold the
+ *  document hostage. */
+const SIGNATURE_FETCH_TIMEOUT_MS = 5000;
+
+/**
+ * One signature image, fetched by the SERVER and returned as a `data:` URI.
+ *
+ * `@react-pdf/renderer` loads images itself while it lays the page out, and a
+ * remote URL there either races the render into a blank cell or - once the
+ * bucket stops being public - fails outright. A presigned URL would not survive
+ * either, because the document outlives the five minutes such a URL is good for.
+ * So the bytes travel inside the payload, and the browser never sees an S3 URL
+ * at all, which is also what lets the bucket be closed later without touching
+ * this file.
+ *
+ * **Every failure resolves to `null`.** A missing object, a timeout, a 403, a
+ * body that is not an image: each of those blanks ONE cell on a form that still
+ * prints. Throwing would take the whole document down over a picture, which is
+ * the wrong trade on a page whose other twenty fields are correct - a signature
+ * cell is a thing the paper form expects to be signed by hand anyway.
+ *
+ * The content-type check is what stops S3's error XML being base64'd and handed
+ * to the renderer as an image: a bucket answering 403 returns a body, and
+ * `response.ok` alone would have let it through on a misconfigured bucket.
+ */
+async function signatureAsDataUri(url: string | null): Promise<string | null> {
+	if (!url) return null;
+
+	try {
+		const response = await fetch(url, { signal: AbortSignal.timeout(SIGNATURE_FETCH_TIMEOUT_MS) });
+
+		if (!response.ok) return null;
+
+		const contentType = response.headers.get("content-type") ?? "";
+
+		if (!contentType.startsWith("image/")) return null;
+
+		const buffer = await response.arrayBuffer();
+
+		return `data:${contentType};base64,${Buffer.from(buffer).toString("base64")}`;
+	} catch {
+		return null;
+	}
 }
 
 export const requestRouter = {
@@ -2061,5 +2109,163 @@ export const requestRouter = {
 
 				return request;
 			});
+		}),
+
+	/**
+	 * The printable projection of one request - everything TUPC-F-OCD-IDO-01 puts
+	 * on paper, and nothing else.
+	 *
+	 * ## Three things are decided here rather than in the renderer
+	 *
+	 * **The signature gate.** `idoFinalSignatureUrl`, `idoFinalSignedAt`,
+	 * `finalDirectorSignatureUrl` and `finalDirectorSignedAt` come back `null`
+	 * unless `finalDirectorStatus === "APPROVED"`. The renderer checks the same
+	 * flag, but that check is the second belt: a gate that lives only in the
+	 * browser publishes every unapproved signature to anybody who opens the
+	 * network tab. `finalDirectorStatus` itself is NOT redacted - the Action
+	 * checkboxes print from it, and it is already on the detail page.
+	 *
+	 * **When it was filed.** `requestSubmittedAt` is the first `SUBMITTED` audit
+	 * log's `createdAt`, never the request's own. A draft written in January and
+	 * sent in March is a March filing, and the DATE and TIME cells under the
+	 * requestor say so.
+	 *
+	 * **Which title is current.** `nameOfBuildingArea` is `finalTitle ?? title`,
+	 * resolved here so the renderer never has to know that IDO may retitle a
+	 * request. `title` still travels, because the form's own header prints it.
+	 *
+	 * Access is `assertCanReadRequest` - the owner or one of the four review
+	 * desks, ADMIN deliberately excluded - which is the same rule as
+	 * `request.getById`. Five roles legitimately read this document, and sharing
+	 * the rule is what keeps the form's visibility from drifting away from the
+	 * request's.
+	 */
+	getForPdf: protectedProcedure.input(z.object({ id: z.string().min(1) })).query(async ({ ctx, input }) => {
+		const { user } = ctx;
+
+		const request = await prisma.request.findUnique({
+			where: { id: input.id },
+			select: {
+				approverNote: true,
+				details: true,
+				documentNumber: true,
+				finalDirectorSignatureUrl: true,
+				finalDirectorSignedAt: true,
+				finalDirectorStatus: true,
+				finalTitle: true,
+				id: true,
+				idoEvaluationStatus: true,
+				idoFinalSignatureUrl: true,
+				idoFinalSignedAt: true,
+				masterStatus: true,
+				position: true,
+				reference: true,
+				requestedBy: true,
+				title: true,
+				typeOfRequest: true,
+				userId: true,
+				user: { select: { signatureUrl: true } },
+				/*
+				 * `take: 1` over an ascending sort: a request can be submitted more than
+				 * once - returned, fixed, sent again - and the form records when it was
+				 * FIRST filed, which is what the office's own numbering is keyed to.
+				 */
+				auditLogs: {
+					orderBy: { createdAt: "asc" },
+					select: { createdAt: true },
+					take: 1,
+					where: { action: "SUBMITTED" },
+				},
+			},
+		});
+
+		assertCanReadRequest(request, user);
+
+		const isApproved = request.finalDirectorStatus === "APPROVED";
+
+		/*
+		 * `satisfies` rather than a bare return: the renderer is laid out cell by
+		 * cell against `RequestPdfData`, and a field renamed here without being
+		 * renamed there prints as an empty box on an official form rather than
+		 * failing anywhere a test would see it.
+		 */
+		return {
+			approverNote: request.approverNote,
+			details: request.details,
+			documentNumber: request.documentNumber,
+			finalDirectorSignatureUrl: isApproved ? request.finalDirectorSignatureUrl : null,
+			finalDirectorSignedAt: isApproved ? (request.finalDirectorSignedAt?.toISOString() ?? null) : null,
+			finalDirectorStatus: request.finalDirectorStatus,
+			finalTitle: request.finalTitle,
+			id: request.id,
+			idoEvaluationStatus: request.idoEvaluationStatus,
+			idoFinalSignatureUrl: isApproved ? request.idoFinalSignatureUrl : null,
+			idoFinalSignedAt: isApproved ? (request.idoFinalSignedAt?.toISOString() ?? null) : null,
+			masterStatus: request.masterStatus,
+			nameOfBuildingArea: request.finalTitle ?? request.title,
+			position: request.position,
+			reference: request.reference,
+			requestedBy: request.requestedBy,
+			requestorSignatureUrl: request.user.signatureUrl,
+			requestSubmittedAt: request.auditLogs[0]?.createdAt.toISOString() ?? null,
+			title: request.title,
+			typeOfRequest: request.typeOfRequest,
+		} satisfies RequestPdfData;
+	}),
+
+	/**
+	 * The three signature images, fetched server-side and inlined as `data:` URIs.
+	 *
+	 * Separate from `getForPdf` because the two have completely different costs: a
+	 * row read answers in milliseconds, three S3 objects do not, and merging them
+	 * would make the whole document wait on the slowest picture. The page draws
+	 * its header from the first and its signatures from this one.
+	 *
+	 * The access rule is `assertCanReadRequest`, exactly as above. The approval
+	 * gate is applied a SECOND time here rather than trusted from `getForPdf`:
+	 * this procedure is callable on its own, and a version that only redacted in
+	 * the other one would hand out the two approval signatures to anybody who
+	 * skipped it.
+	 *
+	 * The requestor's own signature is converted whatever the approval state - it
+	 * is on the form from the moment they file it, which is the whole point of
+	 * collecting it at sign-up.
+	 *
+	 * `Promise.all` over three independent fetches, none of which can reject:
+	 * `signatureAsDataUri` resolves failures to `null` (see its note), so one
+	 * missing object blanks one cell instead of failing the query and taking the
+	 * document with it.
+	 */
+	getSignaturesAsBase64: protectedProcedure
+		.input(z.object({ requestId: z.string().min(1) }))
+		.query(async ({ ctx, input }) => {
+			const { user } = ctx;
+
+			const request = await prisma.request.findUnique({
+				where: { id: input.requestId },
+				select: {
+					finalDirectorSignatureUrl: true,
+					finalDirectorStatus: true,
+					idoFinalSignatureUrl: true,
+					userId: true,
+					user: { select: { signatureUrl: true } },
+				},
+			});
+
+			assertCanReadRequest(request, user);
+
+			const isApproved = request.finalDirectorStatus === "APPROVED";
+
+			const [requestorSignatureBase64, idoFinalSignatureBase64, finalDirectorSignatureBase64] = await Promise.all([
+				signatureAsDataUri(request.user.signatureUrl),
+				isApproved ? signatureAsDataUri(request.idoFinalSignatureUrl) : null,
+				isApproved ? signatureAsDataUri(request.finalDirectorSignatureUrl) : null,
+			]);
+
+			return {
+				finalDirectorSignatureBase64,
+				idoFinalSignatureBase64,
+				requestorSignatureBase64,
+			} satisfies SignaturesBase64;
 		}),
 } satisfies TRPCRouterRecord;

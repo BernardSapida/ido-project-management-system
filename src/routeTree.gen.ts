@@ -128,6 +128,7 @@ import { Route as AuthenticatedRequestsRequestIdDirectorReviewRouteImport } from
 import { Route as AuthenticatedRequestsRequestIdEditRouteImport } from './routes/_authenticated/requests/$requestId/edit'
 import { Route as AuthenticatedRequestsRequestIdFinalDirectorApprovalRouteImport } from './routes/_authenticated/requests/$requestId/final-director-approval'
 import { Route as AuthenticatedRequestsRequestIdFinalReviewRouteImport } from './routes/_authenticated/requests/$requestId/final-review'
+import { Route as AuthenticatedRequestsRequestIdPdfRouteImport } from './routes/_authenticated/requests/$requestId/pdf'
 import { Route as AuthenticatedRequestsRequestIdReviewRouteImport } from './routes/_authenticated/requests/$requestId/review'
 import { Route as AuthenticatedStaffDashboardIndexRouteImport } from './routes/_authenticated/staff/dashboard/index'
 
@@ -818,6 +819,12 @@ const AuthenticatedRequestsRequestIdFinalReviewRoute =
     path: '/requests/$requestId/final-review',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedRequestsRequestIdPdfRoute =
+  AuthenticatedRequestsRequestIdPdfRouteImport.update({
+    id: '/requests/$requestId/pdf',
+    path: '/requests/$requestId/pdf',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedRequestsRequestIdReviewRoute =
   AuthenticatedRequestsRequestIdReviewRouteImport.update({
     id: '/requests/$requestId/review',
@@ -949,6 +956,7 @@ export interface FileRoutesByFullPath {
   '/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
   '/requests/$requestId/final-director-approval': typeof AuthenticatedRequestsRequestIdFinalDirectorApprovalRoute
   '/requests/$requestId/final-review': typeof AuthenticatedRequestsRequestIdFinalReviewRoute
+  '/requests/$requestId/pdf': typeof AuthenticatedRequestsRequestIdPdfRoute
   '/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
   '/requests/$requestId/': typeof AuthenticatedRequestsRequestIdIndexRoute
   '/staff/dashboard/': typeof AuthenticatedStaffDashboardIndexRoute
@@ -1070,6 +1078,7 @@ export interface FileRoutesByTo {
   '/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
   '/requests/$requestId/final-director-approval': typeof AuthenticatedRequestsRequestIdFinalDirectorApprovalRoute
   '/requests/$requestId/final-review': typeof AuthenticatedRequestsRequestIdFinalReviewRoute
+  '/requests/$requestId/pdf': typeof AuthenticatedRequestsRequestIdPdfRoute
   '/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
   '/requests/$requestId': typeof AuthenticatedRequestsRequestIdIndexRoute
   '/staff/dashboard': typeof AuthenticatedStaffDashboardIndexRoute
@@ -1194,6 +1203,7 @@ export interface FileRoutesById {
   '/_authenticated/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
   '/_authenticated/requests/$requestId/final-director-approval': typeof AuthenticatedRequestsRequestIdFinalDirectorApprovalRoute
   '/_authenticated/requests/$requestId/final-review': typeof AuthenticatedRequestsRequestIdFinalReviewRoute
+  '/_authenticated/requests/$requestId/pdf': typeof AuthenticatedRequestsRequestIdPdfRoute
   '/_authenticated/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
   '/_authenticated/requests/$requestId/': typeof AuthenticatedRequestsRequestIdIndexRoute
   '/_authenticated/staff/dashboard/': typeof AuthenticatedStaffDashboardIndexRoute
@@ -1318,6 +1328,7 @@ export interface FileRouteTypes {
     | '/requests/$requestId/edit'
     | '/requests/$requestId/final-director-approval'
     | '/requests/$requestId/final-review'
+    | '/requests/$requestId/pdf'
     | '/requests/$requestId/review'
     | '/requests/$requestId/'
     | '/staff/dashboard/'
@@ -1439,6 +1450,7 @@ export interface FileRouteTypes {
     | '/requests/$requestId/edit'
     | '/requests/$requestId/final-director-approval'
     | '/requests/$requestId/final-review'
+    | '/requests/$requestId/pdf'
     | '/requests/$requestId/review'
     | '/requests/$requestId'
     | '/staff/dashboard'
@@ -1562,6 +1574,7 @@ export interface FileRouteTypes {
     | '/_authenticated/requests/$requestId/edit'
     | '/_authenticated/requests/$requestId/final-director-approval'
     | '/_authenticated/requests/$requestId/final-review'
+    | '/_authenticated/requests/$requestId/pdf'
     | '/_authenticated/requests/$requestId/review'
     | '/_authenticated/requests/$requestId/'
     | '/_authenticated/staff/dashboard/'
@@ -2427,6 +2440,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRequestsRequestIdFinalReviewRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/requests/$requestId/pdf': {
+      id: '/_authenticated/requests/$requestId/pdf'
+      path: '/requests/$requestId/pdf'
+      fullPath: '/requests/$requestId/pdf'
+      preLoaderRoute: typeof AuthenticatedRequestsRequestIdPdfRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/requests/$requestId/review': {
       id: '/_authenticated/requests/$requestId/review'
       path: '/requests/$requestId/review'
@@ -2456,6 +2476,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedRequestsRequestIdEditRoute: typeof AuthenticatedRequestsRequestIdEditRoute
   AuthenticatedRequestsRequestIdFinalDirectorApprovalRoute: typeof AuthenticatedRequestsRequestIdFinalDirectorApprovalRoute
   AuthenticatedRequestsRequestIdFinalReviewRoute: typeof AuthenticatedRequestsRequestIdFinalReviewRoute
+  AuthenticatedRequestsRequestIdPdfRoute: typeof AuthenticatedRequestsRequestIdPdfRoute
   AuthenticatedRequestsRequestIdReviewRoute: typeof AuthenticatedRequestsRequestIdReviewRoute
   AuthenticatedRequestsRequestIdIndexRoute: typeof AuthenticatedRequestsRequestIdIndexRoute
   AuthenticatedStaffDashboardIndexRoute: typeof AuthenticatedStaffDashboardIndexRoute
@@ -2479,6 +2500,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedRequestsRequestIdFinalDirectorApprovalRoute,
   AuthenticatedRequestsRequestIdFinalReviewRoute:
     AuthenticatedRequestsRequestIdFinalReviewRoute,
+  AuthenticatedRequestsRequestIdPdfRoute:
+    AuthenticatedRequestsRequestIdPdfRoute,
   AuthenticatedRequestsRequestIdReviewRoute:
     AuthenticatedRequestsRequestIdReviewRoute,
   AuthenticatedRequestsRequestIdIndexRoute:

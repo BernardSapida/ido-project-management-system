@@ -64,8 +64,9 @@ function CsmPage() {
 
 	/* The PDF opens in a NEW TAB: it is a document to keep beside the request
 	   rather than a page to travel to, and a router navigation would lose this one
-	   behind it. Still an `href` - `/requests/$requestId/pdf` is spec 016 and a
-	   typed `to` cannot name a route that is not in the tree yet. */
+	   behind it. A plain URL rather than a typed `to` for that reason and no
+	   other - the route exists now (spec 016), but `router.navigate` has no way to
+	   open one in a second tab. */
 	const openPdf = () => window.open(`/requests/${requestId}/pdf`, "_blank", "noopener,noreferrer");
 
 	return (

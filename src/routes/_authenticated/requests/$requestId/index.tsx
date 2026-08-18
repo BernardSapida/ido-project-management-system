@@ -94,12 +94,11 @@ function RequestDetailPage() {
 
 	/*
 	 * Edit is a typed navigation now that spec 007 has put the route in the tree.
-	 * `/requests/$requestId/pdf` is still spec 016 and still an `href`, which will
-	 * not compile as a `to` until that route exists - convert it when it does.
 	 *
-	 * The PDF opens in a NEW TAB rather than replacing this page: it is a document
-	 * to be read or printed beside the request, and a router navigation would lose
-	 * the request behind it.
+	 * The PDF stays a plain URL, and now that spec 016 has added the route that is
+	 * a deliberate choice rather than a gap: it opens in a NEW TAB, because it is a
+	 * document to be read or printed beside the request, and `router.navigate` has
+	 * no way to open one in a second tab.
 	 */
 	const goToEdit = () => void router.navigate({ params: { requestId }, to: "/requests/$requestId/edit" });
 	const openPdf = () => window.open(`/requests/${requestId}/pdf`, "_blank", "noopener,noreferrer");
