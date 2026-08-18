@@ -123,6 +123,7 @@ import { Route as ApiPusherAuthRouteImport } from './routes/api/pusher/auth'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api.trpc.$'
 import { Route as AuthenticatedRequestsRequestIdIndexRouteImport } from './routes/_authenticated/requests/$requestId/index'
 import { Route as AuthenticatedRequestsRequestIdBudgetReviewRouteImport } from './routes/_authenticated/requests/$requestId/budget-review'
+import { Route as AuthenticatedRequestsRequestIdDirectorReviewRouteImport } from './routes/_authenticated/requests/$requestId/director-review'
 import { Route as AuthenticatedRequestsRequestIdEditRouteImport } from './routes/_authenticated/requests/$requestId/edit'
 import { Route as AuthenticatedRequestsRequestIdReviewRouteImport } from './routes/_authenticated/requests/$requestId/review'
 import { Route as AuthenticatedStaffDashboardIndexRouteImport } from './routes/_authenticated/staff/dashboard/index'
@@ -784,6 +785,12 @@ const AuthenticatedRequestsRequestIdBudgetReviewRoute =
     path: '/requests/$requestId/budget-review',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedRequestsRequestIdDirectorReviewRoute =
+  AuthenticatedRequestsRequestIdDirectorReviewRouteImport.update({
+    id: '/requests/$requestId/director-review',
+    path: '/requests/$requestId/director-review',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedRequestsRequestIdEditRoute =
   AuthenticatedRequestsRequestIdEditRouteImport.update({
     id: '/requests/$requestId/edit',
@@ -916,6 +923,7 @@ export interface FileRoutesByFullPath {
   '/components/': typeof referencesComponentsIndexRoute
   '/requests/': typeof AuthenticatedRequestsIndexRoute
   '/requests/$requestId/budget-review': typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
+  '/requests/$requestId/director-review': typeof AuthenticatedRequestsRequestIdDirectorReviewRoute
   '/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
   '/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
   '/requests/$requestId/': typeof AuthenticatedRequestsRequestIdIndexRoute
@@ -1033,6 +1041,7 @@ export interface FileRoutesByTo {
   '/components': typeof referencesComponentsIndexRoute
   '/requests': typeof AuthenticatedRequestsIndexRoute
   '/requests/$requestId/budget-review': typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
+  '/requests/$requestId/director-review': typeof AuthenticatedRequestsRequestIdDirectorReviewRoute
   '/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
   '/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
   '/requests/$requestId': typeof AuthenticatedRequestsRequestIdIndexRoute
@@ -1153,6 +1162,7 @@ export interface FileRoutesById {
   '/(references)/components/': typeof referencesComponentsIndexRoute
   '/_authenticated/requests/': typeof AuthenticatedRequestsIndexRoute
   '/_authenticated/requests/$requestId/budget-review': typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
+  '/_authenticated/requests/$requestId/director-review': typeof AuthenticatedRequestsRequestIdDirectorReviewRoute
   '/_authenticated/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
   '/_authenticated/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
   '/_authenticated/requests/$requestId/': typeof AuthenticatedRequestsRequestIdIndexRoute
@@ -1273,6 +1283,7 @@ export interface FileRouteTypes {
     | '/components/'
     | '/requests/'
     | '/requests/$requestId/budget-review'
+    | '/requests/$requestId/director-review'
     | '/requests/$requestId/edit'
     | '/requests/$requestId/review'
     | '/requests/$requestId/'
@@ -1390,6 +1401,7 @@ export interface FileRouteTypes {
     | '/components'
     | '/requests'
     | '/requests/$requestId/budget-review'
+    | '/requests/$requestId/director-review'
     | '/requests/$requestId/edit'
     | '/requests/$requestId/review'
     | '/requests/$requestId'
@@ -1509,6 +1521,7 @@ export interface FileRouteTypes {
     | '/(references)/components/'
     | '/_authenticated/requests/'
     | '/_authenticated/requests/$requestId/budget-review'
+    | '/_authenticated/requests/$requestId/director-review'
     | '/_authenticated/requests/$requestId/edit'
     | '/_authenticated/requests/$requestId/review'
     | '/_authenticated/requests/$requestId/'
@@ -2340,6 +2353,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRequestsRequestIdBudgetReviewRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/requests/$requestId/director-review': {
+      id: '/_authenticated/requests/$requestId/director-review'
+      path: '/requests/$requestId/director-review'
+      fullPath: '/requests/$requestId/director-review'
+      preLoaderRoute: typeof AuthenticatedRequestsRequestIdDirectorReviewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/requests/$requestId/edit': {
       id: '/_authenticated/requests/$requestId/edit'
       path: '/requests/$requestId/edit'
@@ -2371,6 +2391,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedRequestsNewRoute: typeof AuthenticatedRequestsNewRoute
   AuthenticatedRequestsIndexRoute: typeof AuthenticatedRequestsIndexRoute
   AuthenticatedRequestsRequestIdBudgetReviewRoute: typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
+  AuthenticatedRequestsRequestIdDirectorReviewRoute: typeof AuthenticatedRequestsRequestIdDirectorReviewRoute
   AuthenticatedRequestsRequestIdEditRoute: typeof AuthenticatedRequestsRequestIdEditRoute
   AuthenticatedRequestsRequestIdReviewRoute: typeof AuthenticatedRequestsRequestIdReviewRoute
   AuthenticatedRequestsRequestIdIndexRoute: typeof AuthenticatedRequestsRequestIdIndexRoute
@@ -2385,6 +2406,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedRequestsIndexRoute: AuthenticatedRequestsIndexRoute,
   AuthenticatedRequestsRequestIdBudgetReviewRoute:
     AuthenticatedRequestsRequestIdBudgetReviewRoute,
+  AuthenticatedRequestsRequestIdDirectorReviewRoute:
+    AuthenticatedRequestsRequestIdDirectorReviewRoute,
   AuthenticatedRequestsRequestIdEditRoute:
     AuthenticatedRequestsRequestIdEditRoute,
   AuthenticatedRequestsRequestIdReviewRoute:

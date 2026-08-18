@@ -224,3 +224,49 @@ export const BUDGET_ACTIONABLE_DIRECTOR_STATUS = "UNDER_BUDGET_OFFICER_REVIEW";
 export function isBudgetActionableStatus(directorReviewStatus?: string | null): boolean {
 	return directorReviewStatus === BUDGET_ACTIONABLE_DIRECTOR_STATUS;
 }
+
+/**
+ * The two `directorReviewStatus` values in which the Campus Director may
+ * APPROVE - and the one in which they may REJECT.
+ *
+ * ## The asymmetry is the rule, not an oversight
+ *
+ * This is the single most fragile rule in the workflow and the spec says so.
+ * Approving accepts `UNDER_BUDGET_OFFICER_REVIEW` as well as
+ * `UNDER_DIRECTOR_REVIEW`, so the director can approve past an open budget
+ * stage and end it without a budget approval - the documented two-scenario
+ * routing, budget-then-director or director alone. Rejecting accepts only
+ * `UNDER_DIRECTOR_REVIEW`, so a request cannot be KILLED at a stage it has not
+ * reached: while the budget officer still holds it, the director has not been
+ * asked the question yet, and a rejection would end a request the desk before
+ * them might still have stopped for a reason of its own.
+ *
+ * A refactor that folds these two into one list, or one predicate with a
+ * parameter defaulted to the wider set, breaks the documented behaviour in the
+ * direction nothing on screen would report. They are two constants on purpose.
+ *
+ * The pair also has to hold with `BUDGET_ACTIONABLE_DIRECTOR_STATUS` above it:
+ * the budget desk acts only at `UNDER_BUDGET_OFFICER_REVIEW`, so once the
+ * director has approved from there, the budget desk's own guard refuses. That
+ * is the intended race, and it is decided by whichever transaction commits
+ * first.
+ */
+export const DIRECTOR_APPROVABLE_STATUSES = ["UNDER_BUDGET_OFFICER_REVIEW", "UNDER_DIRECTOR_REVIEW"] as const;
+
+/** The ONE status a director may reject from. Deliberately narrower than
+ *  `DIRECTOR_APPROVABLE_STATUSES` - see the note there. */
+export const DIRECTOR_REJECTABLE_STATUS = "UNDER_DIRECTOR_REVIEW";
+
+/** `null` - a request that never reached the approvers - is NOT approvable. */
+export function isDirectorApprovableStatus(directorReviewStatus?: string | null): boolean {
+	if (!directorReviewStatus) return false;
+
+	return (DIRECTOR_APPROVABLE_STATUSES as readonly string[]).includes(directorReviewStatus);
+}
+
+/** Narrower than `isDirectorApprovableStatus` on purpose. The page HIDES Reject
+ *  where this is false and Approve is true, because there is nothing the
+ *  director can do to enable it. */
+export function isDirectorRejectableStatus(directorReviewStatus?: string | null): boolean {
+	return directorReviewStatus === DIRECTOR_REJECTABLE_STATUS;
+}

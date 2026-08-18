@@ -75,7 +75,8 @@ function BudgetReviewPage() {
 	 * the Campus Director while they are being asked to approve it. This is the one
 	 * page in the app where that distinction is the whole subject, so
 	 * `directorReviewStatusMap` is what it reads. `getById` sends the column to the
-	 * budget desk alone.
+	 * two approver desks and to nobody else - the director needs it too, to know
+	 * whether they would be approving ahead of this one (spec 012).
 	 */
 	const stage = request.directorReviewStatus ? directorReviewStatusMap[request.directorReviewStatus] : undefined;
 
