@@ -16,19 +16,38 @@ import type * as Prisma from "../internal/prismaNamespace.ts"
  * Model Csm
  * The satisfaction record: created by the final director approval and completed
  * by the requestor. `submittedAt` is null until they fill it in.
+ * 
+ * `rating` and `comment` are the form itself, and both are NULLABLE - `rating`
+ * deliberately so even though the form requires it. The rows created by spec
+ * 014 exist before anybody has been asked anything, and a required column would
+ * break every one of them on migration; a CSM acknowledged under the old
+ * contract simply has no rating. `submittedAt` is the flag that says whether
+ * the form has been answered, never the presence of a rating.
  */
 export type CsmModel = runtime.Types.Result.DefaultSelection<Prisma.$CsmPayload>
 
 export type AggregateCsm = {
   _count: CsmCountAggregateOutputType | null
+  _avg: CsmAvgAggregateOutputType | null
+  _sum: CsmSumAggregateOutputType | null
   _min: CsmMinAggregateOutputType | null
   _max: CsmMaxAggregateOutputType | null
+}
+
+export type CsmAvgAggregateOutputType = {
+  rating: number | null
+}
+
+export type CsmSumAggregateOutputType = {
+  rating: number | null
 }
 
 export type CsmMinAggregateOutputType = {
   id: string | null
   requestId: string | null
   submittedAt: Date | null
+  rating: number | null
+  comment: string | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -37,6 +56,8 @@ export type CsmMaxAggregateOutputType = {
   id: string | null
   requestId: string | null
   submittedAt: Date | null
+  rating: number | null
+  comment: string | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -45,16 +66,28 @@ export type CsmCountAggregateOutputType = {
   id: number
   requestId: number
   submittedAt: number
+  rating: number
+  comment: number
   createdAt: number
   updatedAt: number
   _all: number
 }
 
 
+export type CsmAvgAggregateInputType = {
+  rating?: true
+}
+
+export type CsmSumAggregateInputType = {
+  rating?: true
+}
+
 export type CsmMinAggregateInputType = {
   id?: true
   requestId?: true
   submittedAt?: true
+  rating?: true
+  comment?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -63,6 +96,8 @@ export type CsmMaxAggregateInputType = {
   id?: true
   requestId?: true
   submittedAt?: true
+  rating?: true
+  comment?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -71,6 +106,8 @@ export type CsmCountAggregateInputType = {
   id?: true
   requestId?: true
   submittedAt?: true
+  rating?: true
+  comment?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -114,6 +151,18 @@ export type CsmAggregateArgs<ExtArgs extends runtime.Types.Extensions.InternalAr
   /**
    * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
    * 
+   * Select which fields to average
+  **/
+  _avg?: CsmAvgAggregateInputType
+  /**
+   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+   * 
+   * Select which fields to sum
+  **/
+  _sum?: CsmSumAggregateInputType
+  /**
+   * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+   * 
    * Select which fields to find the minimum value
   **/
   _min?: CsmMinAggregateInputType
@@ -144,6 +193,8 @@ export type CsmGroupByArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs
   take?: number
   skip?: number
   _count?: CsmCountAggregateInputType | true
+  _avg?: CsmAvgAggregateInputType
+  _sum?: CsmSumAggregateInputType
   _min?: CsmMinAggregateInputType
   _max?: CsmMaxAggregateInputType
 }
@@ -152,9 +203,13 @@ export type CsmGroupByOutputType = {
   id: string
   requestId: string
   submittedAt: Date | null
+  rating: number | null
+  comment: string | null
   createdAt: Date
   updatedAt: Date
   _count: CsmCountAggregateOutputType | null
+  _avg: CsmAvgAggregateOutputType | null
+  _sum: CsmSumAggregateOutputType | null
   _min: CsmMinAggregateOutputType | null
   _max: CsmMaxAggregateOutputType | null
 }
@@ -181,6 +236,8 @@ export type CsmWhereInput = {
   id?: Prisma.StringFilter<"Csm"> | string
   requestId?: Prisma.StringFilter<"Csm"> | string
   submittedAt?: Prisma.DateTimeNullableFilter<"Csm"> | Date | string | null
+  rating?: Prisma.IntNullableFilter<"Csm"> | number | null
+  comment?: Prisma.StringNullableFilter<"Csm"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Csm"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Csm"> | Date | string
   request?: Prisma.XOR<Prisma.RequestScalarRelationFilter, Prisma.RequestWhereInput>
@@ -190,6 +247,8 @@ export type CsmOrderByWithRelationInput = {
   id?: Prisma.SortOrder
   requestId?: Prisma.SortOrder
   submittedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  rating?: Prisma.SortOrderInput | Prisma.SortOrder
+  comment?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   request?: Prisma.RequestOrderByWithRelationInput
@@ -202,6 +261,8 @@ export type CsmWhereUniqueInput = Prisma.AtLeast<{
   OR?: Prisma.CsmWhereInput[]
   NOT?: Prisma.CsmWhereInput | Prisma.CsmWhereInput[]
   submittedAt?: Prisma.DateTimeNullableFilter<"Csm"> | Date | string | null
+  rating?: Prisma.IntNullableFilter<"Csm"> | number | null
+  comment?: Prisma.StringNullableFilter<"Csm"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Csm"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Csm"> | Date | string
   request?: Prisma.XOR<Prisma.RequestScalarRelationFilter, Prisma.RequestWhereInput>
@@ -211,11 +272,15 @@ export type CsmOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
   requestId?: Prisma.SortOrder
   submittedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  rating?: Prisma.SortOrderInput | Prisma.SortOrder
+  comment?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.CsmCountOrderByAggregateInput
+  _avg?: Prisma.CsmAvgOrderByAggregateInput
   _max?: Prisma.CsmMaxOrderByAggregateInput
   _min?: Prisma.CsmMinOrderByAggregateInput
+  _sum?: Prisma.CsmSumOrderByAggregateInput
 }
 
 export type CsmScalarWhereWithAggregatesInput = {
@@ -225,6 +290,8 @@ export type CsmScalarWhereWithAggregatesInput = {
   id?: Prisma.StringWithAggregatesFilter<"Csm"> | string
   requestId?: Prisma.StringWithAggregatesFilter<"Csm"> | string
   submittedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Csm"> | Date | string | null
+  rating?: Prisma.IntNullableWithAggregatesFilter<"Csm"> | number | null
+  comment?: Prisma.StringNullableWithAggregatesFilter<"Csm"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Csm"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Csm"> | Date | string
 }
@@ -232,6 +299,8 @@ export type CsmScalarWhereWithAggregatesInput = {
 export type CsmCreateInput = {
   id?: string
   submittedAt?: Date | string | null
+  rating?: number | null
+  comment?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   request: Prisma.RequestCreateNestedOneWithoutCsmInput
@@ -241,6 +310,8 @@ export type CsmUncheckedCreateInput = {
   id?: string
   requestId: string
   submittedAt?: Date | string | null
+  rating?: number | null
+  comment?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -248,6 +319,8 @@ export type CsmUncheckedCreateInput = {
 export type CsmUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   submittedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  rating?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  comment?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   request?: Prisma.RequestUpdateOneRequiredWithoutCsmNestedInput
@@ -257,6 +330,8 @@ export type CsmUncheckedUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   requestId?: Prisma.StringFieldUpdateOperationsInput | string
   submittedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  rating?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  comment?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -265,6 +340,8 @@ export type CsmCreateManyInput = {
   id?: string
   requestId: string
   submittedAt?: Date | string | null
+  rating?: number | null
+  comment?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -272,6 +349,8 @@ export type CsmCreateManyInput = {
 export type CsmUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   submittedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  rating?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  comment?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -280,6 +359,8 @@ export type CsmUncheckedUpdateManyInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   requestId?: Prisma.StringFieldUpdateOperationsInput | string
   submittedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  rating?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  comment?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -288,14 +369,22 @@ export type CsmCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   requestId?: Prisma.SortOrder
   submittedAt?: Prisma.SortOrder
+  rating?: Prisma.SortOrder
+  comment?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+}
+
+export type CsmAvgOrderByAggregateInput = {
+  rating?: Prisma.SortOrder
 }
 
 export type CsmMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder
   requestId?: Prisma.SortOrder
   submittedAt?: Prisma.SortOrder
+  rating?: Prisma.SortOrder
+  comment?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -304,13 +393,27 @@ export type CsmMinOrderByAggregateInput = {
   id?: Prisma.SortOrder
   requestId?: Prisma.SortOrder
   submittedAt?: Prisma.SortOrder
+  rating?: Prisma.SortOrder
+  comment?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+}
+
+export type CsmSumOrderByAggregateInput = {
+  rating?: Prisma.SortOrder
 }
 
 export type CsmNullableScalarRelationFilter = {
   is?: Prisma.CsmWhereInput | null
   isNot?: Prisma.CsmWhereInput | null
+}
+
+export type NullableIntFieldUpdateOperationsInput = {
+  set?: number | null
+  increment?: number
+  decrement?: number
+  multiply?: number
+  divide?: number
 }
 
 export type CsmCreateNestedOneWithoutRequestInput = {
@@ -348,6 +451,8 @@ export type CsmUncheckedUpdateOneWithoutRequestNestedInput = {
 export type CsmCreateWithoutRequestInput = {
   id?: string
   submittedAt?: Date | string | null
+  rating?: number | null
+  comment?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -355,6 +460,8 @@ export type CsmCreateWithoutRequestInput = {
 export type CsmUncheckedCreateWithoutRequestInput = {
   id?: string
   submittedAt?: Date | string | null
+  rating?: number | null
+  comment?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -378,6 +485,8 @@ export type CsmUpdateToOneWithWhereWithoutRequestInput = {
 export type CsmUpdateWithoutRequestInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   submittedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  rating?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  comment?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -385,6 +494,8 @@ export type CsmUpdateWithoutRequestInput = {
 export type CsmUncheckedUpdateWithoutRequestInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   submittedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  rating?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  comment?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -395,6 +506,8 @@ export type CsmSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = ru
   id?: boolean
   requestId?: boolean
   submittedAt?: boolean
+  rating?: boolean
+  comment?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   request?: boolean | Prisma.RequestDefaultArgs<ExtArgs>
@@ -404,6 +517,8 @@ export type CsmSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extension
   id?: boolean
   requestId?: boolean
   submittedAt?: boolean
+  rating?: boolean
+  comment?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   request?: boolean | Prisma.RequestDefaultArgs<ExtArgs>
@@ -413,6 +528,8 @@ export type CsmSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extension
   id?: boolean
   requestId?: boolean
   submittedAt?: boolean
+  rating?: boolean
+  comment?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   request?: boolean | Prisma.RequestDefaultArgs<ExtArgs>
@@ -422,11 +539,13 @@ export type CsmSelectScalar = {
   id?: boolean
   requestId?: boolean
   submittedAt?: boolean
+  rating?: boolean
+  comment?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type CsmOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "requestId" | "submittedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["csm"]>
+export type CsmOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "requestId" | "submittedAt" | "rating" | "comment" | "createdAt" | "updatedAt", ExtArgs["result"]["csm"]>
 export type CsmInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   request?: boolean | Prisma.RequestDefaultArgs<ExtArgs>
 }
@@ -446,6 +565,8 @@ export type $CsmPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
     id: string
     requestId: string
     submittedAt: Date | null
+    rating: number | null
+    comment: string | null
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["csm"]>
@@ -875,6 +996,8 @@ export interface CsmFieldRefs {
   readonly id: Prisma.FieldRef<"Csm", 'String'>
   readonly requestId: Prisma.FieldRef<"Csm", 'String'>
   readonly submittedAt: Prisma.FieldRef<"Csm", 'DateTime'>
+  readonly rating: Prisma.FieldRef<"Csm", 'Int'>
+  readonly comment: Prisma.FieldRef<"Csm", 'String'>
   readonly createdAt: Prisma.FieldRef<"Csm", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Csm", 'DateTime'>
 }

@@ -60,6 +60,13 @@ export type Verification = Prisma.VerificationModel
  * Model Csm
  * The satisfaction record: created by the final director approval and completed
  * by the requestor. `submittedAt` is null until they fill it in.
+ * 
+ * `rating` and `comment` are the form itself, and both are NULLABLE - `rating`
+ * deliberately so even though the form requires it. The rows created by spec
+ * 014 exist before anybody has been asked anything, and a required column would
+ * break every one of them on migration; a CSM acknowledged under the old
+ * contract simply has no rating. `submittedAt` is the flag that says whether
+ * the form has been answered, never the presence of a rating.
  */
 export type Csm = Prisma.CsmModel
 /**

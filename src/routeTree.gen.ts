@@ -123,6 +123,7 @@ import { Route as ApiPusherAuthRouteImport } from './routes/api/pusher/auth'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api.trpc.$'
 import { Route as AuthenticatedRequestsRequestIdIndexRouteImport } from './routes/_authenticated/requests/$requestId/index'
 import { Route as AuthenticatedRequestsRequestIdBudgetReviewRouteImport } from './routes/_authenticated/requests/$requestId/budget-review'
+import { Route as AuthenticatedRequestsRequestIdCsmRouteImport } from './routes/_authenticated/requests/$requestId/csm'
 import { Route as AuthenticatedRequestsRequestIdDirectorReviewRouteImport } from './routes/_authenticated/requests/$requestId/director-review'
 import { Route as AuthenticatedRequestsRequestIdEditRouteImport } from './routes/_authenticated/requests/$requestId/edit'
 import { Route as AuthenticatedRequestsRequestIdFinalDirectorApprovalRouteImport } from './routes/_authenticated/requests/$requestId/final-director-approval'
@@ -787,6 +788,12 @@ const AuthenticatedRequestsRequestIdBudgetReviewRoute =
     path: '/requests/$requestId/budget-review',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedRequestsRequestIdCsmRoute =
+  AuthenticatedRequestsRequestIdCsmRouteImport.update({
+    id: '/requests/$requestId/csm',
+    path: '/requests/$requestId/csm',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedRequestsRequestIdDirectorReviewRoute =
   AuthenticatedRequestsRequestIdDirectorReviewRouteImport.update({
     id: '/requests/$requestId/director-review',
@@ -937,6 +944,7 @@ export interface FileRoutesByFullPath {
   '/components/': typeof referencesComponentsIndexRoute
   '/requests/': typeof AuthenticatedRequestsIndexRoute
   '/requests/$requestId/budget-review': typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
+  '/requests/$requestId/csm': typeof AuthenticatedRequestsRequestIdCsmRoute
   '/requests/$requestId/director-review': typeof AuthenticatedRequestsRequestIdDirectorReviewRoute
   '/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
   '/requests/$requestId/final-director-approval': typeof AuthenticatedRequestsRequestIdFinalDirectorApprovalRoute
@@ -1057,6 +1065,7 @@ export interface FileRoutesByTo {
   '/components': typeof referencesComponentsIndexRoute
   '/requests': typeof AuthenticatedRequestsIndexRoute
   '/requests/$requestId/budget-review': typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
+  '/requests/$requestId/csm': typeof AuthenticatedRequestsRequestIdCsmRoute
   '/requests/$requestId/director-review': typeof AuthenticatedRequestsRequestIdDirectorReviewRoute
   '/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
   '/requests/$requestId/final-director-approval': typeof AuthenticatedRequestsRequestIdFinalDirectorApprovalRoute
@@ -1180,6 +1189,7 @@ export interface FileRoutesById {
   '/(references)/components/': typeof referencesComponentsIndexRoute
   '/_authenticated/requests/': typeof AuthenticatedRequestsIndexRoute
   '/_authenticated/requests/$requestId/budget-review': typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
+  '/_authenticated/requests/$requestId/csm': typeof AuthenticatedRequestsRequestIdCsmRoute
   '/_authenticated/requests/$requestId/director-review': typeof AuthenticatedRequestsRequestIdDirectorReviewRoute
   '/_authenticated/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
   '/_authenticated/requests/$requestId/final-director-approval': typeof AuthenticatedRequestsRequestIdFinalDirectorApprovalRoute
@@ -1303,6 +1313,7 @@ export interface FileRouteTypes {
     | '/components/'
     | '/requests/'
     | '/requests/$requestId/budget-review'
+    | '/requests/$requestId/csm'
     | '/requests/$requestId/director-review'
     | '/requests/$requestId/edit'
     | '/requests/$requestId/final-director-approval'
@@ -1423,6 +1434,7 @@ export interface FileRouteTypes {
     | '/components'
     | '/requests'
     | '/requests/$requestId/budget-review'
+    | '/requests/$requestId/csm'
     | '/requests/$requestId/director-review'
     | '/requests/$requestId/edit'
     | '/requests/$requestId/final-director-approval'
@@ -1545,6 +1557,7 @@ export interface FileRouteTypes {
     | '/(references)/components/'
     | '/_authenticated/requests/'
     | '/_authenticated/requests/$requestId/budget-review'
+    | '/_authenticated/requests/$requestId/csm'
     | '/_authenticated/requests/$requestId/director-review'
     | '/_authenticated/requests/$requestId/edit'
     | '/_authenticated/requests/$requestId/final-director-approval'
@@ -2379,6 +2392,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRequestsRequestIdBudgetReviewRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/requests/$requestId/csm': {
+      id: '/_authenticated/requests/$requestId/csm'
+      path: '/requests/$requestId/csm'
+      fullPath: '/requests/$requestId/csm'
+      preLoaderRoute: typeof AuthenticatedRequestsRequestIdCsmRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/requests/$requestId/director-review': {
       id: '/_authenticated/requests/$requestId/director-review'
       path: '/requests/$requestId/director-review'
@@ -2431,6 +2451,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedRequestsNewRoute: typeof AuthenticatedRequestsNewRoute
   AuthenticatedRequestsIndexRoute: typeof AuthenticatedRequestsIndexRoute
   AuthenticatedRequestsRequestIdBudgetReviewRoute: typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
+  AuthenticatedRequestsRequestIdCsmRoute: typeof AuthenticatedRequestsRequestIdCsmRoute
   AuthenticatedRequestsRequestIdDirectorReviewRoute: typeof AuthenticatedRequestsRequestIdDirectorReviewRoute
   AuthenticatedRequestsRequestIdEditRoute: typeof AuthenticatedRequestsRequestIdEditRoute
   AuthenticatedRequestsRequestIdFinalDirectorApprovalRoute: typeof AuthenticatedRequestsRequestIdFinalDirectorApprovalRoute
@@ -2448,6 +2469,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedRequestsIndexRoute: AuthenticatedRequestsIndexRoute,
   AuthenticatedRequestsRequestIdBudgetReviewRoute:
     AuthenticatedRequestsRequestIdBudgetReviewRoute,
+  AuthenticatedRequestsRequestIdCsmRoute:
+    AuthenticatedRequestsRequestIdCsmRoute,
   AuthenticatedRequestsRequestIdDirectorReviewRoute:
     AuthenticatedRequestsRequestIdDirectorReviewRoute,
   AuthenticatedRequestsRequestIdEditRoute:

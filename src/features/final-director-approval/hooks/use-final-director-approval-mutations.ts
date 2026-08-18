@@ -63,11 +63,15 @@ export function useFinalDirectorApprovalMutations(requestId: string) {
 	 * move `masterStatus` to a terminal value, so the requestor's list and
 	 * counters are stale the moment either commits.
 	 *
-	 * The spec also names `csm.getMyCsm`, `request.getForPdf` and
-	 * `request.getSignaturesAsBase64`. None of those procedures exist yet - they
-	 * ship with specs 015 and 016 - and a `queryKey()` for a procedure the router
-	 * does not define will not compile. Add them here when those specs land;
-	 * nothing else in this hook has to change.
+	 * `csm.getMyCsm` joined them when spec 015 landed: the approval is what CREATES
+	 * the satisfaction record, so a requestor whose CSM page was open on another
+	 * tab is holding a cached `null` - which that page reads as "there is nothing
+	 * to answer here" and turns into a redirect.
+	 *
+	 * The spec also names `request.getForPdf` and `request.getSignaturesAsBase64`.
+	 * Neither procedure exists yet - they ship with spec 016 - and a `queryKey()`
+	 * for a procedure the router does not define will not compile. Add them here
+	 * when that spec lands; nothing else in this hook has to change.
 	 *
 	 * AWAITED, and every caller awaits it in turn. Resolving before the refetch
 	 * lands would let the dialog close and the page re-render from the pre-action
@@ -80,6 +84,7 @@ export function useFinalDirectorApprovalMutations(requestId: string) {
 			queryClient.invalidateQueries({ queryKey: trpc.request.staffSummary.queryKey() }),
 			queryClient.invalidateQueries({ queryKey: trpc.request.myList.queryKey() }),
 			queryClient.invalidateQueries({ queryKey: trpc.request.mySummary.queryKey() }),
+			queryClient.invalidateQueries({ queryKey: trpc.csm.getMyCsm.queryKey() }),
 		]);
 	}, [queryClient, trpc]);
 

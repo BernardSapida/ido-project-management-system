@@ -1,5 +1,5 @@
 import { AppAlert } from "@bernardsapida/web-ui";
-import { useRouter } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { ClipboardCheck } from "lucide-react";
 
 interface CsmPromptBannerProps {
@@ -23,7 +23,7 @@ interface CsmPromptBannerProps {
  * screen that is meant to have one.
  */
 export function CsmPromptBanner({ completionStatus, requestId }: CsmPromptBannerProps) {
-	const router = useRouter();
+	const navigate = useNavigate();
 
 	if (completionStatus !== "CSM_PENDING") return null;
 
@@ -32,12 +32,13 @@ export function CsmPromptBanner({ completionStatus, requestId }: CsmPromptBanner
 			action={{
 				label: "Fill out the form",
 				/*
-				 * `href`, not `to`. `/requests/$requestId/csm` is spec 015 and is not in
-				 * the route tree yet, so a typed navigation to it would not compile
-				 * today. Convert this when that spec lands; nothing fails if it is left,
-				 * which is the reason it is written down here.
+				 * A typed navigation now that spec 015 has put the route in the tree. It
+				 * was an `href` until then, because a `to` cannot name a route that does
+				 * not exist yet. The destination checks ownership itself and redirects
+				 * back here if the request has no satisfaction record - so this banner
+				 * being hidden for a non-owner is a display rule, never the gate.
 				 */
-				onPress: () => void router.navigate({ href: `/requests/${requestId}/csm` }),
+				onPress: () => void navigate({ params: { requestId }, to: "/requests/$requestId/csm" }),
 			}}
 			data-cy="csm-prompt"
 			description="Tell us how it went. The satisfaction form is the last step and it takes a minute."

@@ -129,6 +129,8 @@ export const CsmScalarFieldEnum = {
   id: 'id',
   requestId: 'requestId',
   submittedAt: 'submittedAt',
+  rating: 'rating',
+  comment: 'comment',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
