@@ -1,447 +1,738 @@
-import type { SiteHeaderAction, SiteNavItem } from "@bernardsapida/web-ui";
-import { AppButton, AppCard, AppChip, AppSiteHeader } from "@bernardsapida/web-ui";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, BookOpen, CheckCircle2, Code2, Database, Github, Layout, Shield, Zap } from "lucide-react";
-import { APP_NAME, seo } from "@/config/seo.config";
+import type { SiteFooterGroup, SiteHeaderAction, SiteNavItem } from "@bernardsapida/web-ui";
+import { AppButton, AppCard, AppChip, AppSiteFooter, AppSiteHeader } from "@bernardsapida/web-ui";
+import { createFileRoute } from "@tanstack/react-router";
+import {
+	ArrowRight,
+	Building2,
+	ClipboardCheck,
+	ClipboardList,
+	FileText,
+	Gauge,
+	HelpCircle,
+	Mail,
+	MapPin,
+	Phone,
+	Star,
+	Target,
+	Workflow,
+} from "lucide-react";
+import { seo } from "@/config/seo.config";
 
 /**
- * The public bar's destinations.
+ * The public face of the Infrastructure Development Office.
  *
- * `Features` is a section of THIS page, so it travels as a router hash rather
- * than a bare `#features` anchor: the same item then works from any other page
- * the header ends up on, and it does not light itself merely because you are on
- * the page it lives in.
+ * The layout is the architect's, carried over from IRMS: a brand utility band,
+ * a sticky bar, a split hero over a building render, then the office told in
+ * five sections - about, objectives, the ISO forms, the two procedures, and the
+ * satisfaction survey that closes every request.
+ *
+ * Everything above the markup is DATA. Copy, form codes and menu entries change
+ * there without anybody opening the JSX, which is what keeps a page whose whole
+ * content answers to an ISO document register maintainable.
  */
-const SITE_NAV: SiteNavItem[] = [
-	{ hash: "features", href: "/", icon: Zap, label: "Features" },
-	{ href: "https://github.com", icon: Github, isExternal: true, label: "GitHub" },
-	{ href: "https://docs.heroui.com", icon: BookOpen, isExternal: true, label: "Docs" },
+
+// ---------------------------------------------------------------------------
+// Content
+// ---------------------------------------------------------------------------
+
+const CONTACT_EMAIL = "tupc_ido@gsfe.tupcavite.edu.ph";
+const CAMPUS = "TUP Cavite Campus";
+const OFFICE = "Infrastructure Development Office";
+const UNIVERSITY = "Technological University of the Philippines";
+
+/**
+ * Drop the real renders into `/public/images/` under these names and they
+ * replace the brand-gradient placeholders automatically - see the README there.
+ */
+const HERO_IMAGE = "/images/ido-hero.jpg";
+
+const GALLERY = [
+	{ label: "Administration Building", src: "/images/ido-building-1.jpg" },
+	{ label: "Academic Complex", src: "/images/ido-building-2.jpg" },
+	{ label: "Campus Gateway", src: "/images/ido-building-3.jpg" },
 ];
 
-/** Log in, then the one thing the page exists to drive. */
-const SITE_ACTIONS: SiteHeaderAction[] = [
-	{ label: "Log in", to: "/sign-in", variant: "ghost" },
-	{ label: "Get started", to: "/sign-up", variant: "primary" },
+const OBJECTIVES = [
+	{
+		desc: "Provide an integrated online engineering management system built on a modern data-management web platform.",
+		icon: Building2,
+		title: "Integrated Online System",
+	},
+	{
+		desc: "Give stakeholders a simple interface to reach the office for engineering requests across all enrolled ISO forms.",
+		icon: Target,
+		title: "Easy Stakeholder Access",
+	},
+	{
+		desc: "Streamline the monitoring and tracking of every engineering request from submission to release.",
+		icon: Gauge,
+		title: "Monitoring & Tracking",
+	},
+	{
+		desc: "Incorporate a Customer Satisfaction Survey so the office continuously improves documents and management quality.",
+		icon: Star,
+		title: "Feedback & Quality",
+	},
 ];
+
+const FORMS = [
+	{
+		anchor: "form-ido-01",
+		code: "TUPC-F-OCD-IDO-01",
+		desc: "Request the design of a new building or facility from the Infrastructure Development Office.",
+		title: "Building Design Request Form",
+	},
+	{
+		anchor: "form-ido-02",
+		code: "TUPC-F-OCD-IDO-02",
+		desc: "Request revisions or amendments to an existing approved building design.",
+		title: "Design Revision Form",
+	},
+	{
+		anchor: "form-ido-05",
+		code: "TUPC-F-OCD-IDO-05",
+		desc: "Track the official release and turnover of engineering documents and drawings.",
+		title: "Document Release Logsheet",
+	},
+	{
+		anchor: "form-qmr-09",
+		code: "TUPC-F-OQA-QMR-09",
+		desc: "Rate the quality of service and documents delivered by the office.",
+		title: "Customer Satisfaction Measurement",
+	},
+];
+
+const PROCEDURES = [
+	{
+		desc: "From initial request and site assessment through design, review, and final approval of new infrastructure.",
+		anchor: "procedure-01",
+		icon: Workflow,
+		step: "Procedure 01",
+		title: "Building Design & Development Procedure",
+	},
+	{
+		desc: "The controlled workflow for evaluating, approving, and documenting changes to an existing design.",
+		anchor: "procedure-02",
+		icon: ClipboardCheck,
+		step: "Procedure 02",
+		title: "Design Revision Procedure",
+	},
+];
+
+// ---------------------------------------------------------------------------
+// The bar, and the band that closes the page
+// ---------------------------------------------------------------------------
+
+/**
+ * Every destination here is a SECTION of this page, and the fragment rides in
+ * `href` rather than in the `hash` prop the type offers.
+ *
+ * That is a WORKAROUND, not a preference. `AppSiteHeader` and `AppSiteFooter`
+ * key every link they render by `link.href` alone - the bar's panels, the mobile
+ * sheet and the footer columns all do it - so two entries pointing at the same
+ * route with different hashes are two children under one React key, which is a
+ * console warning today and undefined ordering tomorrow. A landing page whose
+ * whole navigation is sections of itself trips that on the first menu. Putting
+ * the fragment in the path keeps the keys distinct and the router still resolves
+ * it, at the cost of the `includeHash` active-state matching the prop would have
+ * given us. The package should key on href + hash; when it does, these become
+ * `hash` again.
+ *
+ * The two menus mirror the office's own document register - somebody looking for
+ * "the revision form" is looking for a form, not for a section of a home page,
+ * which is why each form and each procedure is its own anchor further down.
+ * `description` carries the ISO control number, which is how these are actually
+ * referred to on paper.
+ */
+const SITE_NAV: SiteNavItem[] = [
+	{
+		groups: [
+			{
+				links: [
+					{ href: "/#home", icon: Building2, label: "Overview" },
+					{ href: "/#about", icon: FileText, label: "About the Office" },
+					{ href: "/#objectives", icon: Target, label: "Objectives" },
+				],
+			},
+		],
+		label: "Home",
+	},
+	{
+		groups: [
+			{
+				links: [
+					{
+						description: "TUPC-F-OCD-IDO-01",
+						href: "/#form-ido-01",
+						icon: FileText,
+						label: "Building Design Request Form",
+					},
+					{
+						description: "TUPC-F-OCD-IDO-02",
+						href: "/#form-ido-02",
+						icon: ClipboardList,
+						label: "Design Revision Form",
+					},
+					{
+						description: "TUPC-F-OCD-IDO-05",
+						href: "/#form-ido-05",
+						icon: ClipboardCheck,
+						label: "Document Release Logsheet",
+					},
+					{
+						description: "TUPC-F-OQA-QMR-09",
+						href: "/#csm",
+						icon: Star,
+						label: "Customer Satisfaction Measurement",
+					},
+				],
+			},
+		],
+		label: "Forms",
+	},
+	{
+		groups: [
+			{
+				links: [
+					{ href: "/#procedure-01", icon: Workflow, label: "Building Design & Development" },
+					{ href: "/#procedure-02", icon: ClipboardCheck, label: "Design Revision" },
+				],
+			},
+		],
+		label: "Procedure",
+	},
+	{ href: "/#csm", icon: Star, label: "CSM" },
+	{ href: "/#help", icon: HelpCircle, label: "Help" },
+];
+
+/** Sign in, then the one thing the page exists to drive. */
+const SITE_ACTIONS: SiteHeaderAction[] = [
+	{ label: "Sign in", to: "/sign-in", variant: "ghost" },
+	{ label: "Submit a request", to: "/sign-up", variant: "primary" },
+];
+
+const FOOTER_GROUPS: SiteFooterGroup[] = [
+	{
+		heading: "The Office",
+		links: [
+			{ href: "/#about", label: "About the Office" },
+			{ href: "/#objectives", label: "Objectives" },
+			{ href: "/#help", label: "Help & Contact" },
+		],
+	},
+	{
+		heading: "Forms",
+		links: [
+			{ href: "/#form-ido-01", label: "Building Design Request" },
+			{ href: "/#form-ido-02", label: "Design Revision" },
+			{ href: "/#form-ido-05", label: "Document Release Logsheet" },
+			{ href: "/#csm", label: "Customer Satisfaction" },
+		],
+	},
+	{
+		heading: "Procedure",
+		links: [
+			{ href: "/#procedure-01", label: "Design & Development" },
+			{ href: "/#procedure-02", label: "Design Revision" },
+		],
+	},
+];
+
+/**
+ * The brand overlay every image panel wears, so a render that has not been
+ * supplied yet degrades to an intentional plate rather than to a broken image.
+ *
+ * The stops are palette TOKENS, not the literal maroon this design arrived
+ * with. `--brand-800` and `--brand-surface-foreground` are the two darkest ends
+ * of the ramp and neither is re-lit between themes, so the white copy on the
+ * panel holds its contrast in light and dark alike - which a hard-coded `rgba()`
+ * pair cannot promise once the palette moves.
+ */
+function imagePanelStyle(src: string): React.CSSProperties {
+	return {
+		backgroundImage: [
+			"linear-gradient(135deg,",
+			"color-mix(in oklab, var(--brand-800) 88%, transparent) 0%,",
+			"color-mix(in oklab, var(--brand-surface-foreground) 80%, transparent) 100%),",
+			`url("${src}")`,
+		].join(" "),
+		backgroundPosition: "center",
+		backgroundSize: "cover",
+	};
+}
 
 export const Route = createFileRoute("/")({
 	head: () => ({
 		meta: [
 			{ title: seo.title("Home") },
-			{ name: "description", content: seo.description },
-			{ property: "og:title", content: seo.title("Home") },
-			{ property: "og:description", content: seo.description },
-			{ property: "og:image", content: `${seo.url}${seo.ogImage}` },
-			{ property: "og:url", content: seo.url },
-			{ name: "twitter:card", content: seo.twitter.card },
-			{ name: "twitter:title", content: seo.title("Home") },
-			{ name: "twitter:description", content: seo.description },
+			{
+				content: `${OFFICE} of the ${UNIVERSITY} - online engineering request, tracking and document management.`,
+				name: "description",
+			},
+			{ content: seo.title("Home"), property: "og:title" },
+			{ content: seo.description, property: "og:description" },
+			{ content: `${seo.url}${seo.ogImage}`, property: "og:image" },
+			{ content: seo.url, property: "og:url" },
+			{ content: seo.twitter.card, name: "twitter:card" },
+			{ content: seo.title("Home"), name: "twitter:title" },
+			{ content: seo.description, name: "twitter:description" },
 		],
-		links: [{ rel: "canonical", href: seo.url }],
+		links: [{ href: seo.url, rel: "canonical" }],
 	}),
 	component: HomePage,
 });
 
+/** Eyebrow, heading and lead - the three lines that open every section below. */
+function SectionHeading({ desc, eyebrow, title }: { desc?: string; eyebrow: string; title: string }) {
+	return (
+		<div className="mx-auto mb-14 max-w-2xl text-center">
+			<p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-app-brand">{eyebrow}</p>
+			<h2 className="font-serif text-3xl font-bold leading-tight text-text-primary md:text-4xl">{title}</h2>
+			{desc ? <p className="mt-4 text-base leading-relaxed text-text-secondary">{desc}</p> : null}
+		</div>
+	);
+}
+
 function HomePage() {
 	return (
-		<div className="min-h-screen flex flex-col bg-app-base text-text-primary">
+		<div className="flex min-h-screen flex-col bg-app-base text-text-primary">
 			{/*
-			 * `AppSiteHeader`, not a bar of its own. This page hand-rolled the same
-			 * shape for a long time and it had drifted from the component in every
-			 * way that matters: the brand was a `<div>` with `cursor-pointer` rather
-			 * than a link home, the destinations were `hidden md:flex` with no sheet
-			 * to move into - so a phone had a header with no nav in it at all - and
-			 * nothing carried `aria-current`. The floating variant IS this bar: fixed
-			 * island, `max-w-6xl`, rounded, and the shadow deepening on scroll.
+			 * The utility band: where the office is and how to reach it, above
+			 * everything else because it answers the question most first-time visitors
+			 * arrive with.
 			 *
-			 * No `activeHref`: every item here is either an anchor in this page or a
-			 * link off the site, so there is no destination for the bar to light. The
-			 * anchor lights itself through the router once the hash matches.
+			 * `brand-surface-inverse`, not `bg-app-brand` under a white text class.
+			 * `--brand-primary` is the accent as INK and inverts between themes, so a
+			 * band pinned to it goes pale in dark while the copy on it stays white. The
+			 * inverted pair is the one already solved for a dark ground, and it sets
+			 * its own foreground.
+			 */}
+			<div className="brand-surface-inverse hidden md:block">
+				<div className="container-page flex h-9 items-center justify-between text-xs">
+					<span className="flex items-center gap-2 font-medium">
+						<MapPin className="h-3.5 w-3.5" />
+						{CAMPUS} · {OFFICE}
+					</span>
+					<a
+						className="flex items-center gap-2 font-medium hover:underline"
+						href={`mailto:${CONTACT_EMAIL}`}
+					>
+						<Mail className="h-3.5 w-3.5" />
+						{CONTACT_EMAIL}
+					</a>
+				</div>
+			</div>
+
+			{/*
+			 * `AppSiteHeader` in its flush variant, not a bar of its own. Flush is
+			 * STICKY and in the flow, which is what lets the utility band above scroll
+			 * away while the bar stays - the floating island would sit over both. The
+			 * dropdowns, the mobile sheet and `aria-current` come with it; the
+			 * hand-rolled version this design shipped with had hover-only menus and no
+			 * sheet, so a phone got a header with no navigation in it at all.
+			 *
+			 * No `activeHref`: every destination is a section of this page, and the
+			 * ROUTER lights those from the hash. A pathname alone would light all seven
+			 * of them at once.
 			 */}
 			<AppSiteHeader
 				actions={SITE_ACTIONS}
 				data-cy="landing-header"
+				homeHref="/"
 				items={SITE_NAV}
-				variant="floating"
+				variant="flush"
 			/>
 
 			<main className="flex-1">
-				{/* Hero Section */}
-				<section className="relative pt-48 pb-32 overflow-hidden">
-					<div className="container-page relative z-10 flex flex-col items-center text-center">
-						<div className="rise-in [animation-delay:100ms]">
+				{/* Hero */}
+				<section
+					className="relative scroll-mt-24 overflow-hidden py-16 md:py-24"
+					id="home"
+				>
+					<div className="container-page grid items-center gap-12 lg:grid-cols-2">
+						<div className="rise-in max-w-xl">
 							<AppChip
-								className="mb-8 h-8 border-app-brand/20 bg-app-brand/10 px-4 py-1 font-bold text-app-brand"
-								icon={Zap}
-								label="VERSION 1.0 NOW LIVE"
+								className="mb-6"
+								icon={ClipboardCheck}
+								label="ISO-aligned engineering requests"
+								tone="accent"
 							/>
-						</div>
-
-						<h1 className="rise-in text-5xl md:text-7xl lg:text-8xl mb-8 leading-[1.05] tracking-tighter max-w-5xl font-serif">
-							Build <span className="text-app-brand inline-block transform -rotate-1 italic">Premium</span> Fullstack
-							Apps Faster.
-						</h1>
-
-						<p className="rise-in [animation-delay:200ms] text-lg md:text-xl text-text-secondary leading-relaxed max-w-2xl mb-12">
-							The unified monolith template for TanStack Start, HeroUI, and Better Auth. Stop wasting time on
-							boilerplate and start building your actual product.
-						</p>
-
-						<div className="rise-in [animation-delay:300ms] flex flex-col sm:flex-row items-center justify-center gap-4 px-4 w-full">
-							<Link
-								className="w-full sm:w-auto"
-								to="/sign-up"
-							>
+							<h1 className="mb-6 font-serif text-4xl font-bold leading-[1.1] tracking-tight text-text-primary md:text-6xl">
+								Engineering requests, <span className="italic text-app-brand">simplified</span> for the whole
+								university.
+							</h1>
+							<p className="mb-9 text-lg leading-relaxed text-text-secondary">
+								The {OFFICE} provides an integrated online platform for stakeholders to submit, track and manage
+								building design and engineering requests — from first form to final release.
+							</p>
+							<div className="flex flex-col gap-3 sm:flex-row">
+								{/*
+								 * `to`, not a Link wrapped around a button. Wrapping nests one
+								 * interactive element inside another: two tab stops for one
+								 * target, and a name a screen reader reads twice.
+								 */}
 								<AppButton
-									className="gradient-brand w-full sm:w-64 h-16 shadow-2xl shadow-app-brand/30 text-xl font-bold group rounded-2xl"
+									className="h-14 px-8 text-lg font-semibold"
+									icon={ArrowRight}
+									iconPosition="end"
 									size="lg"
+									to="/sign-up"
+									variant="primary"
 								>
-									Start Building Now
-									<ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
+									Submit a request
 								</AppButton>
-							</Link>
-							<a
-								className="w-full sm:w-auto"
-								href="https://github.com"
-								rel="noreferrer"
-								target="_blank"
-							>
 								<AppButton
-									className="w-full sm:w-48 h-16 border-text-primary/10 hover:border-text-primary/20 hover:bg-white text-text-primary font-bold text-lg rounded-2xl"
+									className="h-14 px-8 text-lg font-semibold"
 									size="lg"
+									to="/#procedure"
 									variant="outline"
 								>
-									<Github className="mr-2 h-5 w-5" />
-									GitHub
+									View procedures
 								</AppButton>
-							</a>
+							</div>
+
+							<div className="mt-10 flex flex-wrap gap-x-10 gap-y-4">
+								{[
+									{ label: "ISO Forms", value: "4" },
+									{ label: "Online Tracking", value: "100%" },
+									{ label: "Unified Platform", value: "1" },
+								].map((stat) => (
+									<div key={stat.label}>
+										<p className="font-serif text-3xl font-bold text-app-brand">{stat.value}</p>
+										<p className="text-sm font-medium text-text-secondary">{stat.label}</p>
+									</div>
+								))}
+							</div>
 						</div>
 
-						{/* Social Proof / Tech Stack Bar */}
-						<div className="rise-in [animation-delay:400ms] mt-24 pt-12 border-t border-text-primary/5 w-full">
-							<p className="text-xs uppercase tracking-[0.2em] font-bold text-text-secondary/50 mb-10">
-								THE MODERN MONOLITH STACK
-							</p>
-							<div className="flex flex-wrap justify-center items-center gap-8 md:gap-16 grayscale opacity-40 hover:grayscale-0 hover:opacity-100 transition-all duration-500">
-								<div className="flex items-center gap-2 group cursor-default">
-									<Layout className="h-6 w-6 text-app-brand transition-colors group-hover:text-app-brand" />
-									<span className="font-bold text-lg">TanStack Start</span>
-								</div>
-								<div className="flex items-center gap-2 group cursor-default">
-									<Shield className="h-6 w-6 text-app-brand transition-colors group-hover:text-app-brand" />
-									<span className="font-bold text-lg">Better Auth</span>
-								</div>
-								<div className="flex items-center gap-2 group cursor-default">
-									<Zap className="h-6 w-6 text-app-brand transition-colors group-hover:text-app-brand" />
-									<span className="font-bold text-lg">HeroUI v3</span>
-								</div>
-								<div className="flex items-center gap-2 group cursor-default">
-									<Database className="h-6 w-6 text-app-brand transition-colors group-hover:text-app-brand" />
-									<span className="font-bold text-lg">Prisma</span>
-								</div>
-								<div className="flex items-center gap-2 group cursor-default">
-									<Code2 className="h-6 w-6 text-app-brand transition-colors group-hover:text-app-brand" />
-									<span className="font-bold text-lg">tRPC</span>
+						<div className="rise-in [animation-delay:150ms]">
+							<div
+								className="relative flex aspect-4/3 items-end overflow-hidden rounded-3xl shadow-2xl shadow-app-brand/20"
+								style={imagePanelStyle(HERO_IMAGE)}
+							>
+								<div className="p-8 text-white">
+									<p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">TUP · IDO</p>
+									<p className="mt-1 font-serif text-2xl font-bold">Administration Building</p>
 								</div>
 							</div>
 						</div>
 					</div>
 				</section>
 
-				{/* Features Section */}
+				{/* About */}
 				<section
-					className="py-24 bg-app-base/40 backdrop-blur-[24px]"
-					id="features"
+					className="scroll-mt-24 border-y border-text-primary/10 bg-app-brand/3 py-20"
+					id="about"
 				>
-					<div className="container-page">
-						<div className="flex flex-col md:flex-row items-end justify-between mb-16 gap-6">
-							<div className="max-w-xl">
-								<h2 className="text-4xl md:text-5xl font-serif text-text-primary mb-6 leading-tight max-w-lg">
-									Everything you need, nothing you don't.
-								</h2>
-								<div className="h-1 w-20 bg-app-brand opacity-20 mb-8 rounded-full" />
-								<p className="text-text-secondary/80 text-lg leading-relaxed font-medium">
-									We've selected the best tools in the ecosystem so you don't have to spend weeks configuring them.
-								</p>
-							</div>
-							<Link to="/sign-up">
-								<AppButton
-									className="font-bold group text-app-brand/80 hover:text-app-brand transition-colors"
-									variant="ghost"
-								>
-									See full technical spec{" "}
-									<ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-								</AppButton>
-							</Link>
+					<div className="container-page grid items-center gap-12 md:grid-cols-2">
+						<div>
+							<p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-app-brand">About the Office</p>
+							<h2 className="mb-6 font-serif text-3xl font-bold leading-tight text-text-primary md:text-4xl">
+								A single front door for every infrastructure request on campus.
+							</h2>
+							<p className="mb-4 text-base leading-relaxed text-text-secondary">
+								The {OFFICE} (IDO) manages the design, review and documentation of the university's building and
+								engineering projects. Traditionally handled through paper forms and in-person visits, these requests are
+								now consolidated into one accessible web platform.
+							</p>
+							<p className="text-base leading-relaxed text-text-secondary">
+								Stakeholders can reach the office anytime, submit the correct ISO form, and follow their request as it
+								moves through each stage of review.
+							</p>
 						</div>
-
-						<div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+						<div className="grid grid-cols-2 gap-4">
 							{[
-								{
-									title: "Unified Monolith",
-									desc: "Single codebase, single deployment. Perfect for startups and solo founders who want the simplicity of a monolith with the power of modern tools.",
-									icon: Layout,
-								},
-								{
-									title: "Type-Safe Contracts",
-									desc: "Zero boilerplate tRPC integration ensures your frontend and backend stay in perfect sync. Catch errors in dev, not in prod.",
-									icon: Zap,
-								},
-								{
-									title: "Authentication Ready",
-									desc: "Better Auth pre-configured with everything: Email/Password, Sessions, and Role-Based Access Control out of the box.",
-									icon: Shield,
-								},
-								{
-									title: "UI for Agents",
-									desc: "Optimized for both humans and AI coders. Consistent patterns and clean component structures make development a breeze.",
-									icon: Code2,
-								},
-								{
-									title: "Database Included",
-									desc: "Prisma with PostgreSQL support. Models are structured for horizontal growth while maintaining relational integrity.",
-									icon: Database,
-								},
-								{
-									title: "Premium Design",
-									desc: "Powered by HeroUI v3 + Tailwind v4. Beautiful, accessible components that look like you spent months on them.",
-									icon: CheckCircle2,
-								},
-							].map((f) => (
+								{ icon: FileText, label: "Standardized ISO Forms" },
+								{ icon: Workflow, label: "Guided Procedures" },
+								{ icon: ClipboardList, label: "Document Logsheets" },
+								{ icon: ClipboardCheck, label: "Reviewed & Approved" },
+							].map((item) => (
 								<AppCard
-									description={f.desc}
-									// Marketing copy: each card IS its own argument and there is
-									// nothing to click through to, so a two-line preview would cut
-									// every one of them off mid-sentence.
-									descriptionLines={4}
 									headingLevel={3}
-									icon={f.icon}
-									key={f.title}
-									title={f.title}
+									icon={item.icon}
+									key={item.label}
+									title={item.label}
 								/>
 							))}
 						</div>
 					</div>
 				</section>
 
-				{/* CTA Section */}
-				<section className="py-32">
+				{/* Objectives */}
+				<section
+					className="scroll-mt-24 py-20"
+					id="objectives"
+				>
 					<div className="container-page">
-						{/* `brand-surface`, not `bg-app-brand` and not `gradient-brand`.
+						<SectionHeading
+							desc="What the online Infrastructure Development Office platform sets out to achieve."
+							eyebrow="Specific Objectives"
+							title="Built around four clear goals"
+						/>
+						<div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+							{OBJECTIVES.map((obj) => (
+								<AppCard
+									description={obj.desc}
+									// Each card IS its own argument and there is nothing to click
+									// through to, so the two-line default would cut every one of
+									// them off mid-sentence.
+									descriptionLines={4}
+									headingLevel={3}
+									icon={obj.icon}
+									key={obj.title}
+									title={obj.title}
+								/>
+							))}
+						</div>
+					</div>
+				</section>
 
-						    `bg-app-brand` is --brand-primary, the accent as INK, and it inverts
-						    per theme - so this card went pale in dark while its text stayed
-						    white, at 2.38:1 across the palettes against a 4.5:1 floor.
+				{/* Forms */}
+				<section
+					className="scroll-mt-24 border-y border-text-primary/10 bg-app-brand/3 py-20"
+					id="forms"
+				>
+					<div className="container-page">
+						<SectionHeading
+							desc="The controlled ISO forms handled by the office. Sign in to fill out and submit any of them online."
+							eyebrow="Forms"
+							title="Every request starts with the right form"
+						/>
+						<div className="grid gap-6 md:grid-cols-2">
+							{FORMS.map((form) => (
+								/* Each form is its own anchor, because the menu above lists the
+								   register by name: "the revision form" should land on that card
+								   rather than on the top of a section holding four of them. */
+								<div
+									className="scroll-mt-28"
+									id={form.anchor}
+									key={form.code}
+								>
+									<AppCard
+										description={form.desc}
+										descriptionLines={3}
+										headingLevel={3}
+										icon={FileText}
+										// The control number is a DISCRETE fact about the form,
+										// which is what the meta row is for. In the description it
+										// would be buried in the sentence a reader skims past.
+										meta={[{ label: form.code }]}
+										title={form.title}
+									/>
+								</div>
+							))}
+						</div>
+					</div>
+				</section>
 
-						    `gradient-brand` fixes that but is the CONTROL fill: saturated so a
-						    button reads as pressable, which is what pins its ink near-black at
-						    7.2:1 with no headroom left. A card is not pressable and does not
-						    need to pay for that, so it takes the surface pair instead - a tint
-						    under a real brand navy, 10.2:1. Both set their own foreground, so
-						    nothing inside needs a text colour. */}
-						<div className="brand-surface rounded-[3rem] p-12 md:p-24 relative overflow-hidden shadow-2xl shadow-app-brand/40">
-							{/* Pattern Overlay */}
+				{/* Procedure */}
+				<section
+					className="scroll-mt-24 py-20"
+					id="procedure"
+				>
+					<div className="container-page">
+						<SectionHeading
+							desc="Clear, ISO-aligned workflows so everyone knows exactly what happens after a request is submitted."
+							eyebrow="Procedure"
+							title="Two well-defined workflows"
+						/>
+						<div className="grid gap-6 md:grid-cols-2">
+							{PROCEDURES.map((proc) => (
+								<div
+									className="scroll-mt-28"
+									id={proc.anchor}
+									key={proc.step}
+								>
+									<AppCard
+										description={proc.desc}
+										descriptionLines={3}
+										headingLevel={3}
+										icon={proc.icon}
+										meta={[{ label: proc.step }]}
+										title={proc.title}
+									/>
+								</div>
+							))}
+						</div>
+					</div>
+				</section>
+
+				{/* Gallery */}
+				<section className="pb-20">
+					<div className="container-page">
+						<div className="grid gap-4 sm:grid-cols-3">
+							{GALLERY.map((img) => (
+								<div
+									className="relative flex aspect-4/3 items-end overflow-hidden rounded-2xl shadow-lg shadow-app-brand/10"
+									key={img.label}
+									style={imagePanelStyle(img.src)}
+								>
+									<p className="p-5 font-semibold text-white">{img.label}</p>
+								</div>
+							))}
+						</div>
+					</div>
+				</section>
+
+				{/* CSM */}
+				<section
+					className="scroll-mt-24 py-20"
+					id="csm"
+				>
+					<div className="container-page">
+						{/*
+						 * `brand-surface`, not `bg-app-brand` and not `gradient-brand`. The
+						 * accent-as-ink inverts per theme and takes this plate pale in dark
+						 * while the copy on it stays white; the gradient is the CONTROL fill,
+						 * saturated so a button reads as pressable, which leaves the real
+						 * button on top of it nothing to be. The surface pair is the tint,
+						 * and it sets its own foreground - nothing inside needs a colour.
+						 */}
+						<div className="brand-surface relative overflow-hidden rounded-[2.5rem] p-10 md:p-16">
 							<div
-								className="absolute inset-0 opacity-10 pointer-events-none"
+								className="pointer-events-none absolute inset-0 opacity-10"
 								style={{
-									backgroundImage: "radial-gradient(circle at 2px 2px, white 1px, transparent 0)",
-									backgroundSize: "32px 32px",
+									backgroundImage: "radial-gradient(circle at 2px 2px, currentColor 1px, transparent 0)",
+									backgroundSize: "28px 28px",
 								}}
-							></div>
-
-							<div className="relative z-10 flex flex-col items-center text-center max-w-3xl mx-auto">
-								<h2 className="text-4xl md:text-6xl font-serif mb-8 leading-tight">
-									Ready to ship your next big idea?
-								</h2>
-								{/* Full opacity, differentiating on size and weight - the rule the
-								    labs banner states for exactly this case. A /80 or /60 tint of the
-								    foreground is a second, unmeasured colour on a brand surface. */}
-								<p className="text-xl mb-12 leading-relaxed">
-									Join founders and developers building faster with the modern monolith template. Zero setup, infinite
-									potential.
-								</p>
-								<div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-									<Link
-										className="w-full sm:w-auto"
-										to="/sign-up"
+							/>
+							<div className="relative grid items-center gap-10 md:grid-cols-2">
+								<div>
+									<p className="mb-3 text-xs font-bold uppercase tracking-[0.2em]">Customer Satisfaction Measurement</p>
+									<h2 className="mb-4 font-serif text-3xl font-bold leading-tight md:text-4xl">
+										Your feedback improves the office.
+									</h2>
+									{/*
+									 * Full opacity, differentiating on size and weight. A /80 tint
+									 * of the foreground is a second, unmeasured colour on a brand
+									 * surface - the pair was solved for this ink, not for a wash
+									 * of it.
+									 */}
+									<p className="text-base leading-relaxed">
+										After every completed request, share how we did through the Customer Satisfaction Measurement Form
+										(TUPC-F-OQA-QMR-09). Your responses directly shape the quality of documents and service.
+									</p>
+								</div>
+								<div className="flex flex-col items-start gap-4 md:items-end">
+									{/* Decorative, and it says so: the rating CONTROL is the form
+									    behind the button, not this row. */}
+									<div
+										aria-hidden="true"
+										className="flex gap-1"
 									>
-										<AppButton
-											className="bg-surface text-foreground font-bold h-16 px-10 text-xl shadow-xl w-full sm:w-auto rounded-2xl font-sans"
-											size="lg"
-										>
-											Get Started for Free
-										</AppButton>
-									</Link>
-									<Link
-										className="w-full sm:w-auto"
+										{[0, 1, 2, 3, 4].map((i) => (
+											<Star
+												className="h-8 w-8 fill-current"
+												key={i}
+											/>
+										))}
+									</div>
+									<AppButton
+										className="h-14 bg-surface px-8 text-lg font-semibold text-foreground"
+										icon={ArrowRight}
+										iconPosition="end"
+										size="lg"
 										to="/sign-in"
 									>
-										<AppButton
-											className="border-current/30 font-bold h-16 px-10 text-xl hover:bg-current/10 w-full sm:w-auto rounded-2xl font-sans"
-											size="lg"
-											variant="outline"
-										>
-											View Template Source
-										</AppButton>
-									</Link>
+										Give feedback
+									</AppButton>
 								</div>
-								<p className="mt-8 text-sm font-medium">MIT Licensed. Open Source. Forever.</p>
 							</div>
 						</div>
 					</div>
 				</section>
+
+				{/* Help & contact */}
+				<section
+					className="scroll-mt-24 border-t border-text-primary/10 bg-app-brand/3 py-20"
+					id="help"
+				>
+					<div className="container-page grid gap-12 md:grid-cols-2">
+						<div>
+							<p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-app-brand">Help & Contact</p>
+							<h2 className="mb-6 font-serif text-3xl font-bold leading-tight text-text-primary md:text-4xl">
+								Need assistance with a request?
+							</h2>
+							<p className="mb-8 text-base leading-relaxed text-text-secondary">
+								Reach the {OFFICE} directly. We are happy to guide you to the correct form and walk you through the
+								procedure.
+							</p>
+							<div className="flex flex-col gap-4">
+								<a
+									className="flex items-center gap-3 text-text-primary transition-colors hover:text-app-brand"
+									href={`mailto:${CONTACT_EMAIL}`}
+								>
+									<span className="flex h-11 w-11 items-center justify-center rounded-xl bg-app-brand/10 text-app-brand">
+										<Mail className="h-5 w-5" />
+									</span>
+									<span className="font-semibold">{CONTACT_EMAIL}</span>
+								</a>
+								<div className="flex items-center gap-3 text-text-primary">
+									<span className="flex h-11 w-11 items-center justify-center rounded-xl bg-app-brand/10 text-app-brand">
+										<MapPin className="h-5 w-5" />
+									</span>
+									<span className="font-semibold">{CAMPUS}</span>
+								</div>
+								<div className="flex items-center gap-3 text-text-primary">
+									<span className="flex h-11 w-11 items-center justify-center rounded-xl bg-app-brand/10 text-app-brand">
+										<Phone className="h-5 w-5" />
+									</span>
+									<span className="font-semibold text-text-secondary">Available on request</span>
+								</div>
+							</div>
+						</div>
+
+						<AppCard
+							headingLevel={3}
+							icon={HelpCircle}
+							title="Getting started is simple"
+						>
+							<ol className="flex flex-col gap-4">
+								{[
+									"Create an account or sign in to the platform.",
+									"Choose the ISO form that matches your request.",
+									"Submit and track your request through each review stage.",
+								].map((text, i) => (
+									<li
+										className="flex gap-3"
+										key={text}
+									>
+										<span className="gradient-brand flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold">
+											{i + 1}
+										</span>
+										<span className="text-text-secondary">{text}</span>
+									</li>
+								))}
+							</ol>
+							<AppButton
+								fullWidth
+								size="lg"
+								to="/sign-up"
+								variant="primary"
+							>
+								Create an account
+							</AppButton>
+						</AppCard>
+					</div>
+				</section>
 			</main>
 
-			<footer className="pt-24 pb-12 border-t border-text-primary/5 bg-white/20">
-				<div className="container-page">
-					<div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-24">
-						<div className="col-span-1 md:col-span-2">
-							<div className="flex items-center gap-3 mb-6">
-								<img
-									alt=""
-									aria-hidden="true"
-									className="h-8 w-8 shrink-0 object-contain"
-									src="/images/logo.png"
-								/>
-								<span className="font-serif text-2xl font-bold">{APP_NAME}</span>
-							</div>
-							<p className="text-text-secondary max-w-sm leading-relaxed mb-8 font-sans">
-								The most productive way to build fullstack applications with the best tools in the ecosystem. Designed
-								for humans and agents alike.
-							</p>
-							<div className="flex gap-4">
-								<AppButton
-									aria-label="GitHub repository"
-									className="rounded-xl border-text-primary/10"
-									icon={Github}
-									isIconOnly
-									variant="ghost"
-								/>
-								<AppButton
-									aria-label="Performance"
-									className="rounded-xl border-text-primary/10"
-									icon={Zap}
-									isIconOnly
-									variant="ghost"
-								/>
-								<AppButton
-									aria-label="Security"
-									className="rounded-xl border-text-primary/10"
-									icon={Shield}
-									isIconOnly
-									variant="ghost"
-								/>
-							</div>
-						</div>
-
-						<div>
-							<h4 className="font-bold mb-6 uppercase text-xs tracking-widest text-text-secondary font-sans">
-								Product
-							</h4>
-							<ul className="flex flex-col gap-4 text-text-secondary font-sans">
-								<li>
-									<a
-										className="hover:text-app-brand transition-colors font-sans"
-										href="https://github.com"
-									>
-										Features
-									</a>
-								</li>
-								<li>
-									<a
-										className="hover:text-app-brand transition-colors font-sans"
-										href="https://github.com"
-									>
-										Integrations
-									</a>
-								</li>
-								<li>
-									<a
-										className="hover:text-app-brand transition-colors font-sans"
-										href="https://github.com"
-									>
-										Pricing
-									</a>
-								</li>
-								<li>
-									<a
-										className="hover:text-app-brand transition-colors font-sans"
-										href="https://github.com"
-									>
-										Changelog
-									</a>
-								</li>
-							</ul>
-						</div>
-
-						<div>
-							<h4 className="font-bold mb-6 uppercase text-xs tracking-widest text-text-secondary font-sans">
-								Resources
-							</h4>
-							<ul className="flex flex-col gap-4 text-text-secondary font-sans">
-								<li>
-									<a
-										className="hover:text-app-brand transition-colors font-sans"
-										href="https://github.com"
-									>
-										Documentation
-									</a>
-								</li>
-								<li>
-									<a
-										className="hover:text-app-brand transition-colors font-sans"
-										href="https://github.com"
-									>
-										Guides
-									</a>
-								</li>
-								<li>
-									<a
-										className="hover:text-app-brand transition-colors font-sans"
-										href="https://github.com"
-									>
-										GitHub
-									</a>
-								</li>
-								<li>
-									<a
-										className="hover:text-app-brand transition-colors font-sans"
-										href="https://github.com"
-									>
-										API Reference
-									</a>
-								</li>
-							</ul>
-						</div>
-					</div>
-
-					<div className="flex flex-col md:flex-row justify-between items-center gap-6 pt-12 border-t border-text-primary/5">
-						<p className="text-sm text-text-secondary transition-colors font-sans">
-							© 2026 Bernard Sapida. Built with {APP_NAME}.
-						</p>
-						<div className="flex gap-8 text-xs font-bold text-text-secondary/60 uppercase tracking-wider font-sans">
-							<a
-								className="hover:text-app-brand transition-colors font-sans"
-								href="https://github.com"
-							>
-								Privacy Policy
-							</a>
-							<a
-								className="hover:text-app-brand transition-colors font-sans"
-								href="https://github.com"
-							>
-								Terms of Service
-							</a>
-							<a
-								className="hover:text-app-brand transition-colors font-sans"
-								href="https://github.com"
-							>
-								Cookie Policy
-							</a>
-						</div>
-					</div>
-				</div>
-			</footer>
+			{/*
+			 * `AppSiteFooter`, the signed-out counterpart to the bar above - the same
+			 * logo object, the same tones, the same external-link rule. `muted` marks
+			 * the end of the document without claiming to be a statement, which is
+			 * right under a page that already has a brand band at the top and a brand
+			 * plate in the middle.
+			 */}
+			<AppSiteFooter
+				copyrightNote={`${UNIVERSITY}. All rights reserved.`}
+				data-cy="landing-footer"
+				groups={FOOTER_GROUPS}
+				homeHref="/"
+				owner={OFFICE}
+				tagline={`An integrated online engineering management system for the ${OFFICE} of the ${UNIVERSITY}.`}
+				tone="muted"
+			/>
 		</div>
 	);
 }

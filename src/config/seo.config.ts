@@ -4,8 +4,9 @@
 import { env } from "@/env";
 
 // ---- Site identity — change these when customising the template ----
-export const APP_NAME = "Monolith Template";
-export const APP_DESCRIPTION = "A premium, high-end monolith project template.";
+export const APP_NAME = "IPMS";
+export const APP_DESCRIPTION =
+	"The Infrastructure Development Office of the Technological University of the Philippines - online engineering request, tracking and document management.";
 // -------------------------------------------------------------------
 
 export const seo = {
