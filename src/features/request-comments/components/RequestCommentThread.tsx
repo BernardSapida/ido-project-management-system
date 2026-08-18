@@ -6,6 +6,7 @@ import { getRoleLabel } from "@/config/navigation.config";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useRequestCommentMutations } from "@/features/request-comments/hooks/use-comment-mutations";
 import { useRequestComments } from "@/features/request-comments/hooks/use-comment-queries";
+import { COMMENT_MAX_LENGTH } from "@/features/request-comments/validations/schema/comment.schema";
 import type { UserRole } from "@/utils/config";
 
 interface CommentAuthor {
@@ -38,12 +39,12 @@ interface RequestCommentThreadProps {
  *
  * ## What it does NOT wire, and why that is the whole design
  *
- * `mentionables` and `onReact` are left unset. `RequestComment` has no
- * `parentId` and there is no reaction table, so a Like here would be a press
- * that goes nowhere and a mention would resolve against a directory query that
- * does not exist. `AppCommentSection` renders neither control when the props are
- * absent - which is the point of leaving them absent rather than passing a
- * no-op.
+ * `mentionables` and `onReact` are left unset and `allowsReplies` is off.
+ * `RequestComment` has no `parentId` and there is no reaction table, so a Like
+ * here would be a press that goes nowhere and a Reply would post at the bottom
+ * as an ordinary comment - the answer landing somewhere other than under the
+ * question it answers. None of the three controls render, which is the point of
+ * turning them off rather than accepting the press and dropping what it meant.
  *
  * ## The read rule is not enforced here
  *
@@ -85,6 +86,7 @@ export function RequestCommentThread({ disabledReason, isDisabled = false, reque
 		handle: user ? getRoleLabel(user.role as UserRole) : "",
 		id: user?.id ?? "",
 		name: user ? fullName(user.firstname, user.lastname) : "",
+		title: user ? getRoleLabel(user.role as UserRole) : undefined,
 	};
 
 	/*
@@ -108,12 +110,18 @@ export function RequestCommentThread({ disabledReason, isDisabled = false, reque
 		 */
 		<div className="flex flex-col gap-2 rounded-3xl border border-border bg-surface p-4 sm:p-5">
 			<AppCommentSection
+				allowsReplies={false}
 				comments={comments.map(toCommentItem)}
 				composerSlot={canComment ? undefined : <ClosedComposer reason={closedReason} />}
 				currentUser={currentUser}
 				data-cy="request-comments"
 				heading="Discussion"
 				isLoading={isPending}
+				/* The same 2000 the schema enforces and the router re-parses. The
+				   composer counting down against a different number would be a cap
+				   that refuses a comment the server would have taken, or takes one it
+				   will not. */
+				maxLength={COMMENT_MAX_LENGTH}
 				onDelete={deleteComment}
 				onEdit={editComment}
 				onSubmit={({ body }) => addComment(body)}
@@ -170,10 +178,11 @@ function ClosedComposer({ reason }: { reason: string }) {
 /**
  * A row from `comment.list` as the thread reads it.
  *
- * `handle` carries the ROLE LABEL rather than a username. This app has no
- * handles - people sign in with an email - and the fact a reader actually needs
- * beside a name is which desk it belongs to: "Carlos Santos" means nothing to a
- * requestor and "IDO Chairperson" tells them who is asking.
+ * `title` carries the ROLE LABEL, which prints on the line beside the name -
+ * "Carlos Santos" means nothing to a requestor and "IDO Chairperson" tells them
+ * who is asking. `handle` gets the same string only because the field is
+ * required and this app has no handles; people sign in with an email, and it is
+ * seen nowhere but the popover behind the name.
  *
  * `editedAt` is set only when the row has genuinely moved. Prisma writes
  * `updatedAt` on create as well as on update, so passing it unconditionally
@@ -194,6 +203,7 @@ function toCommentItem(row: {
 			handle: getRoleLabel(row.user.role as UserRole),
 			id: row.user.id,
 			name: fullName(row.user.firstname, row.user.lastname),
+			title: getRoleLabel(row.user.role as UserRole),
 		},
 		body: row.message,
 		createdAt: row.createdAt,
