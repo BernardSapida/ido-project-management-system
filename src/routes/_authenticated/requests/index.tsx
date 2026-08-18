@@ -165,7 +165,19 @@ function RequestsListPage() {
 					// An empty box means "no search", not "search for nothing" - left as
 					// `""` the parameter stays in the URL and the query key changes for a
 					// filter that narrows nothing.
-					onSearchChange={(value) => setFilters({ search: value.trim() || undefined })}
+					//
+					// The equality guard is NOT a micro-optimisation, it is the fix for a
+					// dead "New Request" button. `AppSearchField` fires `onValueChange`
+					// every time React re-runs its passive effects, and React re-runs them
+					// on the whole subtree when the router hides this route to start a
+					// navigation. Without the guard the click's navigation to
+					// `/requests/new` was immediately replaced by this one back to
+					// `/requests`, so the button appeared to do nothing at all.
+					onSearchChange={(value) => {
+						const next = value.trim() || undefined;
+						if (next === search) return;
+						setFilters({ search: next });
+					}}
 					onSortChange={handleSortChange}
 					onStatusChange={(value) => setFilters({ status: value ?? undefined })}
 					page={page}
