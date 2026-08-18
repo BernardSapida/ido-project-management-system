@@ -125,6 +125,7 @@ import { Route as AuthenticatedRequestsRequestIdIndexRouteImport } from './route
 import { Route as AuthenticatedRequestsRequestIdBudgetReviewRouteImport } from './routes/_authenticated/requests/$requestId/budget-review'
 import { Route as AuthenticatedRequestsRequestIdDirectorReviewRouteImport } from './routes/_authenticated/requests/$requestId/director-review'
 import { Route as AuthenticatedRequestsRequestIdEditRouteImport } from './routes/_authenticated/requests/$requestId/edit'
+import { Route as AuthenticatedRequestsRequestIdFinalDirectorApprovalRouteImport } from './routes/_authenticated/requests/$requestId/final-director-approval'
 import { Route as AuthenticatedRequestsRequestIdFinalReviewRouteImport } from './routes/_authenticated/requests/$requestId/final-review'
 import { Route as AuthenticatedRequestsRequestIdReviewRouteImport } from './routes/_authenticated/requests/$requestId/review'
 import { Route as AuthenticatedStaffDashboardIndexRouteImport } from './routes/_authenticated/staff/dashboard/index'
@@ -798,6 +799,12 @@ const AuthenticatedRequestsRequestIdEditRoute =
     path: '/requests/$requestId/edit',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedRequestsRequestIdFinalDirectorApprovalRoute =
+  AuthenticatedRequestsRequestIdFinalDirectorApprovalRouteImport.update({
+    id: '/requests/$requestId/final-director-approval',
+    path: '/requests/$requestId/final-director-approval',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedRequestsRequestIdFinalReviewRoute =
   AuthenticatedRequestsRequestIdFinalReviewRouteImport.update({
     id: '/requests/$requestId/final-review',
@@ -932,6 +939,7 @@ export interface FileRoutesByFullPath {
   '/requests/$requestId/budget-review': typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
   '/requests/$requestId/director-review': typeof AuthenticatedRequestsRequestIdDirectorReviewRoute
   '/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
+  '/requests/$requestId/final-director-approval': typeof AuthenticatedRequestsRequestIdFinalDirectorApprovalRoute
   '/requests/$requestId/final-review': typeof AuthenticatedRequestsRequestIdFinalReviewRoute
   '/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
   '/requests/$requestId/': typeof AuthenticatedRequestsRequestIdIndexRoute
@@ -1051,6 +1059,7 @@ export interface FileRoutesByTo {
   '/requests/$requestId/budget-review': typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
   '/requests/$requestId/director-review': typeof AuthenticatedRequestsRequestIdDirectorReviewRoute
   '/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
+  '/requests/$requestId/final-director-approval': typeof AuthenticatedRequestsRequestIdFinalDirectorApprovalRoute
   '/requests/$requestId/final-review': typeof AuthenticatedRequestsRequestIdFinalReviewRoute
   '/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
   '/requests/$requestId': typeof AuthenticatedRequestsRequestIdIndexRoute
@@ -1173,6 +1182,7 @@ export interface FileRoutesById {
   '/_authenticated/requests/$requestId/budget-review': typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
   '/_authenticated/requests/$requestId/director-review': typeof AuthenticatedRequestsRequestIdDirectorReviewRoute
   '/_authenticated/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
+  '/_authenticated/requests/$requestId/final-director-approval': typeof AuthenticatedRequestsRequestIdFinalDirectorApprovalRoute
   '/_authenticated/requests/$requestId/final-review': typeof AuthenticatedRequestsRequestIdFinalReviewRoute
   '/_authenticated/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
   '/_authenticated/requests/$requestId/': typeof AuthenticatedRequestsRequestIdIndexRoute
@@ -1295,6 +1305,7 @@ export interface FileRouteTypes {
     | '/requests/$requestId/budget-review'
     | '/requests/$requestId/director-review'
     | '/requests/$requestId/edit'
+    | '/requests/$requestId/final-director-approval'
     | '/requests/$requestId/final-review'
     | '/requests/$requestId/review'
     | '/requests/$requestId/'
@@ -1414,6 +1425,7 @@ export interface FileRouteTypes {
     | '/requests/$requestId/budget-review'
     | '/requests/$requestId/director-review'
     | '/requests/$requestId/edit'
+    | '/requests/$requestId/final-director-approval'
     | '/requests/$requestId/final-review'
     | '/requests/$requestId/review'
     | '/requests/$requestId'
@@ -1535,6 +1547,7 @@ export interface FileRouteTypes {
     | '/_authenticated/requests/$requestId/budget-review'
     | '/_authenticated/requests/$requestId/director-review'
     | '/_authenticated/requests/$requestId/edit'
+    | '/_authenticated/requests/$requestId/final-director-approval'
     | '/_authenticated/requests/$requestId/final-review'
     | '/_authenticated/requests/$requestId/review'
     | '/_authenticated/requests/$requestId/'
@@ -2380,6 +2393,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRequestsRequestIdEditRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/requests/$requestId/final-director-approval': {
+      id: '/_authenticated/requests/$requestId/final-director-approval'
+      path: '/requests/$requestId/final-director-approval'
+      fullPath: '/requests/$requestId/final-director-approval'
+      preLoaderRoute: typeof AuthenticatedRequestsRequestIdFinalDirectorApprovalRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/requests/$requestId/final-review': {
       id: '/_authenticated/requests/$requestId/final-review'
       path: '/requests/$requestId/final-review'
@@ -2413,6 +2433,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedRequestsRequestIdBudgetReviewRoute: typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
   AuthenticatedRequestsRequestIdDirectorReviewRoute: typeof AuthenticatedRequestsRequestIdDirectorReviewRoute
   AuthenticatedRequestsRequestIdEditRoute: typeof AuthenticatedRequestsRequestIdEditRoute
+  AuthenticatedRequestsRequestIdFinalDirectorApprovalRoute: typeof AuthenticatedRequestsRequestIdFinalDirectorApprovalRoute
   AuthenticatedRequestsRequestIdFinalReviewRoute: typeof AuthenticatedRequestsRequestIdFinalReviewRoute
   AuthenticatedRequestsRequestIdReviewRoute: typeof AuthenticatedRequestsRequestIdReviewRoute
   AuthenticatedRequestsRequestIdIndexRoute: typeof AuthenticatedRequestsRequestIdIndexRoute
@@ -2431,6 +2452,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedRequestsRequestIdDirectorReviewRoute,
   AuthenticatedRequestsRequestIdEditRoute:
     AuthenticatedRequestsRequestIdEditRoute,
+  AuthenticatedRequestsRequestIdFinalDirectorApprovalRoute:
+    AuthenticatedRequestsRequestIdFinalDirectorApprovalRoute,
   AuthenticatedRequestsRequestIdFinalReviewRoute:
     AuthenticatedRequestsRequestIdFinalReviewRoute,
   AuthenticatedRequestsRequestIdReviewRoute:

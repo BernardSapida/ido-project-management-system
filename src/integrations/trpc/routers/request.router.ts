@@ -9,6 +9,10 @@ import {
 	directorRejectSchema,
 } from "@/features/director-review/validations/schema/director-approver.schema";
 import {
+	finalDirectorApproveSchema,
+	finalDirectorRejectSchema,
+} from "@/features/final-director-approval/validations/schema/final-director-approver.schema";
+import {
 	idoFinalApproveSchema,
 	idoFinalRejectSchema,
 } from "@/features/ido-final-review/validations/schema/ido-final-approver.schema";
@@ -30,10 +34,12 @@ import { assertCanReadRequest } from "@/lib/request-access";
 import {
 	BUDGET_ACTIONABLE_DIRECTOR_STATUS,
 	directorReviewStatusMap,
+	finalDirectorStatusMap,
 	idoFinalStatusMap,
 	isDirectorApprovableStatus,
 	isDirectorRejectableStatus,
 	isEditableStatus,
+	isFinalDirectorActionableStatus,
 	isIdoActionableStatus,
 	isIdoFinalActionableStatus,
 	masterStatusMap,
@@ -41,6 +47,7 @@ import {
 	REJECTED_STATUSES,
 	STATUS_GROUPS,
 } from "@/lib/status-maps/request-status";
+import { Prisma } from "../../../../prisma/generated/client.ts";
 import type { RequestWhereInput } from "../../../../prisma/generated/models.ts";
 import { protectedProcedure, roleProcedure } from "../init";
 
@@ -687,6 +694,85 @@ async function loadIdoFinalActionableRequest(id: string, userId: string) {
 	return existing;
 }
 
+/* -------------------------------------------------------------------------- */
+/* The Campus Director's FINAL approval - spec 014                             */
+
+/**
+ * The last stage's guard, shared by both of its actions.
+ *
+ * ## Why it reads `finalDirectorStatus` and nothing else
+ *
+ * The DIRECTOR appears twice in this workflow, holding one role and one grant
+ * across both appearances. `roleProcedure("DIRECTOR")` and `APPROVE_DIRECTOR`
+ * therefore say exactly as much about the first approval as about this one, and
+ * neither can tell the two apart - this column is the only thing that can. A
+ * guard here that read `masterStatus`, or that reused
+ * `isDirectorApprovableStatus`, would let a director give the final approval
+ * from the first-stage page and vice versa.
+ *
+ * The column is written by the CHAIRPERSON's approval (`idoFinalApprove`), never
+ * here, which is the coupling `FINAL_DIRECTOR_ACTIONABLE_STATUS` documents.
+ *
+ * ## Why `requestEndAt` is selected
+ *
+ * The approval sets it only when it is null - the same rule `recommend` applies
+ * to `requestStartAt`, and for the same reason: the pair is the DURATION the
+ * office reports on, and a retry that moved the end date would rewrite a
+ * completed request's turnaround time.
+ *
+ * The refusal NAMES the stage, because this error is what a page left open on a
+ * request a colleague has since acted on gets back.
+ */
+async function loadFinalDirectorActionableRequest(id: string, userId: string) {
+	await assertPermission(userId, "APPROVE_DIRECTOR");
+
+	const existing = await prisma.request.findUnique({
+		where: { id },
+		select: { finalDirectorStatus: true, masterStatus: true, requestEndAt: true },
+	});
+
+	if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Request not found" });
+
+	if (!isFinalDirectorActionableStatus(existing.finalDirectorStatus)) {
+		const label = existing.finalDirectorStatus
+			? (finalDirectorStatusMap[existing.finalDirectorStatus]?.label ?? existing.finalDirectorStatus)
+			: (masterStatusMap[existing.masterStatus]?.label ?? existing.masterStatus);
+
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: `This request is not at the final approval stage (${label})`,
+		});
+	}
+
+	return existing;
+}
+
+/**
+ * The one database error this stage translates rather than letting through.
+ *
+ * `Csm.requestId` is unique, so a second approval that somehow reached the
+ * `create` fails with P2002 and takes the whole transaction with it - which is
+ * the CORRECT outcome, because a duplicate can only mean the request has already
+ * been approved. What is not correct is showing the director a raw write
+ * conflict for it: the stage guard above is what normally catches this, and by
+ * the time P2002 is the thing that stopped them, the only true sentence left is
+ * that the approval already exists.
+ *
+ * Anything else is re-thrown untouched. Swallowing an unrelated write failure
+ * into "already approved" would tell a director their signature landed when it
+ * did not.
+ */
+function asAlreadyApprovedError(error: unknown): unknown {
+	if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+		return new TRPCError({
+			code: "CONFLICT",
+			message: "This request has already been approved. Reload the page to see the approved record.",
+		});
+	}
+
+	return error;
+}
+
 export const requestRouter = {
 	generateDocumentNumber: protectedProcedure.mutation(async () => {
 		const documentNumber = await generateDocumentNumber();
@@ -865,7 +951,12 @@ export const requestRouter = {
 		 * - the director gets both of those, because approving past an open budget
 		 *   stage is a choice they have to be able to see, plus their own stamp;
 		 * - the chairperson's final review gets all of the above (its approval trail
-		 *   shows who has signed so far) plus the IDO-final stage and stamp.
+		 *   shows who has signed so far) plus the IDO-final stage and stamp;
+		 * - the director's FINAL approval (spec 014) is the widest read in the app,
+		 *   and it has to be: they are countersigning three other signatures, so all
+		 *   three stamps plus their own final pair and stage column go to them.
+		 *   `idoFinalSignatureUrl` is therefore a SIGNED-TRAIL column rather than a
+		 *   chairperson-only one - the desk after a signature always sees it.
 		 *
 		 * The REQUESTOR gets none of it, and that is the whole reason these are
 		 * redacted here rather than added to `REQUEST_DETAIL_SELECT`: `masterStatus`
@@ -904,6 +995,9 @@ export const requestRouter = {
 					directorReviewStatus: true,
 					directorSignatureUrl: true,
 					directorSignedAt: true,
+					finalDirectorSignatureUrl: true,
+					finalDirectorSignedAt: true,
+					finalDirectorStatus: true,
 					idoFinalSignatureUrl: true,
 					idoFinalSignedAt: true,
 					idoFinalStatus: true,
@@ -961,6 +1055,9 @@ export const requestRouter = {
 			directorReviewStatus,
 			directorSignatureUrl,
 			directorSignedAt,
+			finalDirectorSignatureUrl,
+			finalDirectorSignedAt,
+			finalDirectorStatus,
 			idoFinalSignatureUrl,
 			idoFinalSignedAt,
 			idoFinalStatus,
@@ -982,8 +1079,21 @@ export const requestRouter = {
 			directorReviewStatus: isApproverDesk ? directorReviewStatus : null,
 			directorSignatureUrl: isSignedTrailDesk ? directorSignatureUrl : null,
 			directorSignedAt: isSignedTrailDesk ? directorSignedAt : null,
-			idoFinalSignatureUrl: isChairDesk ? idoFinalSignatureUrl : null,
-			idoFinalSignedAt: isChairDesk ? idoFinalSignedAt : null,
+			/*
+			 * The director's own FINAL trio, and nobody else's business - not even the
+			 * chairperson's, whose page is finished with the request the moment they
+			 * sign it. `finalDirectorStatus` is the column spec 014's guard reads and
+			 * the one the printed form's signatures hang on, so it goes to the one desk
+			 * that can act on it.
+			 */
+			finalDirectorSignatureUrl: isDirectorDesk ? finalDirectorSignatureUrl : null,
+			finalDirectorSignedAt: isDirectorDesk ? finalDirectorSignedAt : null,
+			finalDirectorStatus: isDirectorDesk ? finalDirectorStatus : null,
+			// The desk AFTER a signature sees it: the director countersigns the
+			// chairperson's at the final approval, so this is `isSignedTrailDesk`
+			// while `idoFinalStatus` - what that desk DECIDED - stays theirs.
+			idoFinalSignatureUrl: isSignedTrailDesk ? idoFinalSignatureUrl : null,
+			idoFinalSignedAt: isSignedTrailDesk ? idoFinalSignedAt : null,
 			idoFinalStatus: isChairDesk ? idoFinalStatus : null,
 		};
 	}),
@@ -1770,6 +1880,182 @@ export const requestRouter = {
 						note,
 						requestId: id,
 						toStatus: "IDO_FINAL_REJECTED",
+					},
+				});
+
+				return request;
+			});
+		}),
+
+	/**
+	 * The last approval in the workflow, and the only write in this app that
+	 * touches three tables.
+	 *
+	 * ## `finalDirectorStatus: "APPROVED"` is the PDF's gate
+	 *
+	 * Not `masterStatus`. The printed form (spec 016) releases every signature on
+	 * it - the budget officer's, the director's first, the chairperson's and this
+	 * one - on that column alone, and no other procedure in the app may write that
+	 * value. Both columns are set here and today they agree; the reason to say
+	 * this out loud is that a change setting one without the other publishes or
+	 * withholds four people's signatures with nothing on screen reporting it.
+	 *
+	 * ## Six columns, a row in ANOTHER table and the audit entry, in ONE
+	 * transaction
+	 *
+	 * `finalDirectorSignatureUrl`, `finalDirectorSignedAt`, `finalDirectorStatus`,
+	 * `masterStatus`, `completionStatus` and `requestEndAt`, plus the `Csm` row and
+	 * the log. This is the most consequential write in the system and anything less
+	 * than all-or-nothing has two failure modes that both look like working
+	 * software: an APPROVED request whose requestor is never asked for feedback,
+	 * or a satisfaction record hanging off an approval that never committed.
+	 *
+	 * ## The `Csm` row is created EMPTY
+	 *
+	 * `submittedAt` stays null - the requestor fills the form in themselves (spec
+	 * 015), and `completionStatus: "CSM_PENDING"` is what puts the banner in front
+	 * of them and what their CSM route keys on. Creating the row here rather than
+	 * on first visit is what makes "was this ever asked for?" answerable from the
+	 * table rather than inferred from a status.
+	 *
+	 * ## `requestEndAt` is guarded on null
+	 *
+	 * The same rule `recommend` applies to `requestStartAt`. The pair is the
+	 * turnaround the office reports on, so a second write must never move it.
+	 *
+	 * ## The signature is COPIED, never joined
+	 *
+	 * Written from `ctx.user.signatureUrl` onto the row, for the reason the three
+	 * approvals before it give: a director who replaces the image on their profile
+	 * next March must not rewrite what this approval printed.
+	 */
+	finalDirectorApprove: roleProcedure("DIRECTOR")
+		.input(finalDirectorApproveSchema)
+		.mutation(async ({ ctx, input }) => {
+			const { id } = input;
+			const { user } = ctx;
+
+			const existing = await loadFinalDirectorActionableRequest(id, user.id);
+
+			/*
+			 * The gate, not a courtesy. The page disables Approve & Sign when the
+			 * profile has no signature, and this is what makes that true rather than
+			 * merely displayed - and here it does more than protect one block of the
+			 * form: this signature is what releases ALL of them, so an approval with no
+			 * image would publish a fully signed instrument with the final signatory's
+			 * box blank.
+			 *
+			 * Rejecting deliberately does not check this: a refusal is not a signed
+			 * instrument, and a director with no signature must still be able to stop a
+			 * request rather than being forced to approve it.
+			 */
+			if (!user.signatureUrl) {
+				throw new TRPCError({
+					code: "FORBIDDEN",
+					message: "Your profile is missing a signature. Please complete your profile before approving.",
+				});
+			}
+
+			return await prisma.$transaction(async (tx) => {
+				const request = await tx.request.update({
+					where: { id },
+					data: {
+						completionStatus: "CSM_PENDING",
+						finalDirectorSignatureUrl: user.signatureUrl,
+						finalDirectorSignedAt: new Date(),
+						finalDirectorStatus: "APPROVED",
+						masterStatus: "APPROVED",
+						// Only when it was null. A retry that moved the end date would
+						// rewrite the turnaround of a request that finished last week.
+						...(existing.requestEndAt ? {} : { requestEndAt: new Date() }),
+					},
+					select: {
+						completionStatus: true,
+						finalDirectorSignedAt: true,
+						finalDirectorStatus: true,
+						id: true,
+						masterStatus: true,
+						requestEndAt: true,
+					},
+				});
+
+				/*
+				 * Inside the transaction, and it is the reason there is one. The unique
+				 * constraint on `requestId` means a duplicate throws rather than quietly
+				 * creating a second satisfaction record - and the throw rolls the
+				 * approval back with it, which is correct: a duplicate can only mean the
+				 * first approval already committed.
+				 */
+				try {
+					await tx.csm.create({ data: { requestId: id } });
+				} catch (error) {
+					throw asAlreadyApprovedError(error);
+				}
+
+				await tx.auditLog.create({
+					data: {
+						action: "FINAL_DIRECTOR_APPROVED",
+						actorId: user.id,
+						fromStatus: existing.masterStatus,
+						note: null,
+						requestId: id,
+						toStatus: "APPROVED",
+					},
+				});
+
+				return request;
+			});
+		}),
+
+	/**
+	 * The Campus Director refuses it at the final approval. Terminal, and the last
+	 * word anybody gets on a request that has passed every other desk.
+	 *
+	 * Both columns move to `FINAL_REJECTED`, which `masterStatusMap` labels
+	 * "Director Final Rejected" - deliberately not "Final Rejected", because
+	 * `IDO_FINAL_REJECTED` is the chairperson's terminal no one stage earlier and
+	 * a requestor reading two identically-named statuses cannot tell which desk
+	 * stopped their request.
+	 *
+	 * ## No `Csm` row, and that is the whole difference from the approval
+	 *
+	 * `completionStatus` is left alone. The satisfaction form asks how the WORK
+	 * went; there is no work, and prompting for feedback on a request that was
+	 * refused would be the app asking the requestor to rate its own refusal.
+	 *
+	 * No signature required, for the reason the three rejections before it give.
+	 */
+	finalDirectorReject: roleProcedure("DIRECTOR")
+		.input(finalDirectorRejectSchema)
+		.mutation(async ({ ctx, input }) => {
+			const { id, note } = input;
+			const { user } = ctx;
+
+			const existing = await loadFinalDirectorActionableRequest(id, user.id);
+
+			/*
+			 * One transaction, for the reason `applyIdoOutcome` gives: the audit log is
+			 * the only history this app has, and a request that stopped with no entry
+			 * saying who stopped it is a record nobody can account for.
+			 */
+			return await prisma.$transaction(async (tx) => {
+				const request = await tx.request.update({
+					where: { id },
+					data: {
+						finalDirectorStatus: "FINAL_REJECTED",
+						masterStatus: "FINAL_REJECTED",
+					},
+					select: { finalDirectorStatus: true, id: true },
+				});
+
+				await tx.auditLog.create({
+					data: {
+						action: "FINAL_DIRECTOR_REJECTED",
+						actorId: user.id,
+						fromStatus: existing.masterStatus,
+						note,
+						requestId: id,
+						toStatus: "FINAL_REJECTED",
 					},
 				});
 

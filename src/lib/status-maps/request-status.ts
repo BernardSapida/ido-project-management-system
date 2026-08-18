@@ -9,6 +9,7 @@ import {
 	type LucideIcon,
 	Search,
 	Send,
+	ShieldCheck,
 	Undo2,
 	Wallet,
 	XCircle,
@@ -311,4 +312,56 @@ export const IDO_FINAL_ACTIONABLE_STATUS = "UNDER_IDO_FINAL_REVIEW";
  *  actionable. */
 export function isIdoFinalActionableStatus(idoFinalStatus?: string | null): boolean {
 	return idoFinalStatus === IDO_FINAL_ACTIONABLE_STATUS;
+}
+
+/**
+ * The `finalDirectorStatus` column - the Campus Director's SECOND appearance.
+ *
+ * A FOURTH status vocabulary, and it is the one that carries the most weight in
+ * the app: `finalDirectorStatus === "APPROVED"` is the gate the printed form's
+ * signatures hang on (spec 016), not `masterStatus`. Both are set by the same
+ * approval, so today they agree - but they are read by different code for
+ * different questions, and a future change that moves one without the other
+ * silently releases or withholds every signature on the document.
+ *
+ * It earns its place the same way the three columns above it do.
+ * `masterStatus` reads `UNDER_FINAL_DIRECTOR_REVIEW` while this desk holds the
+ * request and `APPROVED` once it has signed, so it can say where the request IS
+ * but never which of the director's TWO decisions produced it - the first
+ * approval writes `directorReviewStatus` and this one writes this column, and
+ * that separation is the only thing telling their two stages apart.
+ * `resolveReviewRoute` keys on the PRESENCE of this column to decide which of
+ * the director's two pages a queue row opens.
+ *
+ * `FINAL_REJECTED` keeps the label `masterStatusMap` fixed for it - "Director
+ * Final Rejected", never "Final Rejected" - because `IDO_FINAL_REJECTED` is the
+ * chairperson's terminal no and the two must not read alike.
+ */
+export const finalDirectorStatusMap: Record<string, StatusMapEntry> = {
+	UNDER_FINAL_DIRECTOR_APPROVAL: { icon: ShieldCheck, label: "Final Approval", tone: "warning" },
+	APPROVED: { icon: CheckCircle2, label: "Approved", tone: "success" },
+	FINAL_REJECTED: { icon: XCircle, label: "Director Final Rejected", tone: "danger" },
+};
+
+/**
+ * The ONE `finalDirectorStatus` in which the Campus Director may give the final
+ * approval.
+ *
+ * Written by the CHAIRPERSON's approval (`idoFinalApprove`), never here - the
+ * same coupling `IDO_FINAL_ACTIONABLE_STATUS` documents one stage earlier. Move
+ * that write and this stage's guard has nothing left to match, and the symptom
+ * is a director's queue that fills with requests no procedure will accept.
+ *
+ * A single value, and both procedures read it - unlike the director's FIRST
+ * approval, whose approve and reject guards are deliberately different widths.
+ * There is no race at this stage: one desk holds the request, both outcomes are
+ * terminal for the whole workflow, and the approval's extra guard is the
+ * signature rather than a second status.
+ */
+export const FINAL_DIRECTOR_ACTIONABLE_STATUS = "UNDER_FINAL_DIRECTOR_APPROVAL";
+
+/** `null` - a request that has not reached the final approval - is NOT
+ *  actionable. So is `"APPROVED"`: this stage is over and nothing re-opens it. */
+export function isFinalDirectorActionableStatus(finalDirectorStatus?: string | null): boolean {
+	return finalDirectorStatus === FINAL_DIRECTOR_ACTIONABLE_STATUS;
 }
