@@ -1,3 +1,6 @@
+import type { ChipTone } from "@bernardsapida/web-ui";
+import { ChevronDown, ChevronsUp, ChevronUp, type LucideIcon, Minus } from "lucide-react";
+
 /**
  * Every closed list the request form offers, and the single place each is named.
  *
@@ -103,6 +106,29 @@ export const PRIORITY_OPTIONS: { label: string; value: Priority }[] = PRIORITY_V
 export function priorityLabel(value: string | null | undefined): string {
 	if (!value) return "—";
 	return PRIORITY_LABELS[value as Priority] ?? value;
+}
+
+/**
+ * How a priority reads as a chip, and the one place that pairing is decided.
+ *
+ * A staff desk scans forty rows for the one that cannot wait, and plain text in
+ * a Priority column does not survive that - "High" and "Low" are the same shape
+ * at a glance. The tone is what makes the row findable.
+ *
+ * `default` for LOW rather than `success`: green says "good", and a low-priority
+ * request is not good news, it is ordinary. Reserving colour for the two that
+ * change what somebody does today is what keeps HIGH loud.
+ */
+const PRIORITY_CHIPS: Record<Priority, { icon: LucideIcon; tone: ChipTone }> = {
+	HIGH: { icon: ChevronsUp, tone: "danger" },
+	LOW: { icon: ChevronDown, tone: "default" },
+	MEDIUM: { icon: ChevronUp, tone: "warning" },
+};
+
+/** A priority the map has never heard of renders as itself, in the neutral tone,
+ *  rather than crashing the row it sits in. */
+export function priorityChip(value: string | null | undefined): { icon: LucideIcon; tone: ChipTone } {
+	return PRIORITY_CHIPS[value as Priority] ?? { icon: Minus, tone: "default" };
 }
 
 export const JUSTIFICATION_VALUES = [

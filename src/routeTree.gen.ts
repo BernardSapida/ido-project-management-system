@@ -123,6 +123,7 @@ import { Route as ApiPusherAuthRouteImport } from './routes/api/pusher/auth'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api.trpc.$'
 import { Route as AuthenticatedRequestsRequestIdIndexRouteImport } from './routes/_authenticated/requests/$requestId/index'
 import { Route as AuthenticatedRequestsRequestIdEditRouteImport } from './routes/_authenticated/requests/$requestId/edit'
+import { Route as AuthenticatedStaffDashboardIndexRouteImport } from './routes/_authenticated/staff/dashboard/index'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -781,6 +782,12 @@ const AuthenticatedRequestsRequestIdEditRoute =
     path: '/requests/$requestId/edit',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedStaffDashboardIndexRoute =
+  AuthenticatedStaffDashboardIndexRouteImport.update({
+    id: '/staff/dashboard/',
+    path: '/staff/dashboard/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -896,6 +903,7 @@ export interface FileRoutesByFullPath {
   '/requests/': typeof AuthenticatedRequestsIndexRoute
   '/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
   '/requests/$requestId/': typeof AuthenticatedRequestsRequestIdIndexRoute
+  '/staff/dashboard/': typeof AuthenticatedStaffDashboardIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -1010,6 +1018,7 @@ export interface FileRoutesByTo {
   '/requests': typeof AuthenticatedRequestsIndexRoute
   '/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
   '/requests/$requestId': typeof AuthenticatedRequestsRequestIdIndexRoute
+  '/staff/dashboard': typeof AuthenticatedStaffDashboardIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -1127,6 +1136,7 @@ export interface FileRoutesById {
   '/_authenticated/requests/': typeof AuthenticatedRequestsIndexRoute
   '/_authenticated/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
   '/_authenticated/requests/$requestId/': typeof AuthenticatedRequestsRequestIdIndexRoute
+  '/_authenticated/staff/dashboard/': typeof AuthenticatedStaffDashboardIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -1244,6 +1254,7 @@ export interface FileRouteTypes {
     | '/requests/'
     | '/requests/$requestId/edit'
     | '/requests/$requestId/'
+    | '/staff/dashboard/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -1358,6 +1369,7 @@ export interface FileRouteTypes {
     | '/requests'
     | '/requests/$requestId/edit'
     | '/requests/$requestId'
+    | '/staff/dashboard'
   id:
     | '__root__'
     | '/'
@@ -1474,6 +1486,7 @@ export interface FileRouteTypes {
     | '/_authenticated/requests/'
     | '/_authenticated/requests/$requestId/edit'
     | '/_authenticated/requests/$requestId/'
+    | '/_authenticated/staff/dashboard/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -2301,6 +2314,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRequestsRequestIdEditRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/staff/dashboard/': {
+      id: '/_authenticated/staff/dashboard/'
+      path: '/staff/dashboard'
+      fullPath: '/staff/dashboard/'
+      preLoaderRoute: typeof AuthenticatedStaffDashboardIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
 
@@ -2312,6 +2332,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedRequestsIndexRoute: typeof AuthenticatedRequestsIndexRoute
   AuthenticatedRequestsRequestIdEditRoute: typeof AuthenticatedRequestsRequestIdEditRoute
   AuthenticatedRequestsRequestIdIndexRoute: typeof AuthenticatedRequestsRequestIdIndexRoute
+  AuthenticatedStaffDashboardIndexRoute: typeof AuthenticatedStaffDashboardIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -2324,6 +2345,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedRequestsRequestIdEditRoute,
   AuthenticatedRequestsRequestIdIndexRoute:
     AuthenticatedRequestsRequestIdIndexRoute,
+  AuthenticatedStaffDashboardIndexRoute: AuthenticatedStaffDashboardIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

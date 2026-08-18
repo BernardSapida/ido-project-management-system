@@ -15,7 +15,8 @@ import {
 	REJECTED_STATUSES,
 	STATUS_GROUPS,
 } from "@/lib/status-maps/request-status";
-import { protectedProcedure } from "../init";
+import type { RequestWhereInput } from "../../../../prisma/generated/models.ts";
+import { protectedProcedure, roleProcedure } from "../init";
 
 /**
  * Issue the next document number for the current year, as `YYYY-NNNN`.
@@ -147,6 +148,186 @@ async function loadOwnEditableRequest(id: string, userId: string, verb: "edited"
 	}
 
 	return existing;
+}
+
+/* -------------------------------------------------------------------------- */
+/* The staff queue - spec 009                                                  */
+
+/**
+ * The first IDO stage, which BOTH IDO desks answer for.
+ *
+ * Named once and spread into the two roles below rather than written twice: the
+ * chairperson's queue is the officer's queue plus the final-review stage, and
+ * two copies of the first half is how a status added to one desk quietly goes
+ * missing from the other.
+ */
+const IDO_FIRST_STAGE_SCOPE: RequestWhereInput[] = [
+	{ masterStatus: "SUBMITTED" },
+	{
+		idoEvaluationStatus: {
+			in: ["UNDER_IDO_REVIEW", "RECOMMENDED_BY_IDO", "RETURNED_TO_REQUESTOR", "REJECTED_BY_IDO", "FOR_NEXT_YEAR_PPMP"],
+		},
+	},
+];
+
+/**
+ * Every request a desk has a stake in - what it can act on now, PLUS what it has
+ * already finished with.
+ *
+ * ## One OR, never two queries
+ *
+ * The chairperson and the director each appear at two stages, and a request can
+ * legitimately match both clauses at once - a director's request sitting at
+ * IDO-final still carries `directorReviewStatus: DIRECTOR_APPROVED`. Unioning
+ * two queries would list it twice and count it twice; a single `OR` inside one
+ * `where` is what makes the row appear once.
+ *
+ * ## History stays in scope
+ *
+ * `budgetOfficerSignedAt: { not: null }` is not decoration. A budget officer's
+ * approved request moves on to the director the moment they sign it, and without
+ * that clause their own signed work vanishes from their screen the instant they
+ * finish it - which is the point at which they most want to look at it again.
+ *
+ * The destination pages this scope feeds must therefore render READ-ONLY for a
+ * request the role has already handled rather than refusing it. That refusal is
+ * exactly what IRMS-old logged as "Request is not available for IDO review".
+ */
+const STAFF_QUEUE_SCOPE = {
+	BUDGET_OFFICER: [
+		{ directorReviewStatus: { in: ["UNDER_BUDGET_OFFICER_REVIEW", "BUDGET_OFFICER_REJECTED"] } },
+		{ budgetOfficerSignedAt: { not: null } },
+	],
+	DIRECTOR: [
+		{ directorReviewStatus: { in: ["UNDER_DIRECTOR_REVIEW", "DIRECTOR_APPROVED", "DIRECTOR_REJECTED"] } },
+		{ finalDirectorStatus: { in: ["UNDER_FINAL_DIRECTOR_APPROVAL", "APPROVED", "FINAL_REJECTED"] } },
+	],
+	IDO_CHAIRPERSON: [
+		...IDO_FIRST_STAGE_SCOPE,
+		{ idoFinalStatus: { in: ["UNDER_IDO_FINAL_REVIEW", "IDO_FINAL_APPROVED", "IDO_FINAL_REJECTED"] } },
+	],
+	IDO_OFFICER: IDO_FIRST_STAGE_SCOPE,
+} satisfies Record<string, RequestWhereInput[]>;
+
+/**
+ * The four desks. The `roleProcedure` on both queue procedures is built from
+ * these keys, so the gate and the scope map cannot name different sets of roles.
+ */
+type StaffRole = keyof typeof STAFF_QUEUE_SCOPE;
+
+const STAFF_QUEUE_ROLES = Object.keys(STAFF_QUEUE_SCOPE) as StaffRole[];
+
+/**
+ * The subset of the scope this desk can act on RIGHT NOW - the "Waiting on you"
+ * tile, and the `stage=waiting` filter behind it.
+ *
+ * "Handled" is deliberately defined as the scope MINUS this rather than as a
+ * third list. Written out separately the two would eventually stop partitioning
+ * the queue, and the visible failure - a request in neither tile, or counted in
+ * both - is a staff member's counters disagreeing with their own table.
+ */
+const STAFF_WAITING_SCOPE = {
+	BUDGET_OFFICER: [{ directorReviewStatus: "UNDER_BUDGET_OFFICER_REVIEW" }],
+	DIRECTOR: [
+		{ directorReviewStatus: "UNDER_DIRECTOR_REVIEW" },
+		{ finalDirectorStatus: "UNDER_FINAL_DIRECTOR_APPROVAL" },
+	],
+	IDO_CHAIRPERSON: [
+		{ masterStatus: { in: ["SUBMITTED", "UNDER_IDO_REVIEW"] } },
+		{ idoFinalStatus: "UNDER_IDO_FINAL_REVIEW" },
+	],
+	IDO_OFFICER: [{ masterStatus: { in: ["SUBMITTED", "UNDER_IDO_REVIEW"] } }],
+} satisfies Record<StaffRole, RequestWhereInput[]>;
+
+/**
+ * Narrows `ctx.user.role` to the four keys above.
+ *
+ * `roleProcedure` is the GATE and has already thrown for anybody else; this is
+ * the type system catching up with it, and the throw at each call site is
+ * unreachable by design. Indexing the map with an unnarrowed `Role` instead
+ * would need a cast, and a cast is what turns a seventh role added to the enum
+ * from a compile error into an `undefined` scope - which is a `where` of
+ * `{ OR: undefined }`, i.e. every request in the system.
+ */
+function isStaffRole(role: string): role is StaffRole {
+	return role in STAFF_QUEUE_SCOPE;
+}
+
+/**
+ * Thrown where `isStaffRole` fails. The same message `roleProcedure` uses,
+ * because it is the same refusal arriving one layer later.
+ */
+function notStaffError() {
+	return new TRPCError({ code: "FORBIDDEN", message: "Insufficient permissions" });
+}
+
+/**
+ * What a row in the staff queue needs.
+ *
+ * The six visible columns, plus `idoFinalStatus` and `finalDirectorStatus` -
+ * which are never rendered. They are what `resolveReviewRoute` reads to decide
+ * WHERE a row click goes, and dropping them from the payload silently sends
+ * every chairperson to the first-stage review page.
+ */
+const STAFF_ROW_SELECT = {
+	createdAt: true,
+	documentNumber: true,
+	finalDirectorStatus: true,
+	id: true,
+	idoFinalStatus: true,
+	masterStatus: true,
+	priority: true,
+	title: true,
+	typeOfRequest: true,
+} as const;
+
+const staffListInputSchema = z.object({
+	page: z.number().int().min(1).default(1),
+	pageSize: z.number().int().min(1).max(100).default(10),
+	priority: z.string().optional(),
+	search: z.string().optional(),
+	/**
+	 * Which half of the queue: what is waiting on this desk, or what it has
+	 * finished with. Absent is both - the whole role scope.
+	 */
+	stage: z.enum(["handled", "waiting"]).optional(),
+	status: z.string().optional(),
+});
+
+type StaffListInput = z.infer<typeof staffListInputSchema>;
+
+/**
+ * The role scope, ANDed with whatever the caller asked for.
+ *
+ * The AND is the security. Every filter is pushed as an ADDITIONAL condition
+ * beside the role clause, never in place of it, so a `status=DRAFT` from a budget
+ * officer narrows their queue to nothing rather than reaching a draft that never
+ * left the requestor's desk. Building `where` as `{ ...roleScope, ...filters }` -
+ * the shape this reads as if you skim it - would let a `masterStatus` key in the
+ * filters overwrite the one in the scope, and that is the whole leak.
+ */
+function staffQueueWhere(role: StaffRole, input: Omit<StaffListInput, "page" | "pageSize">): RequestWhereInput {
+	const search = input.search?.trim();
+	const waiting: RequestWhereInput = { OR: STAFF_WAITING_SCOPE[role] };
+	const conditions: RequestWhereInput[] = [{ OR: STAFF_QUEUE_SCOPE[role] }];
+
+	if (input.stage === "waiting") conditions.push(waiting);
+	if (input.stage === "handled") conditions.push({ NOT: waiting });
+	if (input.status) conditions.push({ masterStatus: input.status });
+	if (input.priority) conditions.push({ priority: input.priority });
+
+	if (search) {
+		conditions.push({
+			OR: [
+				{ title: { contains: search, mode: "insensitive" } },
+				// Insensitive on a numeric-looking column for the reason `myList` gives:
+				// `YYYY-NNNN` is one letter suffix away from needing it.
+				{ documentNumber: { contains: search, mode: "insensitive" } },
+			],
+		});
+	}
+
+	return { AND: conditions };
 }
 
 export const requestRouter = {
@@ -414,4 +595,121 @@ export const requestRouter = {
 
 		return { approved, pending, rejected, total };
 	}),
+	/**
+	 * One page of the staff queue, scoped to the caller's desk.
+	 *
+	 * ## The scope comes from the session, never from the input
+	 *
+	 * `staffQueueWhere` reads `ctx.user.role` and nothing else to build the role
+	 * clause; `status`, `priority`, `search` and `stage` are ANDed onto it. So a
+	 * crafted filter can NARROW what a desk sees and has no shape at all that
+	 * widens it - the failure this is written against is a status dropdown that
+	 * turns into a way to read every request in the system.
+	 *
+	 * `roleProcedure` over the same four roles is the gate. IRMS-old used a
+	 * `protectedProcedure` with an inline `else throw`, which worked and had to be
+	 * remembered on every endpoint added afterwards.
+	 */
+	staffList: roleProcedure(...STAFF_QUEUE_ROLES)
+		.input(staffListInputSchema)
+		.query(async ({ ctx, input }) => {
+			const { page, pageSize } = input;
+			const role = ctx.user.role;
+
+			if (!isStaffRole(role)) throw notStaffError();
+
+			const where = staffQueueWhere(role, input);
+
+			const [items, total] = await prisma.$transaction([
+				prisma.request.findMany({
+					// Newest first, and not sortable. Every other column here is a closed
+					// enum with no order worth offering, and the one thing a desk scans a
+					// queue for is what arrived while they were away.
+					orderBy: { createdAt: "desc" },
+					select: STAFF_ROW_SELECT,
+					skip: (page - 1) * pageSize,
+					take: pageSize,
+					where,
+				}),
+				prisma.request.count({ where }),
+			]);
+
+			return { items, page, pageSize, total, totalPages: Math.ceil(total / pageSize) };
+		}),
+
+	/**
+	 * The two counters above the queue, in one transaction so they are two
+	 * readings of the same instant rather than two of two.
+	 *
+	 * UNFILTERED within the role scope, unlike `staffList` - they answer "how big
+	 * is my desk", which is the question a filtered count cannot answer. They also
+	 * add up to the whole scope by construction: handled is the scope minus
+	 * waiting, so `waiting + handled` is the count line the table renders above
+	 * itself as "in your queue".
+	 */
+	staffSummary: roleProcedure(...STAFF_QUEUE_ROLES).query(async ({ ctx }) => {
+		const role = ctx.user.role;
+
+		if (!isStaffRole(role)) throw notStaffError();
+
+		const scope: RequestWhereInput = { OR: STAFF_QUEUE_SCOPE[role] };
+		const waiting: RequestWhereInput = { OR: STAFF_WAITING_SCOPE[role] };
+
+		const [handledCount, waitingCount] = await prisma.$transaction([
+			prisma.request.count({ where: { AND: [scope, { NOT: waiting }] } }),
+			prisma.request.count({ where: { AND: [scope, waiting] } }),
+		]);
+
+		return { handled: handledCount, waiting: waitingCount };
+	}),
+
+	/**
+	 * The narrow IDO inbox - `SUBMITTED` and `UNDER_IDO_REVIEW` alone.
+	 *
+	 * A separate procedure from `staffList` rather than a filter on it, because
+	 * "what must I action?" and "everything I have ever touched" are two
+	 * questions, and folding the first into a `stage` value on the second ties the
+	 * IDO inbox to whatever the queue's scope happens to be next year. Both IDO
+	 * desks may call it; the chairperson's own final-review stage is not in it,
+	 * which is the point - this is the FIRST desk's tray.
+	 */
+	listSubmitted: roleProcedure("IDO_OFFICER", "IDO_CHAIRPERSON")
+		.input(
+			z.object({
+				page: z.number().int().min(1).default(1),
+				pageSize: z.number().int().min(1).max(100).default(10),
+				priority: z.string().optional(),
+				search: z.string().optional(),
+			}),
+		)
+		.query(async ({ input }) => {
+			const { page, pageSize, priority } = input;
+			const search = input.search?.trim();
+
+			const where: RequestWhereInput = {
+				masterStatus: { in: ["SUBMITTED", "UNDER_IDO_REVIEW"] },
+				...(priority ? { priority } : {}),
+				...(search
+					? {
+							OR: [
+								{ title: { contains: search, mode: "insensitive" } },
+								{ documentNumber: { contains: search, mode: "insensitive" } },
+							],
+						}
+					: {}),
+			};
+
+			const [items, total] = await prisma.$transaction([
+				prisma.request.findMany({
+					orderBy: { createdAt: "desc" },
+					select: STAFF_ROW_SELECT,
+					skip: (page - 1) * pageSize,
+					take: pageSize,
+					where,
+				}),
+				prisma.request.count({ where }),
+			]);
+
+			return { items, page, pageSize, total, totalPages: Math.ceil(total / pageSize) };
+		}),
 } satisfies TRPCRouterRecord;
