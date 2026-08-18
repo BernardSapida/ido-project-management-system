@@ -28,6 +28,7 @@ import {
 	Warehouse,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { useState } from "react";
 import { seo } from "@/config/seo.config";
 
 /**
@@ -59,6 +60,7 @@ function TableLabPage() {
 				title="Table lab"
 			/>
 			<LiveSection />
+			<ControlledSection />
 			<LoadingSection />
 			<EmptySection />
 			<StickySection />
@@ -412,6 +414,157 @@ function LiveSection() {
 					storageKey="app.lab.table.orders"
 					title="Orders"
 				/>
+			</div>
+		</LabSection>
+	);
+}
+
+/* -------------------------------------------------------------------------- */
+
+/** Five, so the page control is real inside a specimen this small. */
+const CONTROLLED_ROWS_PER_PAGE = 5;
+
+/**
+ * Server mode with the CALLER holding the filter values.
+ *
+ * This is the shape a page needs when its filters belong in the URL, and the
+ * three things it buys are all visible here rather than described:
+ *
+ *   1. **The state line below the table is shareable.** It is built from the
+ *      same values the table is rendering, so it cannot drift from them. In the
+ *      uncontrolled specimen above there is nothing to build it from - the
+ *      values are inside the component.
+ *   2. **"Express only" sets the same row set the dropdowns do.** It is a
+ *      control the table does not render and cannot know about, which is what
+ *      `externalFilterCount` is for: the "N active" chip counts it, and - the
+ *      part that matters - an empty table under it says *filtered* instead of
+ *      "no orders yet". Turn it on with a city that has none and read the empty
+ *      state; that sentence is the whole reason the prop exists.
+ *   3. **One "Clear all" clears all three.** `onReset` is the only handler that
+ *      can reach the toggle, and it writes every value in one go rather than
+ *      three - which for a router caller is one history entry instead of three.
+ *
+ * The narrowing below stands in for a query. It is deliberately written out
+ * rather than delegated to the table: in server mode the table does none of it,
+ * and a specimen that hid that fact would be demonstrating client mode with
+ * extra steps.
+ */
+function ControlledSection() {
+	const [filters, setFilters] = useState<Record<string, string | null>>({});
+	const [search, setSearch] = useState("");
+	const [page, setPage] = useState(1);
+	const [isExpressOnly, setIsExpressOnly] = useState(false);
+
+	const columns = orderColumns(
+		() => undefined,
+		() => undefined,
+	);
+
+	/*
+	 * The "server". Filters, searches and slices exactly as a query would, and in
+	 * that order - narrow, then find, then take one page.
+	 *
+	 * `FILTERS` is reused whole. A `DataTableFilter` is a `FilterDef` with a
+	 * predicate, so the same array describes the dropdowns to the table and tells
+	 * this fake backend what each choice means; the table ignores the predicates
+	 * in server mode, which is the point of it being one array rather than two
+	 * that could disagree.
+	 */
+	const matched = ALL_ROWS.filter((row) => {
+		if (isExpressOnly && row.service !== "Express") return false;
+
+		for (const filter of FILTERS) {
+			const value = filters[filter.key];
+			if (value && !filter.predicate(row, value)) return false;
+		}
+
+		const needle = search.trim().toLowerCase();
+		if (!needle) return true;
+		return row.name.toLowerCase().includes(needle) || row.city.toLowerCase().includes(needle);
+	});
+
+	const pageRows = matched.slice((page - 1) * CONTROLLED_ROWS_PER_PAGE, page * CONTROLLED_ROWS_PER_PAGE);
+
+	/** What a router would be holding. Built from the state the table renders, so
+	 *  the two cannot disagree - which is the property the whole mode exists for. */
+	const query = new URLSearchParams();
+	for (const [key, value] of Object.entries(filters)) {
+		if (value) query.set(key, value);
+	}
+	if (search.trim()) query.set("search", search.trim());
+	if (isExpressOnly) query.set("service", "express");
+	if (page > 1) query.set("page", String(page));
+
+	function reset() {
+		setFilters({});
+		setSearch("");
+		setIsExpressOnly(false);
+		setPage(1);
+	}
+
+	return (
+		<LabSection
+			description="Server mode, with the page holding the filters instead of the table. Everything the table renders comes from state above it, so the address line under the table is always what a link would carry - and the Express toggle, which the table cannot see, still counts as an active filter and still gets cleared by Clear all."
+			title="Controlled filters"
+		>
+			<div
+				className="space-y-4"
+				data-cy="table-controlled"
+			>
+				{/*
+				 * The outside control. A toggle rather than a dropdown on purpose: if it
+				 * were a dropdown it would belong in the filter bar, and the case worth
+				 * showing is the one where it cannot.
+				 */}
+				<AppButton
+					data-cy="controlled-express"
+					icon={Package}
+					onPress={() => {
+						setIsExpressOnly((previous) => !previous);
+						// The page reset lives HERE, with the state change, for the reason
+						// `onPageChange` gives: one write, one history entry.
+						setPage(1);
+					}}
+					size="sm"
+					variant={isExpressOnly ? "primary" : "ghost"}
+				>
+					{isExpressOnly ? "Express only" : "All services"}
+				</AppButton>
+
+				<AppDataTable
+					columns={columns}
+					// Counted in the bar's "N active", and - the reason it exists - what
+					// makes an empty table blame the filters rather than the database.
+					externalFilterCount={isExpressOnly ? 1 : 0}
+					filters={FILTERS}
+					headingLevel={3}
+					noun="orders"
+					rows={pageRows}
+					rowsPerPage={CONTROLLED_ROWS_PER_PAGE}
+					searchPlaceholder="Search orders..."
+					server={{
+						filters,
+						onFiltersChange: (next) => {
+							setFilters(next);
+							setPage(1);
+						},
+						onPageChange: setPage,
+						onReset: reset,
+						onSearchChange: (next) => {
+							setSearch(next);
+							setPage(1);
+						},
+						page,
+						search,
+						total: matched.length,
+					}}
+					title="Orders"
+				/>
+
+				<p className="text-xs text-muted">
+					<span className="font-medium">Address bar: </span>
+					<code>/orders{query.size > 0 ? `?${query}` : ""}</code>
+				</p>
 			</div>
 		</LabSection>
 	);
