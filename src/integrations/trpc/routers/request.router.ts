@@ -1,15 +1,22 @@
 import { TRPCError, type TRPCRouterRecord } from "@trpc/server";
 import { z } from "zod";
 import {
+	idoDeferSchema,
+	idoRecommendSchema,
+	idoRejectSchema,
+	idoReturnSchema,
+} from "@/features/ido-review/validations/schema/ido-approver.schema";
+import {
 	createRequestSchema,
 	saveDraftRequestSchema,
 	submitRequestSchema,
 } from "@/features/request-form/validations/schema/request.schema";
-import { assertPermission } from "@/lib/permissions";
+import { assertPermission, hasPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { assertCanReadRequest } from "@/lib/request-access";
 import {
 	isEditableStatus,
+	isIdoActionableStatus,
 	masterStatusMap,
 	PENDING_STATUSES,
 	REJECTED_STATUSES,
@@ -91,6 +98,11 @@ const REQUEST_DETAIL_SELECT = {
 	position: true,
 	priority: true,
 	processor: true,
+	// The IDO's own two columns, and they belong to the DETAIL payload rather than
+	// to a review-only query: the requestor's page prints the reference beside the
+	// document number once one is issued, and the review page (spec 010) has to
+	// show a reviewer what an earlier reviewer already decided.
+	reference: true,
 	requestedBy: true,
 	title: true,
 	typeOfRequest: true,
@@ -330,6 +342,148 @@ function staffQueueWhere(role: StaffRole, input: Omit<StaffListInput, "page" | "
 	return { AND: conditions };
 }
 
+/* -------------------------------------------------------------------------- */
+/* The IDO first review - spec 010                                             */
+
+/**
+ * The two desks that answer for the FIRST IDO stage.
+ *
+ * Named once and spread into all four `roleProcedure` calls below AND read by
+ * `getById` to decide `canReview`, so the gate and the flag the browser draws
+ * its buttons from cannot name different sets of roles. The chairperson is here
+ * because they may do an ordinary officer's review; the reverse is not true, and
+ * the final review (spec 013) is a separate list.
+ */
+const IDO_REVIEW_ROLES = ["IDO_OFFICER", "IDO_CHAIRPERSON"] as const;
+
+function isIdoReviewRole(role: string): boolean {
+	return (IDO_REVIEW_ROLES as readonly string[]).includes(role);
+}
+
+/**
+ * The reviewer's name as it is stamped onto the request and printed on the form.
+ *
+ * From `firstname`/`lastname` rather than from `name`, for the reason `create`
+ * gives: those two are the fields the printed form is laid out for, and `name` is
+ * a display string the user can put anything into. The fallback exists only for
+ * an account that predates the profile fields - a blank processor reads as "not
+ * yet assigned" on the requestor's side rail, which would be a lie about a
+ * request that has been recommended.
+ */
+function reviewerName(user: { firstname?: string | null; lastname?: string | null; name?: string | null }): string {
+	const composed = `${user.firstname ?? ""} ${user.lastname ?? ""}`.trim();
+
+	return composed || (user.name ?? "IDO");
+}
+
+/**
+ * The three checks every one of the four IDO actions shares, in the order the
+ * spec's guard list names them: grant, existence, stage.
+ *
+ * ## Why the grant comes first here, and last in `comment.create`
+ *
+ * The comment router checks access before the grant so a caller who cannot read
+ * a request cannot learn from the error that there is a request to read. That
+ * concern does not exist on this path: `roleProcedure` has already established
+ * the caller is an IDO desk, and both IDO roles are in `REQUEST_READER_ROLES` -
+ * they may read every request in the system. So the order carries no information
+ * and the cheaper check runs first.
+ *
+ * ## Why the status is NAMED in the refusal
+ *
+ * This error is what a review page left open on a request a colleague has since
+ * acted on gets back, and "not at the IDO review stage" leaves the officer with
+ * no idea what happened. `masterStatusMap` is the same label the chip shows, so
+ * the message and the page agree about where the request went.
+ *
+ * `requestStartAt` is selected because `recommend` needs it and the other three
+ * do not care - one query rather than a second read on the one path that does.
+ */
+async function loadIdoActionableRequest(id: string, userId: string) {
+	await assertPermission(userId, "REVIEW_REQUEST");
+
+	const existing = await prisma.request.findUnique({
+		where: { id },
+		select: { masterStatus: true, requestStartAt: true },
+	});
+
+	if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "Request not found" });
+
+	if (!isIdoActionableStatus(existing.masterStatus)) {
+		const label = masterStatusMap[existing.masterStatus]?.label ?? existing.masterStatus;
+
+		throw new TRPCError({
+			code: "FORBIDDEN",
+			message: `This request is not at the IDO review stage (${label})`,
+		});
+	}
+
+	return existing;
+}
+
+/**
+ * The three outcomes that are one status pair plus one audit entry.
+ *
+ * A map rather than three near-identical procedure bodies, because the ONLY
+ * thing that differs between returning, rejecting and deferring is which three
+ * strings get written - and three copies of the transaction is how one of them
+ * ends up writing the audit log outside it. Note that `masterStatus` and
+ * `idoEvaluationStatus` are separate keys rather than one: a return sets
+ * `RETURNED` on the first and `RETURNED_TO_REQUESTOR` on the second, and the
+ * other two happen to agree.
+ *
+ * `toStatus` is the master status, deliberately. IRMS-old wrote `DRAFT` here on a
+ * return, which made the timeline read "Submitted -> Draft" for a request whose
+ * status is Returned by IDO - the audit log disagreeing with the row it describes.
+ */
+const IDO_OUTCOMES = {
+	defer: {
+		action: "DEFERRED_TO_NEXT_YEAR_PPMP",
+		idoEvaluationStatus: "FOR_NEXT_YEAR_PPMP",
+		masterStatus: "FOR_NEXT_YEAR_PPMP",
+	},
+	reject: {
+		action: "REJECTED_BY_IDO",
+		idoEvaluationStatus: "REJECTED_BY_IDO",
+		masterStatus: "REJECTED_BY_IDO",
+	},
+	return: {
+		action: "RETURNED_TO_REQUESTOR",
+		idoEvaluationStatus: "RETURNED_TO_REQUESTOR",
+		masterStatus: "RETURNED",
+	},
+} as const;
+
+/**
+ * Write one of the three outcomes, and its audit entry, in one transaction.
+ *
+ * One transaction and not two writes: the audit log is the only history this app
+ * has, and a request that changed status with no entry saying who changed it is
+ * a record nobody can account for. The reverse - an entry for a status change
+ * that never committed - is worse, because the timeline then reports a decision
+ * that was never taken.
+ */
+async function applyIdoOutcome(
+	outcome: keyof typeof IDO_OUTCOMES,
+	{ actorId, fromStatus, id, note }: { actorId: string; fromStatus: string; id: string; note?: string },
+) {
+	const { action, idoEvaluationStatus, masterStatus } = IDO_OUTCOMES[outcome];
+
+	return await prisma.$transaction(async (tx) => {
+		const request = await tx.request.update({
+			where: { id },
+			data: { idoEvaluationStatus, masterStatus },
+			select: { id: true, idoEvaluationStatus: true },
+		});
+
+		await tx.auditLog.create({
+			data: { action, actorId, fromStatus, note: note ?? null, requestId: id, toStatus: masterStatus },
+		});
+
+		return request;
+	});
+}
+
 export const requestRouter = {
 	generateDocumentNumber: protectedProcedure.mutation(async () => {
 		const documentNumber = await generateDocumentNumber();
@@ -497,28 +651,45 @@ export const requestRouter = {
 	getById: protectedProcedure.input(z.object({ id: z.string().min(1) })).query(async ({ ctx, input }) => {
 		const { user } = ctx;
 
-		const request = await prisma.request.findUnique({
-			where: { id: input.id },
-			select: {
-				...REQUEST_DETAIL_SELECT,
-				auditLogs: {
-					select: {
-						action: true,
-						actor: { select: { firstname: true, id: true, lastname: true, role: true } },
-						createdAt: true,
-						fromStatus: true,
-						id: true,
-						note: true,
-						toStatus: true,
+		const [request, canReview] = await Promise.all([
+			prisma.request.findUnique({
+				where: { id: input.id },
+				select: {
+					...REQUEST_DETAIL_SELECT,
+					auditLogs: {
+						select: {
+							action: true,
+							actor: { select: { firstname: true, id: true, lastname: true, role: true } },
+							createdAt: true,
+							fromStatus: true,
+							id: true,
+							note: true,
+							toStatus: true,
+						},
+						orderBy: { createdAt: "asc" },
 					},
-					orderBy: { createdAt: "asc" },
 				},
-			},
-		});
+			}),
+			/*
+			 * Both halves of the IDO gate - the role AND the grant - answered for the
+			 * browser, for the reason `comment.list` sends `canComment`: the session
+			 * carries a role, and `REVIEW_REQUEST` is a per-user grant an admin can
+			 * revoke without touching it, so there is no other way for the page to
+			 * learn that its four buttons would all answer FORBIDDEN.
+			 *
+			 * Only looked up for the two IDO desks. A requestor, a director or a
+			 * budget officer cannot act at this stage whatever grants they hold, so
+			 * paying an indexed read on every detail-page load to be told `false`
+			 * would be a round trip that changes nothing.
+			 *
+			 * It decides nothing. All four procedures re-check the grant themselves.
+			 */
+			isIdoReviewRole(user.role) ? hasPermission(user.id, "REVIEW_REQUEST") : Promise.resolve(false),
+		]);
 
 		assertCanReadRequest(request, user);
 
-		return request;
+		return { ...request, canReview };
 	}),
 
 	/**
@@ -711,5 +882,150 @@ export const requestRouter = {
 			]);
 
 			return { items, page, pageSize, total, totalPages: Math.ceil(total / pageSize) };
+		}),
+
+	/**
+	 * Recommend it onward - the only one of the four outcomes that moves the
+	 * request forwards, and the only one that WRITES anything besides a status.
+	 *
+	 * ## Six columns and an audit entry, in one transaction
+	 *
+	 * `finalTitle`, `reference`, `approverNote`, `processor`, the two statuses and
+	 * the start date all commit together or none of them do. A failure halfway
+	 * would leave a request carrying a final title with its status unchanged: still
+	 * in IDO's queue, already retitled, and the next officer to open it cannot tell
+	 * which of the two facts is the stale one.
+	 *
+	 * ## `title` is never overwritten
+	 *
+	 * `finalTitle` is a second column, not a correction of the first. The requestor
+	 * wrote the original and it is the string they will search for; the detail page
+	 * shows the final title with the original beneath it. This resolves the open
+	 * question IRMS-old left in TASKS.md.
+	 *
+	 * ## The budget branch is a server-side count, never input
+	 *
+	 * Whether the request goes to a budget officer or straight to the director is
+	 * decided by whether there IS a budget officer, and the browser has no say. It
+	 * counts ACTIVE accounts: `protectedProcedure` refuses a suspended or inactive
+	 * user on every call, so routing a request to a desk staffed only by accounts
+	 * that cannot sign in strands it with no procedure able to move it on. `User.status`
+	 * also defaults to `inactive`, which is what makes the distinction real rather
+	 * than theoretical.
+	 *
+	 * The count is read at recommendation time and never revisited. Creating a
+	 * budget officer tomorrow does not re-route requests already sent to the
+	 * director, and that is correct - see the spec's edge cases.
+	 *
+	 * ## `masterStatus` does not expose the split
+	 *
+	 * It becomes `UNDER_DIRECTOR_REVIEW` on both branches. The requestor's view
+	 * says the request is with the approvers; which internal desk holds it is
+	 * `directorReviewStatus`, and mixing the two is how a request becomes
+	 * actionable at two desks at once.
+	 */
+	recommend: roleProcedure(...IDO_REVIEW_ROLES)
+		.input(idoRecommendSchema)
+		.mutation(async ({ ctx, input }) => {
+			const { finalTitle, id, note, reference } = input;
+			const { user } = ctx;
+
+			const existing = await loadIdoActionableRequest(id, user.id);
+
+			const budgetOfficerCount = await prisma.user.count({
+				where: { role: "BUDGET_OFFICER", status: "active" },
+			});
+
+			const directorReviewStatus = budgetOfficerCount > 0 ? "UNDER_BUDGET_OFFICER_REVIEW" : "UNDER_DIRECTOR_REVIEW";
+
+			return await prisma.$transaction(async (tx) => {
+				const request = await tx.request.update({
+					where: { id },
+					data: {
+						approverNote: note ?? null,
+						directorReviewStatus,
+						finalTitle,
+						idoEvaluationStatus: "RECOMMENDED_BY_IDO",
+						masterStatus: "UNDER_DIRECTOR_REVIEW",
+						processor: reviewerName(user),
+						reference: reference ?? null,
+						/*
+						 * Written ONLY when it was null, through an absent key rather than by
+						 * passing the old value back. The status guard above should already
+						 * make a second recommendation impossible, and this is the second
+						 * lock on the same door: `requestStartAt` is when the work actually
+						 * began, and a re-recommendation that moved it would silently rewrite
+						 * a date the completion report is measured against.
+						 */
+						...(existing.requestStartAt ? {} : { requestStartAt: new Date() }),
+					},
+					select: { id: true, idoEvaluationStatus: true },
+				});
+
+				await tx.auditLog.create({
+					data: {
+						action: "RECOMMENDED_BY_IDO",
+						actorId: user.id,
+						fromStatus: existing.masterStatus,
+						note: note ?? null,
+						requestId: id,
+						toStatus: "UNDER_DIRECTOR_REVIEW",
+					},
+				});
+
+				return request;
+			});
+		}),
+
+	/**
+	 * Send it back to the requestor to be fixed.
+	 *
+	 * Not a refusal: `RETURNED` is one of the two `EDITABLE_STATUSES`, so the
+	 * requestor can edit and resubmit, and `request.submit` reissues no document
+	 * number - the request keeps the one it was filed under. The note is required
+	 * because it IS the instruction; it lands in the audit log and the requestor
+	 * reads it as the banner on their detail page.
+	 */
+	returnToRequestor: roleProcedure(...IDO_REVIEW_ROLES)
+		.input(idoReturnSchema)
+		.mutation(async ({ ctx, input }) => {
+			const { id, note } = input;
+			const existing = await loadIdoActionableRequest(id, ctx.user.id);
+
+			return await applyIdoOutcome("return", { actorId: ctx.user.id, fromStatus: existing.masterStatus, id, note });
+		}),
+
+	/**
+	 * Refuse it at the first checkpoint. Terminal - there is no re-opening action,
+	 * and the requestor has to file a new request.
+	 *
+	 * The note is required for the same reason it is on a return, and it matters
+	 * more here: this is the last thing anybody will say about the request.
+	 */
+	rejectByIdo: roleProcedure(...IDO_REVIEW_ROLES)
+		.input(idoRejectSchema)
+		.mutation(async ({ ctx, input }) => {
+			const { id, note } = input;
+			const existing = await loadIdoActionableRequest(id, ctx.user.id);
+
+			return await applyIdoOutcome("reject", { actorId: ctx.user.id, fromStatus: existing.masterStatus, id, note });
+		}),
+
+	/**
+	 * Set it aside for next year's PPMP - the Project Procurement Management Plan.
+	 *
+	 * Terminal like a rejection and the opposite of one in meaning: the request was
+	 * valid, and the budget calendar rather than a reviewer's judgement is what
+	 * stopped it. That is why the note is optional - there may genuinely be nothing
+	 * to explain beyond the year - and why the audit entry renders on the neutral
+	 * `system` rail rather than the red one.
+	 */
+	deferToNextYearPpmp: roleProcedure(...IDO_REVIEW_ROLES)
+		.input(idoDeferSchema)
+		.mutation(async ({ ctx, input }) => {
+			const { id, note } = input;
+			const existing = await loadIdoActionableRequest(id, ctx.user.id);
+
+			return await applyIdoOutcome("defer", { actorId: ctx.user.id, fromStatus: existing.masterStatus, id, note });
 		}),
 } satisfies TRPCRouterRecord;

@@ -144,6 +144,29 @@ export function isEditableStatus(masterStatus?: string | null): boolean {
 }
 
 /**
+ * The two statuses in which the FIRST IDO desk may still act.
+ *
+ * `SUBMITTED` is a request nobody has picked up; `UNDER_IDO_REVIEW` is one an
+ * officer has. Every other status means the request has left this desk, and the
+ * four review procedures (spec 010) refuse it - which is what stops a second
+ * officer recommending a request the first one already rejected.
+ *
+ * It sits beside `EDITABLE_STATUSES` for the same reason that list does: the
+ * server guard and the read-only branch of the review page both read it, so the
+ * button and the gate cannot disagree about which request is actionable.
+ */
+export const IDO_ACTIONABLE_STATUSES = ["SUBMITTED", "UNDER_IDO_REVIEW"] as const;
+
+/** `undefined`/`null` is NOT actionable - unlike `isEditableStatus`, which treats
+ *  an absent status as the create page. A request with no status is not one an
+ *  IDO officer can recommend. */
+export function isIdoActionableStatus(masterStatus?: string | null): boolean {
+	if (!masterStatus) return false;
+
+	return (IDO_ACTIONABLE_STATUSES as readonly string[]).includes(masterStatus);
+}
+
+/**
  * The two `FILTER_OPTIONS` values that are not a literal status, and what each
  * expands to.
  *

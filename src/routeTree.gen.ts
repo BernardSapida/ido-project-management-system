@@ -123,6 +123,7 @@ import { Route as ApiPusherAuthRouteImport } from './routes/api/pusher/auth'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api.trpc.$'
 import { Route as AuthenticatedRequestsRequestIdIndexRouteImport } from './routes/_authenticated/requests/$requestId/index'
 import { Route as AuthenticatedRequestsRequestIdEditRouteImport } from './routes/_authenticated/requests/$requestId/edit'
+import { Route as AuthenticatedRequestsRequestIdReviewRouteImport } from './routes/_authenticated/requests/$requestId/review'
 import { Route as AuthenticatedStaffDashboardIndexRouteImport } from './routes/_authenticated/staff/dashboard/index'
 
 const IndexRoute = IndexRouteImport.update({
@@ -782,6 +783,12 @@ const AuthenticatedRequestsRequestIdEditRoute =
     path: '/requests/$requestId/edit',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedRequestsRequestIdReviewRoute =
+  AuthenticatedRequestsRequestIdReviewRouteImport.update({
+    id: '/requests/$requestId/review',
+    path: '/requests/$requestId/review',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedStaffDashboardIndexRoute =
   AuthenticatedStaffDashboardIndexRouteImport.update({
     id: '/staff/dashboard/',
@@ -902,6 +909,7 @@ export interface FileRoutesByFullPath {
   '/components/': typeof referencesComponentsIndexRoute
   '/requests/': typeof AuthenticatedRequestsIndexRoute
   '/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
+  '/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
   '/requests/$requestId/': typeof AuthenticatedRequestsRequestIdIndexRoute
   '/staff/dashboard/': typeof AuthenticatedStaffDashboardIndexRoute
 }
@@ -1017,6 +1025,7 @@ export interface FileRoutesByTo {
   '/components': typeof referencesComponentsIndexRoute
   '/requests': typeof AuthenticatedRequestsIndexRoute
   '/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
+  '/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
   '/requests/$requestId': typeof AuthenticatedRequestsRequestIdIndexRoute
   '/staff/dashboard': typeof AuthenticatedStaffDashboardIndexRoute
 }
@@ -1135,6 +1144,7 @@ export interface FileRoutesById {
   '/(references)/components/': typeof referencesComponentsIndexRoute
   '/_authenticated/requests/': typeof AuthenticatedRequestsIndexRoute
   '/_authenticated/requests/$requestId/edit': typeof AuthenticatedRequestsRequestIdEditRoute
+  '/_authenticated/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
   '/_authenticated/requests/$requestId/': typeof AuthenticatedRequestsRequestIdIndexRoute
   '/_authenticated/staff/dashboard/': typeof AuthenticatedStaffDashboardIndexRoute
 }
@@ -1253,6 +1263,7 @@ export interface FileRouteTypes {
     | '/components/'
     | '/requests/'
     | '/requests/$requestId/edit'
+    | '/requests/$requestId/review'
     | '/requests/$requestId/'
     | '/staff/dashboard/'
   fileRoutesByTo: FileRoutesByTo
@@ -1368,6 +1379,7 @@ export interface FileRouteTypes {
     | '/components'
     | '/requests'
     | '/requests/$requestId/edit'
+    | '/requests/$requestId/review'
     | '/requests/$requestId'
     | '/staff/dashboard'
   id:
@@ -1485,6 +1497,7 @@ export interface FileRouteTypes {
     | '/(references)/components/'
     | '/_authenticated/requests/'
     | '/_authenticated/requests/$requestId/edit'
+    | '/_authenticated/requests/$requestId/review'
     | '/_authenticated/requests/$requestId/'
     | '/_authenticated/staff/dashboard/'
   fileRoutesById: FileRoutesById
@@ -2314,6 +2327,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRequestsRequestIdEditRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/requests/$requestId/review': {
+      id: '/_authenticated/requests/$requestId/review'
+      path: '/requests/$requestId/review'
+      fullPath: '/requests/$requestId/review'
+      preLoaderRoute: typeof AuthenticatedRequestsRequestIdReviewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/staff/dashboard/': {
       id: '/_authenticated/staff/dashboard/'
       path: '/staff/dashboard'
@@ -2331,6 +2351,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedRequestsNewRoute: typeof AuthenticatedRequestsNewRoute
   AuthenticatedRequestsIndexRoute: typeof AuthenticatedRequestsIndexRoute
   AuthenticatedRequestsRequestIdEditRoute: typeof AuthenticatedRequestsRequestIdEditRoute
+  AuthenticatedRequestsRequestIdReviewRoute: typeof AuthenticatedRequestsRequestIdReviewRoute
   AuthenticatedRequestsRequestIdIndexRoute: typeof AuthenticatedRequestsRequestIdIndexRoute
   AuthenticatedStaffDashboardIndexRoute: typeof AuthenticatedStaffDashboardIndexRoute
 }
@@ -2343,6 +2364,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedRequestsIndexRoute: AuthenticatedRequestsIndexRoute,
   AuthenticatedRequestsRequestIdEditRoute:
     AuthenticatedRequestsRequestIdEditRoute,
+  AuthenticatedRequestsRequestIdReviewRoute:
+    AuthenticatedRequestsRequestIdReviewRoute,
   AuthenticatedRequestsRequestIdIndexRoute:
     AuthenticatedRequestsRequestIdIndexRoute,
   AuthenticatedStaffDashboardIndexRoute: AuthenticatedStaffDashboardIndexRoute,
