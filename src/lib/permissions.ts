@@ -102,15 +102,33 @@ export async function resetAndSeedPermissions(userId: string, role: string, gran
 }
 
 /**
- * The gate. Reads `UserPermission` and nothing else - a role that WOULD hold the
- * action by default does not help if the grant row has been revoked.
+ * Does this user hold the grant? Reads `UserPermission` and nothing else - a
+ * role that WOULD hold the action by default does not help if the grant row has
+ * been revoked.
+ *
+ * The non-throwing half of `assertPermission`, and it exists for one thing: a
+ * screen that has to DISABLE a control rather than let it fail. The comment
+ * composer (spec 008) is the case - a requestor whose `ADD_COMMENT` was revoked
+ * can still read the thread, so the box has to be there and refuse, with a
+ * reason, rather than either vanish or throw when they press Comment.
+ *
+ * It is never the gate. Answering this question for the client is a courtesy;
+ * `assertPermission` on the write is what actually decides.
  */
-export async function assertPermission(userId: string, action: Action): Promise<void> {
+export async function hasPermission(userId: string, action: Action): Promise<boolean> {
 	const perm = await prisma.userPermission.findUnique({
 		where: { userId_action: { action, userId } },
 	});
 
-	if (!perm) {
+	return perm !== null;
+}
+
+/**
+ * The gate. Reads `UserPermission` and nothing else - a role that WOULD hold the
+ * action by default does not help if the grant row has been revoked.
+ */
+export async function assertPermission(userId: string, action: Action): Promise<void> {
+	if (!(await hasPermission(userId, action))) {
 		throw new TRPCError({
 			code: "FORBIDDEN",
 			message: "You don't have permission to perform this action",

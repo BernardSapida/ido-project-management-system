@@ -5,6 +5,7 @@ import { seo } from "@/config/seo.config";
 import { assertAuthenticatedFn } from "@/features/auth/functions/auth.functions";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { CsmPromptBanner } from "@/features/csm/components/CsmPromptBanner";
+import { RequestCommentThread } from "@/features/request-comments/components/RequestCommentThread";
 import { RejectionNotice } from "@/features/request-detail/components/RejectionNotice";
 import { RequestActivityFeed } from "@/features/request-detail/components/RequestActivityFeed";
 import { RequestDetailSkeleton } from "@/features/request-detail/components/RequestDetailSkeleton";
@@ -196,6 +197,12 @@ function RequestDetailPage() {
 					visibleActions={isOwner ? REQUESTOR_VISIBLE_ACTIONS : undefined}
 				/>
 			</AppCard>
+
+			{/* Below the activity feed, because the two answer different questions in
+			    that order: what has HAPPENED to this request, and then what is being
+			    ASKED about it. No ownership check - every role that reached this page
+			    may read the thread, and `comment.list` decides that, not this page. */}
+			<RequestCommentThread requestId={requestId} />
 		</div>
 	);
 }

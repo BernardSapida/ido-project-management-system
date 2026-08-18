@@ -7,6 +7,7 @@ import {
 } from "@/features/request-form/validations/schema/request.schema";
 import { assertPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { assertCanReadRequest } from "@/lib/request-access";
 import {
 	isEditableStatus,
 	masterStatusMap,
@@ -96,16 +97,6 @@ const REQUEST_DETAIL_SELECT = {
 	userId: true,
 	workScope: true,
 } as const;
-
-/**
- * Who may read somebody else's request.
- *
- * ADMIN is deliberately absent. An administrator manages accounts - they hold no
- * `REVIEW_REQUEST` or `APPROVE_*` grant either (see `ROLE_DEFAULT_PERMISSIONS`),
- * and letting the role that can reset anybody's password also read everybody's
- * requests would make it the one account with no limit at all.
- */
-const REQUEST_READER_ROLES = ["IDO_OFFICER", "IDO_CHAIRPERSON", "BUDGET_OFFICER", "DIRECTOR"] as const;
 
 const myListInputSchema = z.object({
 	masterStatus: z.string().optional(),
@@ -306,23 +297,17 @@ export const requestRouter = {
 	/**
 	 * One request, with its history, for the page that shows it.
 	 *
-	 * ## The order of the two checks, and what it costs
-	 *
-	 * Existence first, then access - so a missing id is `NOT_FOUND` and an id that
-	 * exists but is not yours is `FORBIDDEN`. Those two ARE distinguishable, and
-	 * that is a decision rather than an oversight: cuids are not guessable in bulk,
-	 * so the set of ids anybody can probe is the set they were already given, and
-	 * the alternative - answering `NOT_FOUND` to a reviewer whose grant was revoked
-	 * this morning - sends them to look for a request that is sitting right there.
-	 * What neither answer carries is anything ABOUT the request: no title, no
-	 * owner, no status. That is the part that would be a leak.
-	 *
 	 * ## Five roles read this and one does not
 	 *
-	 * The owner, plus the four desks in `REQUEST_READER_ROLES`. A staff member
-	 * following a link from their queue gets the same read the requestor gets, and
-	 * no action - the page offers Edit, Submit and the CSM banner to the owner
-	 * only, and `saveDraft`/`submit` re-check ownership themselves regardless.
+	 * The owner, plus the four desks in `REQUEST_READER_ROLES`. The rule and the
+	 * order of its two checks live in `assertCanReadRequest` (spec 008) rather
+	 * than here, because the comment thread hangs off this request and has to
+	 * inherit the same visibility exactly - see the note there.
+	 *
+	 * A staff member following a link from their queue gets the same read the
+	 * requestor gets, and no action - the page offers Edit, Submit and the CSM
+	 * banner to the owner only, and `saveDraft`/`submit` re-check ownership
+	 * themselves regardless.
 	 *
 	 * The audit logs come back OLDEST-FIRST, which the client relies on twice: the
 	 * feed renders a process moving forwards, and `latestNegativeLog` walks the
@@ -350,13 +335,7 @@ export const requestRouter = {
 			},
 		});
 
-		if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "Request not found" });
-
-		const isReader = (REQUEST_READER_ROLES as readonly string[]).includes(user.role);
-
-		if (!isReader && request.userId !== user.id) {
-			throw new TRPCError({ code: "FORBIDDEN", message: "Access denied" });
-		}
+		assertCanReadRequest(request, user);
 
 		return request;
 	}),

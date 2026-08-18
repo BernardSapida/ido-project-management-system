@@ -5,6 +5,7 @@ import { Lock, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { seo } from "@/config/seo.config";
 import { assertAuthenticatedRoleFn } from "@/features/auth/functions/auth.functions";
+import { RequestCommentThread } from "@/features/request-comments/components/RequestCommentThread";
 import { RejectionNotice } from "@/features/request-detail/components/RejectionNotice";
 import { RequestDetailSkeleton } from "@/features/request-detail/components/RequestDetailSkeleton";
 import { RequestForm } from "@/features/request-form/components/RequestForm";
@@ -189,6 +190,16 @@ function RequestEditPage() {
 				processor={request.processor}
 				requestId={requestId}
 			/>
+
+			{/* The thread belongs on the EDIT page, not only on the detail page, and
+			    this is the page where it earns its place: a returned request is being
+			    fixed here, and the reviewer's question about it is the thing being
+			    fixed against. Sending the requestor to another page to re-read it -
+			    losing the form they are halfway through - is the failure this avoids.
+
+			    It is outside `RequestForm` on purpose. Nothing in it is a field, and
+			    posting a comment must not go through the form's save. */}
+			<RequestCommentThread requestId={requestId} />
 		</div>
 	);
 }
