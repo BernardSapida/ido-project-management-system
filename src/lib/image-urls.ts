@@ -104,6 +104,52 @@ export function collectRichTextImageUrls(body: unknown): string[] {
 	return urls;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Per-model collectors                                                        */
+
+/**
+ * The images a `User` row uses. Today that is the signature and nothing else.
+ *
+ * This one is not optional decoration - it is the entry that keeps the sweep
+ * from deleting a live signature. A signature is uploaded ONCE, usually on the
+ * day the account is set up, and is then referenced by every approval that
+ * person has ever stamped. It is therefore always older than the grace period
+ * and always looks like garbage to a sweep that cannot see this column.
+ *
+ * Registered in `REFERENCE_SOURCES` in `scripts/s3-sweep.ts`.
+ */
+export function collectUserImageUrls(user: { signatureUrl?: unknown }): string[] {
+	return isUsableUrl(user.signatureUrl) ? [user.signatureUrl] : [];
+}
+
+/**
+ * The files a `Request` row references — its attachments, and nothing else.
+ *
+ * `attachments` is a Json column, so this reads it as `unknown` and checks every
+ * step: what Prisma hands back is whatever last wrote the row, and a hand-edited
+ * one is not covered by the Zod schema that guards the write path. A `[]`
+ * default and a malformed row must both come out as no URLs rather than as a
+ * throw — this runs inside the sweep, and an exception there aborts a run
+ * partway through, after some deletes and before others.
+ *
+ * Registered in `REFERENCE_SOURCES` in `scripts/s3-sweep.ts`. Without that entry
+ * every attachment older than the grace period looks unreferenced, and a
+ * `--delete` strips the quotations off requests that are still under review.
+ */
+export function collectRequestImageUrls(request: { attachments?: unknown }): string[] {
+	if (!Array.isArray(request.attachments)) return [];
+
+	return unique(
+		request.attachments.flatMap((entry) => {
+			if (entry === null || typeof entry !== "object") return [];
+
+			const { url } = entry as { url?: unknown };
+
+			return isUsableUrl(url) ? [url] : [];
+		}),
+	);
+}
+
 /**
  * What an edit added and what it stranded.
  *

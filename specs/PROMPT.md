@@ -40,14 +40,14 @@ Each one assumes a fresh session. Paste as-is.
 ### 001 — Foundation
 
 ```
-Read specs/README.md, then implement specs/001-foundation-schema-roles-permissions.json in full.
+Read specs/README.md on IPMS, then implement specs/001-foundation-schema-roles-permissions.json in full.
 Run the migration and the seed when you're done. No tests — the spec lists them for later.
 ```
 
 ### 002 — Sign-up with position
 
 ```
-Read specs/README.md, then implement specs/002-sign-up-with-position.json.
+Read specs/README.md on IPMS, then implement specs/002-sign-up-with-position.json.
 For the email-verification edge case: mark self sign-ups emailVerified, and write down that we did it and why.
 No tests.
 ```
@@ -55,96 +55,96 @@ No tests.
 ### 003 — Profile and signature
 
 ```
-Read specs/README.md, then implement specs/003-profile-and-signature.json.
+Read specs/README.md on IPMS, then implement specs/003-profile-and-signature.json.
 S3 must be configured first — tell me if it isn't. No tests.
 ```
 
 ### 004 — My Requests
 
 ```
-Read specs/README.md, then implement specs/004-my-requests.json. No tests.
+Read specs/README.md on IPMS, then implement specs/004-my-requests.json. No tests.
 ```
 
 ### 005 — New Request
 
 ```
-Read specs/README.md, then implement specs/005-new-request.json. No tests.
+Read specs/README.md on IPMS, then implement specs/005-new-request.json. No tests.
 ```
 
 ### 006 — Request detail
 
 ```
-Read specs/README.md, then implement specs/006-request-detail.json. No tests.
+Read specs/README.md on IPMS, then implement specs/006-request-detail.json. No tests.
 ```
 
 ### 007 — Edit Request
 
 ```
-Read specs/README.md, then implement specs/007-edit-request.json. No tests.
+Read specs/README.md on IPMS, then implement specs/007-edit-request.json. No tests.
 ```
 
 ### 008 — Comment thread
 
 ```
-Read specs/README.md, then implement specs/008-request-comment-thread.json.
+Read specs/README.md on IPMS, then implement specs/008-request-comment-thread.json.
 Mount it on the pages the spec names. No tests.
 ```
 
 ### 009 — Staff dashboard
 
 ```
-Read specs/README.md, then implement specs/009-staff-dashboard.json. No tests.
+Read specs/README.md on IPMS, then implement specs/009-staff-dashboard.json. No tests.
 ```
 
 ### 010 — IDO first review
 
 ```
-Read specs/README.md, then implement specs/010-ido-first-review.json. No tests.
+Read specs/README.md on IPMS, then implement specs/010-ido-first-review.json. No tests.
 ```
 
 ### 011 — Budget officer review
 
 ```
-Read specs/README.md, then implement specs/011-budget-officer-review.json. No tests.
+Read specs/README.md on IPMS, then implement specs/011-budget-officer-review.json. No tests.
 ```
 
 ### 012 — Director first approval
 
 ```
-Read specs/README.md, then implement specs/012-director-first-approval.json.
+Read specs/README.md on IPMS, then implement specs/012-director-first-approval.json.
 Read the approve/reject asymmetry in edge_cases carefully — it is deliberate. No tests.
 ```
 
 ### 013 — IDO final review
 
 ```
-Read specs/README.md, then implement specs/013-ido-final-review.json. No tests.
+Read specs/README.md on IPMS, then implement specs/013-ido-final-review.json. No tests.
 ```
 
 ### 014 — Final director approval
 
 ```
-Read specs/README.md, then implement specs/014-final-director-approval.json.
+Read specs/README.md on IPMS, then implement specs/014-final-director-approval.json.
 The whole approval is one transaction. No tests.
 ```
 
 ### 015 — CSM
 
 ```
-Read specs/README.md, then implement specs/015-csm-satisfaction-form.json. No tests.
+Read specs/README.md on IPMS, then implement specs/015-csm-satisfaction-form.json. No tests.
 ```
 
 ### 016 — Request PDF
 
 ```
-Read specs/README.md, then implement specs/016-request-pdf.json.
+Read specs/README.md on IPMS, then implement specs/016-request-pdf.json.
 Add @react-pdf/renderer — it isn't in package.json yet. No tests.
 ```
 
 ### 017 — Admin accounts
 
 ```
-Read specs/README.md, then implement specs/017-admin-account-management.json. No tests.
+Read specs/README.md on IPMS, then implement specs/017-admin-account-management.json. No tests.
 ```
 
 ---
@@ -182,4 +182,5 @@ Read specs/0NN-….json and write the tests in its test_requirements. Run them u
 
 Do the security ones first, and verify each fails when you remove the guard it covers. A
 green suite you have never seen fail proves nothing.
-</content>
+
+Always commit after implementing spec

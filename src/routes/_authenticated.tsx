@@ -1,16 +1,39 @@
 import { AppHeader, AppLayout, AppMobileDrawer, AppSidebar } from "@bernardsapida/web-ui";
-import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
 import { getNavigation, getRoleLabel, getSecondaryNavigation, isNavItemActive } from "@/config/navigation.config";
 import { assertAuthenticatedFn } from "@/features/auth/functions/auth.functions";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { authClient } from "@/features/auth/utils/auth-client";
 import { useRouteBreadcrumbs, useRouteMainWidth } from "@/hooks/useRouteBreadcrumbs";
 import { useUIStore } from "@/store/ui.store";
+import type { User } from "@/types/auth.types";
 import { USER_ROLES } from "@/utils/config";
 
 export const Route = createFileRoute("/_authenticated")({
-	beforeLoad: async () => {
-		await assertAuthenticatedFn();
+	/**
+	 * Signed in, and finished signing up.
+	 *
+	 * The second half is the profile gate: a user whose `profileComplete` is
+	 * false has no signature on file, and a signature is stamped onto the printed
+	 * request form and onto every approval — so there is nothing they can usefully
+	 * do until it exists. Sending them to /profile is the whole of it.
+	 *
+	 * **The exemption is load-bearing.** Without the `/profile` test the redirect
+	 * fires on the page it redirects TO, and the user loops forever with no way to
+	 * fix the thing the loop is about.
+	 *
+	 * It lives here rather than in each page for the usual reason: a gate written
+	 * per route is a gate missing from the next route somebody adds.
+	 */
+	beforeLoad: async ({ location }) => {
+		const session = await assertAuthenticatedFn();
+		const user = session.user as unknown as User;
+
+		if (!user.profileComplete && !location.pathname.startsWith("/profile")) {
+			throw redirect({ to: "/profile" });
+		}
+
+		return { session };
 	},
 	component: SignedInLayout,
 });

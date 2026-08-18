@@ -110,6 +110,8 @@ import { Route as referencesComponentsToggleButtonRouteImport } from './routes/(
 import { Route as referencesComponentsTooltipRouteImport } from './routes/(references)/components/tooltip'
 import { Route as referencesComponentsTrackingRouteImport } from './routes/(references)/components/tracking'
 import { Route as referencesComponentsUsersListRouteImport } from './routes/(references)/components/users-list'
+import { Route as AuthenticatedRequestsIndexRouteImport } from './routes/_authenticated/requests/index'
+import { Route as AuthenticatedRequestsNewRouteImport } from './routes/_authenticated/requests/new'
 import { Route as ApiAppConfigRouteImport } from './routes/api/app/config'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiAuthChangePasswordRouteImport } from './routes/api/auth/change-password'
@@ -708,6 +710,18 @@ const referencesComponentsUsersListRoute =
     path: '/users-list',
     getParentRoute: () => referencesComponentsRoute,
   } as any)
+const AuthenticatedRequestsIndexRoute =
+  AuthenticatedRequestsIndexRouteImport.update({
+    id: '/requests/',
+    path: '/requests/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedRequestsNewRoute =
+  AuthenticatedRequestsNewRouteImport.update({
+    id: '/requests/new',
+    path: '/requests/new',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const ApiAppConfigRoute = ApiAppConfigRouteImport.update({
   id: '/api/app/config',
   path: '/api/app/config',
@@ -854,6 +868,7 @@ export interface FileRoutesByFullPath {
   '/components/tooltip': typeof referencesComponentsTooltipRoute
   '/components/tracking': typeof referencesComponentsTrackingRoute
   '/components/users-list': typeof referencesComponentsUsersListRoute
+  '/requests/new': typeof AuthenticatedRequestsNewRoute
   '/api/app/config': typeof ApiAppConfigRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/auth/change-password': typeof ApiAuthChangePasswordRoute
@@ -864,6 +879,7 @@ export interface FileRoutesByFullPath {
   '/api/pusher/auth': typeof ApiPusherAuthRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/components/': typeof referencesComponentsIndexRoute
+  '/requests/': typeof AuthenticatedRequestsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -964,6 +980,7 @@ export interface FileRoutesByTo {
   '/components/tooltip': typeof referencesComponentsTooltipRoute
   '/components/tracking': typeof referencesComponentsTrackingRoute
   '/components/users-list': typeof referencesComponentsUsersListRoute
+  '/requests/new': typeof AuthenticatedRequestsNewRoute
   '/api/app/config': typeof ApiAppConfigRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/auth/change-password': typeof ApiAuthChangePasswordRoute
@@ -974,6 +991,7 @@ export interface FileRoutesByTo {
   '/api/pusher/auth': typeof ApiPusherAuthRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/components': typeof referencesComponentsIndexRoute
+  '/requests': typeof AuthenticatedRequestsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -1077,6 +1095,7 @@ export interface FileRoutesById {
   '/(references)/components/tooltip': typeof referencesComponentsTooltipRoute
   '/(references)/components/tracking': typeof referencesComponentsTrackingRoute
   '/(references)/components/users-list': typeof referencesComponentsUsersListRoute
+  '/_authenticated/requests/new': typeof AuthenticatedRequestsNewRoute
   '/api/app/config': typeof ApiAppConfigRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/auth/change-password': typeof ApiAuthChangePasswordRoute
@@ -1087,6 +1106,7 @@ export interface FileRoutesById {
   '/api/pusher/auth': typeof ApiPusherAuthRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/(references)/components/': typeof referencesComponentsIndexRoute
+  '/_authenticated/requests/': typeof AuthenticatedRequestsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -1190,6 +1210,7 @@ export interface FileRouteTypes {
     | '/components/tooltip'
     | '/components/tracking'
     | '/components/users-list'
+    | '/requests/new'
     | '/api/app/config'
     | '/api/auth/$'
     | '/api/auth/change-password'
@@ -1200,6 +1221,7 @@ export interface FileRouteTypes {
     | '/api/pusher/auth'
     | '/api/trpc/$'
     | '/components/'
+    | '/requests/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -1300,6 +1322,7 @@ export interface FileRouteTypes {
     | '/components/tooltip'
     | '/components/tracking'
     | '/components/users-list'
+    | '/requests/new'
     | '/api/app/config'
     | '/api/auth/$'
     | '/api/auth/change-password'
@@ -1310,6 +1333,7 @@ export interface FileRouteTypes {
     | '/api/pusher/auth'
     | '/api/trpc/$'
     | '/components'
+    | '/requests'
   id:
     | '__root__'
     | '/'
@@ -1412,6 +1436,7 @@ export interface FileRouteTypes {
     | '/(references)/components/tooltip'
     | '/(references)/components/tracking'
     | '/(references)/components/users-list'
+    | '/_authenticated/requests/new'
     | '/api/app/config'
     | '/api/auth/$'
     | '/api/auth/change-password'
@@ -1422,6 +1447,7 @@ export interface FileRouteTypes {
     | '/api/pusher/auth'
     | '/api/trpc/$'
     | '/(references)/components/'
+    | '/_authenticated/requests/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -2158,6 +2184,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof referencesComponentsUsersListRouteImport
       parentRoute: typeof referencesComponentsRoute
     }
+    '/_authenticated/requests/': {
+      id: '/_authenticated/requests/'
+      path: '/requests'
+      fullPath: '/requests/'
+      preLoaderRoute: typeof AuthenticatedRequestsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/requests/new': {
+      id: '/_authenticated/requests/new'
+      path: '/requests/new'
+      fullPath: '/requests/new'
+      preLoaderRoute: typeof AuthenticatedRequestsNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/api/app/config': {
       id: '/api/app/config'
       path: '/api/app/config'
@@ -2228,12 +2268,16 @@ interface AuthenticatedRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
+  AuthenticatedRequestsNewRoute: typeof AuthenticatedRequestsNewRoute
+  AuthenticatedRequestsIndexRoute: typeof AuthenticatedRequestsIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
+  AuthenticatedRequestsNewRoute: AuthenticatedRequestsNewRoute,
+  AuthenticatedRequestsIndexRoute: AuthenticatedRequestsIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

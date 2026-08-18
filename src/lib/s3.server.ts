@@ -10,7 +10,7 @@ import { env } from "@/env";
  * behind them — which is what makes moving to Cloudflare R2 a change to the two
  * functions below rather than a change to every form.
  *
- * SERVER ONLY. It reads `AWS_SECRET_ACCESS_KEY`. Nothing under `components/`,
+ * SERVER ONLY. It reads `APP_AWS_SECRET_ACCESS_KEY`. Nothing under `components/`,
  * `features/*\/components/` or `routes/` may import it; the browser reaches this
  * through the `upload` tRPC router and gets back a URL that expires.
  */
@@ -32,13 +32,13 @@ interface S3Config {
  * name.
  */
 function assertS3Config(): S3Config {
-	const { AWS_ACCESS_KEY_ID, AWS_REGION, AWS_S3_BUCKET, AWS_SECRET_ACCESS_KEY } = env;
+	const { APP_AWS_ACCESS_KEY_ID, APP_AWS_REGION, APP_AWS_S3_BUCKET, APP_AWS_SECRET_ACCESS_KEY } = env;
 
 	const missing = [
-		["AWS_REGION", AWS_REGION],
-		["AWS_S3_BUCKET", AWS_S3_BUCKET],
-		["AWS_ACCESS_KEY_ID", AWS_ACCESS_KEY_ID],
-		["AWS_SECRET_ACCESS_KEY", AWS_SECRET_ACCESS_KEY],
+		["APP_AWS_REGION", APP_AWS_REGION],
+		["APP_AWS_S3_BUCKET", APP_AWS_S3_BUCKET],
+		["APP_AWS_ACCESS_KEY_ID", APP_AWS_ACCESS_KEY_ID],
+		["APP_AWS_SECRET_ACCESS_KEY", APP_AWS_SECRET_ACCESS_KEY],
 	]
 		.filter(([, value]) => !value)
 		.map(([name]) => name);
@@ -48,10 +48,10 @@ function assertS3Config(): S3Config {
 	}
 
 	return {
-		accessKeyId: AWS_ACCESS_KEY_ID as string,
-		bucket: AWS_S3_BUCKET as string,
-		region: AWS_REGION as string,
-		secretAccessKey: AWS_SECRET_ACCESS_KEY as string,
+		accessKeyId: APP_AWS_ACCESS_KEY_ID as string,
+		bucket: APP_AWS_S3_BUCKET as string,
+		region: APP_AWS_REGION as string,
+		secretAccessKey: APP_AWS_SECRET_ACCESS_KEY as string,
 	};
 }
 

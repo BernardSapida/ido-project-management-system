@@ -6,6 +6,17 @@ import type { Role } from "../../../prisma/generated/enums.ts";
 
 interface TRPCContext {
 	headers: Headers;
+	/**
+	 * Headers a procedure wants on the HTTP response, drained by `responseMeta`
+	 * in `src/routes/api.trpc.$.tsx`.
+	 *
+	 * It exists for exactly one thing: forwarding a refreshed Better Auth
+	 * `set-cookie`. tRPC hands a resolver no way to touch the response, so a
+	 * procedure that changes something the session cookie CACHES — see
+	 * `profile.updateMyProfile` — has no other way to tell the browser about it,
+	 * and the stale cookie then wins for as long as the cache lives.
+	 */
+	responseHeaders: Headers;
 }
 
 const t = initTRPC.context<TRPCContext>().create({

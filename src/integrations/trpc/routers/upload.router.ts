@@ -1,37 +1,74 @@
 import { TRPCError, type TRPCRouterRecord } from "@trpc/server";
 import { z } from "zod";
 import { deleteImage, keyFromPublicUrl, presignImageUpload } from "@/lib/s3.server";
-import { UPLOAD_ACCEPTED_TYPES, UPLOAD_FOLDERS, UPLOAD_MAX_BYTES } from "@/lib/upload-constraints";
-import { adminProcedure } from "../init";
+import {
+	UPLOAD_ALL_ACCEPTED_TYPES,
+	UPLOAD_FOLDER_ACCEPTED_TYPES,
+	UPLOAD_FOLDERS,
+	UPLOAD_MAX_BYTES,
+} from "@/lib/upload-constraints";
+import { adminProcedure, protectedProcedure } from "../init";
 
 /**
  * Minting upload URLs, and removing what they wrote.
  *
- * `adminProcedure`, both of them, because an upload URL is a write to a bucket
- * that anyone on the internet can then read — and today the only things being
- * uploaded are blog banners, event banners and speaker photos, all of which are
- * behind the admin area already. The day a USER uploads an avatar, this becomes
- * `protectedProcedure` with a `folder` the caller does not choose, and that
- * should be a deliberate edit rather than a gate that was already open.
+ * ## Why `presign` is no longer admin-only
+ *
+ * It was `adminProcedure` while the only uploads were blog and event banners,
+ * with a note saying that the day a USER uploads something this becomes a
+ * deliberate edit rather than a gate that was already open. Spec 003 is that
+ * day: every role has to upload a signature before it can do anything at all,
+ * so an admin-only presign would lock the entire app behind a role nobody
+ * signing up has.
+ *
+ * What holds it now is `protectedProcedure` plus the input schema: the caller is
+ * an authenticated, ACTIVE account, `folder` is a closed enum rather than a
+ * string that could carry `../`, and the content type is one of five image
+ * formats and is signed INTO the URL, so S3 itself refuses a PUT that claims
+ * anything else.
+ *
+ * ## Why `remove` stayed admin-only
+ *
+ * It takes a URL and deletes the object behind it, with no way to prove the
+ * caller owns that object — opening it to every signed-in account would let any
+ * user delete any other user's signature by guessing a key. The one non-admin
+ * caller is the flush's own rollback in `use-deferred-upload.ts`, and it already
+ * swallows failures (`Promise.allSettled`): a rollback that 403s leaves the
+ * orphan for `npm run s3:sweep`, which is exactly what the sweep is for.
  */
 
-const presignInputSchema = z.object({
-	contentType: z.enum(UPLOAD_ACCEPTED_TYPES),
-	fileName: z.string().min(1).max(255),
-	/** Closed list — it becomes a path prefix. See `UPLOAD_FOLDERS`. */
-	folder: z.enum(UPLOAD_FOLDERS),
-	/**
-	 * Checked before a URL is issued, not by S3.
+const presignInputSchema = z
+	.object({
+		contentType: z.enum(UPLOAD_ALL_ACCEPTED_TYPES),
+		fileName: z.string().min(1).max(255),
+		/** Closed list — it becomes a path prefix. See `UPLOAD_FOLDERS`. */
+		folder: z.enum(UPLOAD_FOLDERS),
+		/**
+		 * Checked before a URL is issued, not by S3.
+		 *
+		 * A presigned PUT cannot be capped by size without moving to a POST policy,
+		 * so this refuses to MINT a URL for a file the browser has already measured
+		 * as too big. A caller who lies about the number gets a URL and can push
+		 * more through it — they are an authenticated admin, and the honest summary
+		 * is that this stops accidents, not attacks. The bucket's cost ceiling is a
+		 * billing alarm, not this line.
+		 */
+		size: z.number().int().positive().max(UPLOAD_MAX_BYTES),
+	})
+	/*
+	 * The type has to be accepted BY THIS FOLDER, not merely accepted somewhere.
 	 *
-	 * A presigned PUT cannot be capped by size without moving to a POST policy,
-	 * so this refuses to MINT a URL for a file the browser has already measured
-	 * as too big. A caller who lies about the number gets a URL and can push
-	 * more through it — they are an authenticated admin, and the honest summary
-	 * is that this stops accidents, not attacks. The bucket's cost ceiling is a
-	 * billing alarm, not this line.
+	 * Spec 005 opened the enum above to PDFs and Office documents so a requestor
+	 * can attach a quotation. Without this line that also opens `signatures` to
+	 * them — a caller asks for `application/pdf` into `signatures`, gets a signed
+	 * URL, and the printed form carries a blank signature box nobody notices
+	 * until it has been signed. `UPLOAD_FOLDER_ACCEPTED_TYPES` is the same map the
+	 * drop zone checks, so the browser's refusal and this one cannot disagree.
 	 */
-	size: z.number().int().positive().max(UPLOAD_MAX_BYTES),
-});
+	.refine(({ contentType, folder }) => UPLOAD_FOLDER_ACCEPTED_TYPES[folder].includes(contentType), {
+		message: "That file type is not accepted for this kind of upload.",
+		path: ["contentType"],
+	});
 
 export const uploadRouter = {
 	/**
@@ -41,7 +78,7 @@ export const uploadRouter = {
 	 * where the file will end up before the upload finishes — that is the value
 	 * that goes into the form field and then into `bannerUrl`.
 	 */
-	presign: adminProcedure.input(presignInputSchema).mutation(async ({ input }) => {
+	presign: protectedProcedure.input(presignInputSchema).mutation(async ({ input }) => {
 		try {
 			return await presignImageUpload({
 				contentType: input.contentType,

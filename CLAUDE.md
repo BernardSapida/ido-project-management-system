@@ -46,10 +46,10 @@ Wired and ready; add four variables and it works. Full console runbook —
 bucket policy, CORS, IAM — is `../infrastructure/docs/aws/s3-setup.md`.
 
 ```
-AWS_REGION=ap-southeast-1
-AWS_S3_BUCKET=
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
+APP_AWS_REGION=ap-southeast-1
+APP_AWS_S3_BUCKET=
+APP_AWS_ACCESS_KEY_ID=
+APP_AWS_SECRET_ACCESS_KEY=
 ```
 
 All four or none. Leave them blank and the app runs normally; only an upload
@@ -83,6 +83,14 @@ blank.
 
 Add a prefix to `UPLOAD_FOLDERS` per feature that uploads — it becomes the key
 prefix, and it is what a lifecycle rule or bulk cleanup selects on.
+
+**What a folder accepts is per folder**, in `UPLOAD_FOLDER_ACCEPTED_TYPES`.
+`signatures` takes images only — it is stamped onto the printed form, and a PDF
+there prints as a blank box. `request-attachments` takes documents too (spec
+005), because a quotation is a PDF. Both `assertAcceptedUpload` in the browser
+and `upload.presign` on the server read that one map; the server copy is the
+gate, the browser copy is the message arriving while the user is still looking
+at the drop zone.
 
 ### Cleaning up orphans
 

@@ -79,3 +79,65 @@ export const FILTER_OPTIONS = [
 	{ label: "Rejected", value: "REJECTED" },
 	{ label: "Completed", value: "COMPLETED" },
 ];
+
+/**
+ * In flight - somebody else is holding it and the requestor is waiting.
+ *
+ * DRAFT and RETURNED are deliberately NOT here: both are on the requestor's own
+ * desk, and counting them as "under review" tells a user to wait for a reply to
+ * something they have not sent.
+ */
+export const PENDING_STATUSES = [
+	"SUBMITTED",
+	"UNDER_IDO_REVIEW",
+	"UNDER_DIRECTOR_REVIEW",
+	"UNDER_IDO_FINAL_REVIEW",
+	"UNDER_FINAL_DIRECTOR_REVIEW",
+] as const;
+
+/** The five terminal noes. Which desk said it does not change what it means. */
+export const REJECTED_STATUSES = [
+	"REJECTED_BY_IDO",
+	"BUDGET_OFFICER_REJECTED",
+	"DIRECTOR_REJECTED",
+	"IDO_FINAL_REJECTED",
+	"FINAL_REJECTED",
+] as const;
+
+/**
+ * The only two statuses in which a requestor may still change the text.
+ *
+ * DRAFT has never been sent; RETURNED has been sent back to be fixed. Every
+ * other status means somebody else is reading it, and letting a requestor edit
+ * then would change the document under the desk that is reviewing it. Both the
+ * server guards (`request.saveDraft`, `request.submit`) and the form's read-only
+ * mode read this list, so the button and the gate cannot disagree about which
+ * request is editable.
+ */
+export const EDITABLE_STATUSES = ["DRAFT", "RETURNED"] as const;
+
+/** `undefined` is a request that does not exist yet - the create page - which is
+ *  editable by definition. */
+export function isEditableStatus(masterStatus?: string | null): boolean {
+	if (!masterStatus) return true;
+
+	return (EDITABLE_STATUSES as readonly string[]).includes(masterStatus);
+}
+
+/**
+ * The two `FILTER_OPTIONS` values that are not a literal status, and what each
+ * expands to.
+ *
+ * This is the single place that expansion is written down, and both halves of
+ * the app read it from here: the query builds its `masterStatus IN (…)` from it,
+ * and the counter tiles send the same key back. Written twice they drift, and
+ * the failure is silent - a tile reading 5 over a table showing 4, with nothing
+ * on screen saying which is wrong.
+ *
+ * A key absent from here is passed through as a literal status, so `DRAFT`,
+ * `APPROVED`, `RETURNED` and `COMPLETED` need no entry.
+ */
+export const STATUS_GROUPS: Record<string, readonly string[]> = {
+	PENDING: PENDING_STATUSES,
+	REJECTED: REJECTED_STATUSES,
+};

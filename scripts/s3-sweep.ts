@@ -44,6 +44,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../prisma/generated/client.ts";
+import { collectRequestImageUrls, collectUserImageUrls } from "../src/lib/image-urls.ts";
 
 /**
  * Every table that can hold an image URL, and how to read the URLs out of it.
@@ -89,7 +90,31 @@ interface ReferenceSource {
 	read: (prisma: PrismaClient) => Promise<string[]>;
 }
 
-const REFERENCE_SOURCES: ReferenceSource[] = [];
+const REFERENCE_SOURCES: ReferenceSource[] = [
+	{
+		label: "user.signatureUrl",
+		read: async (prisma) => {
+			const rows = await prisma.user.findMany({
+				select: { signatureUrl: true },
+				where: { signatureUrl: { not: null } },
+			});
+
+			return rows.flatMap((row) => collectUserImageUrls(row));
+		},
+	},
+	{
+		label: "request.attachments",
+		read: async (prisma) => {
+			// No `where` narrowing the Json column. `attachments` defaults to `[]`
+			// rather than to null, so `{ not: null }` would match every row anyway -
+			// and a filter that looks like it is doing work while doing none is worse
+			// than none. `collectRequestImageUrls` skips the empty ones.
+			const rows = await prisma.request.findMany({ select: { attachments: true } });
+
+			return rows.flatMap((row) => collectRequestImageUrls(row));
+		},
+	},
+];
 
 /**
  * How old an object must be before it can be considered garbage.
@@ -227,10 +252,10 @@ async function main(): Promise<void> {
 		process.exit(1);
 	}
 
-	const region = requireEnv("AWS_REGION");
-	const bucket = requireEnv("AWS_S3_BUCKET");
-	const accessKeyId = requireEnv("AWS_ACCESS_KEY_ID");
-	const secretAccessKey = requireEnv("AWS_SECRET_ACCESS_KEY");
+	const region = requireEnv("APP_AWS_REGION");
+	const bucket = requireEnv("APP_AWS_S3_BUCKET");
+	const accessKeyId = requireEnv("APP_AWS_ACCESS_KEY_ID");
+	const secretAccessKey = requireEnv("APP_AWS_SECRET_ACCESS_KEY");
 
 	const s3 = new S3Client({ credentials: { accessKeyId, secretAccessKey }, region });
 	const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: requireEnv("DATABASE_URL") }) });

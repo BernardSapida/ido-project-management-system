@@ -24,10 +24,10 @@ export const env = createEnv({
 		 * not upload anything still boots, runs and passes typecheck without an
 		 * AWS account. Only the upload endpoint fails, and it says why.
 		 */
-		AWS_REGION: z.string().optional(),
-		AWS_S3_BUCKET: z.string().optional(),
-		AWS_ACCESS_KEY_ID: z.string().optional(),
-		AWS_SECRET_ACCESS_KEY: z.string().optional(),
+		APP_AWS_REGION: z.string().optional(),
+		APP_AWS_S3_BUCKET: z.string().optional(),
+		APP_AWS_ACCESS_KEY_ID: z.string().optional(),
+		APP_AWS_SECRET_ACCESS_KEY: z.string().optional(),
 	},
 
 	/**

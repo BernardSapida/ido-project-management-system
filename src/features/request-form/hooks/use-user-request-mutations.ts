@@ -1,0 +1,184 @@
+import { AppToast, reason } from "@bernardsapida/web-ui";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { CircleAlert, FileText, Send } from "lucide-react";
+import { useCallback } from "react";
+import { type RequestFormValues, toRequestInput } from "@/features/request-form/validations/schema/request.schema";
+import { useTRPC } from "@/integrations/trpc/react";
+import { pendingUrlsIn, withUploadedUrls } from "@/lib/pending-uploads";
+import { useUploadingSubmit } from "@/lib/use-uploading-submit";
+
+/**
+ * What a save needs to know, and what it reports back on the way.
+ *
+ * `onSaved` fires the moment the ROW exists - after the create, before the
+ * submit - and it is the reason this is a callback rather than a return value.
+ * Submitting from the create page is two mutations, and if the second one fails
+ * the first one has already committed: without this the page would have a draft
+ * in the database, no id in its hands, and a second press would file a duplicate.
+ */
+interface SaveArgs {
+	onSaved?: (id: string) => void;
+	/** Absent on the create page. Present once a draft exists - including a draft
+	 *  this hook created a moment ago on a submit that then failed. */
+	requestId?: string;
+	values: RequestFormValues;
+}
+
+/**
+ * Creating, saving and submitting a request, with the uploads in the right order.
+ *
+ * `useUploadingSubmit` owns that order - flush the parked files to S3, rewrite
+ * every `blob:` URL in the values to its S3 URL, save, and only then release the
+ * parked copies. Wrapping it here rather than in the form is the point: a caller
+ * cannot get the sequence wrong, because there is no sequence exposed to get
+ * wrong.
+ *
+ * Every path resolves with the request's id, so the caller can navigate to it.
+ */
+export function useUserRequestMutations() {
+	const trpc = useTRPC();
+	const queryClient = useQueryClient();
+
+	const create = useMutation(trpc.request.create.mutationOptions());
+	const saveDraft = useMutation(trpc.request.saveDraft.mutationOptions());
+	const submit = useMutation(trpc.request.submit.mutationOptions());
+
+	const {
+		isSubmitting,
+		pendingLabel,
+		submit: withUploads,
+	} = useUploadingSubmit<RequestFormValues>({
+		apply: (values, uploaded) => ({ ...values, attachments: withUploadedUrls(values.attachments, uploaded) }),
+		collect: (values) => pendingUrlsIn(values.attachments),
+	});
+
+	/**
+	 * The list and the counters, after any write.
+	 *
+	 * `request.getById` (spec 006) and the staff queue (spec 009) belong here too
+	 * the day those procedures exist - a submitted request has to leave the
+	 * requestor's pending count and appear in IDO's queue in the same beat.
+	 */
+	const invalidateLists = useCallback(async () => {
+		await Promise.all([
+			queryClient.invalidateQueries({ queryKey: trpc.request.myList.queryKey() }),
+			queryClient.invalidateQueries({ queryKey: trpc.request.mySummary.queryKey() }),
+		]);
+	}, [queryClient, trpc]);
+
+	/** Create or update, whichever this request needs, and hand back its id. */
+	const persist = useCallback(
+		async ({ onSaved, requestId, values }: SaveArgs): Promise<string> => {
+			let id = requestId;
+
+			await withUploads(values, async (resolved) => {
+				const input = toRequestInput(resolved);
+
+				if (id) {
+					await saveDraft.mutateAsync({ id, ...input });
+				} else {
+					id = (await create.mutateAsync(input)).id;
+				}
+
+				onSaved?.(id);
+			});
+
+			// Only unreachable if `withUploads` resolved without running its save,
+			// which it does not do - but the alternative to this line is a non-null
+			// assertion on the one value every caller navigates with.
+			if (!id) throw new Error("The request was not saved.");
+
+			return id;
+		},
+		[create, saveDraft, withUploads],
+	);
+
+	const saveRequestDraft = useCallback(
+		async (args: SaveArgs): Promise<string> => {
+			let id: string;
+
+			try {
+				id = await persist(args);
+			} catch (error) {
+				AppToast.error("Failed to save the request. Please try again.", {
+					description: reason(error, "Nothing was saved — your answers are still on this page."),
+					icon: CircleAlert,
+				});
+
+				throw error;
+			}
+
+			await invalidateLists();
+
+			AppToast.success("Draft saved.", {
+				description: "You can finish it later from My Requests.",
+				icon: FileText,
+			});
+
+			return id;
+		},
+		[invalidateLists, persist],
+	);
+
+	/**
+	 * Save, then send.
+	 *
+	 * Two mutations, and the failure between them is the case worth designing for:
+	 * the draft is already committed, so the error names the submit rather than the
+	 * save, and `onSaved` has already given the caller the id to take the user to.
+	 * Retrying re-enters through `persist` with that id, so the second attempt
+	 * updates the draft instead of filing a second one.
+	 */
+	const submitRequest = useCallback(
+		async (args: SaveArgs): Promise<string> => {
+			let id: string;
+
+			try {
+				id = await persist(args);
+			} catch (error) {
+				AppToast.error("Failed to save the request. Please try again.", {
+					description: reason(error, "Nothing was saved — your answers are still on this page."),
+					icon: CircleAlert,
+				});
+
+				throw error;
+			}
+
+			try {
+				await submit.mutateAsync({ id });
+			} catch (error) {
+				// A different sentence from the one above, because a different thing
+				// happened: the draft is in the database. Telling this user that
+				// nothing was saved would have them fill the form in again and file it
+				// twice.
+				AppToast.error("Saved as a draft, but not submitted.", {
+					description: reason(error, "Open the draft and press Submit Request again."),
+					icon: CircleAlert,
+				});
+
+				await invalidateLists();
+
+				throw error;
+			}
+
+			await invalidateLists();
+
+			AppToast.success("Request submitted.", {
+				description: "Your request has been sent to IDO for review.",
+				icon: Send,
+			});
+
+			return id;
+		},
+		[invalidateLists, persist, submit],
+	);
+
+	return {
+		/** True from the first uploaded byte to the server's answer, on either path. */
+		isSaving: isSubmitting,
+		/** "Uploading images... 40%" / "Saving..." — the label of the button being waited on. */
+		pendingLabel,
+		saveRequestDraft,
+		submitRequest,
+	};
+}

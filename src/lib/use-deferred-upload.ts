@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { useTRPC } from "@/integrations/trpc/react";
 import { isPendingUrl, readPending, registerPending, releasePending, type UploadedUrlMap } from "@/lib/pending-uploads";
 import type { UploadFolder } from "@/lib/upload-constraints";
-import { assertAcceptedImage, useS3Uploader } from "@/lib/use-s3-upload";
+import { assertAcceptedUpload, useS3Uploader } from "@/lib/use-s3-upload";
 
 /**
  * Picking a file, without uploading it.
@@ -44,7 +44,7 @@ export function useDeferredUpload(folder: UploadFolder): UploadHandler {
 			// refuse is refused while the author is still looking at the drop zone.
 			// `useS3Uploader` checks again; that copy is the gate, this one is the
 			// message arriving in time to be useful.
-			assertAcceptedImage(file);
+			assertAcceptedUpload(file, folder);
 
 			const url = registerPending(file, folder);
 

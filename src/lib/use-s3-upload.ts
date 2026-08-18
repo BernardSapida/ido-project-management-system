@@ -1,7 +1,12 @@
 import { useMutation } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { useTRPC } from "@/integrations/trpc/react";
-import { UPLOAD_ACCEPTED_TYPES, type UploadAcceptedType, type UploadFolder } from "@/lib/upload-constraints";
+import {
+	UPLOAD_ACCEPTED_TYPES,
+	UPLOAD_FOLDER_ACCEPTED_TYPES,
+	type UploadAcceptedType,
+	type UploadFolder,
+} from "@/lib/upload-constraints";
 
 /**
  * The real uploader - the one that actually moves bytes.
@@ -92,10 +97,6 @@ function putWithProgress(
 	});
 }
 
-function isAcceptedType(type: string): type is UploadAcceptedType {
-	return (UPLOAD_ACCEPTED_TYPES as readonly string[]).includes(type);
-}
-
 /**
  * Refuse a file the bucket will not take, in words about the file.
  *
@@ -103,17 +104,30 @@ function isAcceptedType(type: string): type is UploadAcceptedType {
  * duplication is the point: the author finds out that their `.bmp` is no good
  * while they are still looking at the drop zone, not after pressing Create.
  *
+ * The FOLDER is an argument because the answer differs by destination -
+ * `signatures` takes images only, `request-attachments` takes documents too -
+ * and a single global list would let a PDF through as somebody's signature.
+ * `UPLOAD_FOLDER_ACCEPTED_TYPES` is the one place that mapping is written down,
+ * and `upload.presign` checks the same map server-side.
+ *
  * Browsers derive `type` from the extension and occasionally give up, leaving
  * `""` - which is why the empty case gets its own sentence rather than being
- * reported as `"" is not an accepted image format`.
+ * reported as `"" is not an accepted format`.
  */
-export function assertAcceptedImage(file: File): asserts file is File & { type: UploadAcceptedType } {
-	if (isAcceptedType(file.type)) return;
+export function assertAcceptedUpload(
+	file: File,
+	folder: UploadFolder,
+): asserts file is File & { type: UploadAcceptedType } {
+	const accepted = UPLOAD_FOLDER_ACCEPTED_TYPES[folder];
+
+	if (accepted.includes(file.type)) return;
+
+	const isImageOnly = accepted === UPLOAD_ACCEPTED_TYPES;
 
 	throw new Error(
 		file.type
-			? `${file.type} is not an accepted image format.`
-			: `Could not tell what kind of file ${file.name} is. Try a JPG, PNG or WebP.`,
+			? `${file.type} is not accepted here.${isImageOnly ? " Upload a JPG, PNG or WebP." : ""}`
+			: `Could not tell what kind of file ${file.name} is. Try a JPG, PNG${isImageOnly ? " or WebP." : ", PDF or Word document."}`,
 	);
 }
 
@@ -129,7 +143,7 @@ export function useS3Uploader(): S3Uploader {
 
 	return useCallback<S3Uploader>(
 		async (file, folder, progress) => {
-			assertAcceptedImage(file);
+			assertAcceptedUpload(file, folder);
 
 			const { uploadUrl, url } = await mutateAsync({
 				contentType: file.type,

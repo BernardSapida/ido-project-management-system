@@ -43,14 +43,14 @@ const TITLE = "S3 upload";
  *
  * ## Setup
  *
- * Needs `AWS_REGION`, `AWS_S3_BUCKET`, `AWS_ACCESS_KEY_ID` and
- * `AWS_SECRET_ACCESS_KEY` in `.env` or `.env.local`, plus a public-read bucket
+ * Needs `APP_AWS_REGION`, `APP_AWS_S3_BUCKET`, `APP_AWS_ACCESS_KEY_ID` and
+ * `APP_AWS_SECRET_ACCESS_KEY` in `.env` or `.env.local`, plus a public-read bucket
  * policy and a CORS rule allowing PUT from this origin. Full runbook:
  * `../infrastructure/docs/aws/s3-setup.md`.
  *
- * You must also be signed in as an ADMIN - `upload.presign` is an
- * `adminProcedure`, so an anonymous visitor gets UNAUTHORIZED rather than an
- * upload URL.
+ * You must also be signed in - `upload.presign` is a `protectedProcedure` (it
+ * was admin-only until every role had to upload a signature; see spec 003), so
+ * an anonymous visitor gets UNAUTHORIZED rather than an upload URL.
  *
  * ## Things to check by hand
  *
