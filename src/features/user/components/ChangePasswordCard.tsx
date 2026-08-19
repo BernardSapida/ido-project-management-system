@@ -1,5 +1,4 @@
-import { AppInputGroup, AppToast } from "@bernardsapida/web-ui";
-import { Button, Card } from "@heroui/react";
+import { AppButton, AppInputGroup, AppToast } from "@bernardsapida/web-ui";
 import { Check, CheckCircle2, KeyRound, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
@@ -56,8 +55,8 @@ export function ChangePasswordCard() {
 	};
 
 	return (
-		<Card className="p-8 lg:p-10 border-none shadow-none rise-in [animation-delay:300ms]">
-			<Card.Content className="p-0 space-y-8 text-left">
+		<div className="border-none shadow-none rise-in [animation-delay:300ms]">
+			<div className="p-0 space-y-8 text-left">
 				<div className="flex items-center gap-4 text-app-brand">
 					<KeyRound size={24} />
 					<h2 className="text-2xl font-serif font-bold">Change Password</h2>
@@ -91,26 +90,22 @@ export function ChangePasswordCard() {
 						/>
 					</div>
 
-					<div className="pt-2 flex justify-end">
-						<Button
+					{/* Same component and same size as the Save on the two cards above
+					    it — this used to be a raw HeroUI Button at size="lg", which
+					    made the third button on the page visibly the biggest one. */}
+					<div className="flex flex-wrap items-center justify-end gap-3 pt-2">
+						<AppButton
+							icon={isSuccess ? Check : undefined}
 							isDisabled={(!isDirty && !isSuccess) || isSubmitting}
 							isPending={isSubmitting}
-							size="lg"
 							type="submit"
 							variant="primary"
 						>
-							{isSuccess ? (
-								<>
-									<Check size={20} />
-									Password Updated
-								</>
-							) : (
-								"Change Password"
-							)}
-						</Button>
+							{isSuccess ? "Password Updated" : "Change Password"}
+						</AppButton>
 					</div>
 				</form>
-			</Card.Content>
-		</Card>
+			</div>
+		</div>
 	);
 }

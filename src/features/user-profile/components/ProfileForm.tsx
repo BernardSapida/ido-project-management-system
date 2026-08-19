@@ -1,121 +1,60 @@
-import { AppInputGroup, AppReadOnlyField, AppSelect } from "@bernardsapida/web-ui";
-import { type Ref, useEffect, useImperativeHandle, useMemo } from "react";
-import { useWatch } from "react-hook-form";
+import { AppButton, AppInputGroup, AppReadOnlyField, AppSelect } from "@bernardsapida/web-ui";
+import { Typography } from "@heroui/react";
+import { useMemo } from "react";
 import { POSITION_OPTIONS } from "@/features/request-form/lib/request-options";
 import { useUserProfileMutations } from "@/features/user-profile/hooks/use-user-profile-mutations";
 import {
-	createUpdateProfileSchema,
-	type UpdateProfileValues,
+	createProfileDetailsSchema,
+	type ProfileDetailsValues,
 } from "@/features/user-profile/validations/schema/update-profile.schema";
 import { useAppForm } from "@/hooks/use-app-form";
-
-/** What the page's action bar drives. The form owns `reset` and `handleSubmit`;
- *  the bar owns the buttons, and this is the seam between them. */
-export interface ProfileFormHandle {
-	discard: () => void;
-	submit: () => void;
-}
-
-/** What the action bar needs to render itself, reported up on every change. */
-export interface ProfileFormState {
-	isDirty: boolean;
-	isPending: boolean;
-	/**
-	 * "Uploading images... 40%" / "Saving...", or `undefined` when idle.
-	 *
-	 * The drop zone's own bar finished at pick time — the file was parked, not
-	 * sent — so this is the only honest progress on the page, and it belongs on
-	 * the button the user is waiting at.
-	 */
-	pendingLabel?: string;
-}
 
 interface ProfileFormProps {
 	/** Immutable — it is the auth identity, so it is shown, not edited. */
 	email?: string;
-	onStateChange: (state: ProfileFormState) => void;
-	/** The values as SAVED, so the page can adopt the S3 URL of a new signature. */
-	onSuccess: (saved: UpdateProfileValues) => void;
-	/**
-	 * The signature the user has picked or removed in this session, if any.
-	 *
-	 * `undefined` means untouched, and is why this is separate from `values`:
-	 * `values` is the record as the server has it, and react-hook-form RESETS the
-	 * form when it changes — which would mark the form clean immediately after an
-	 * upload and leave Save disabled with an unsaved signature on screen. That was
-	 * a real bug in the old app. This one writes the field with `shouldDirty`
-	 * instead.
-	 */
-	pendingSignatureUrl?: string | null;
-	ref?: Ref<ProfileFormHandle>;
 	/** Decides whether `position` is required. See the schema. */
 	role?: string;
 	/** The saved record. `undefined` until the query resolves. */
-	values?: UpdateProfileValues;
+	values?: ProfileDetailsValues;
 }
 
-export function ProfileForm({
-	email,
-	onStateChange,
-	onSuccess,
-	pendingSignatureUrl,
-	ref,
-	role,
-	values,
-}: ProfileFormProps) {
-	const { isSaving, pendingLabel, saveProfile } = useUserProfileMutations();
+/**
+ * Name and position, with the button that saves them.
+ *
+ * The button lives HERE rather than on the page, because this form is the only
+ * thing it saves. It used to sit in the signature card's footer driving both —
+ * one "Save changes" under the signature that also committed the name field in
+ * the other column, and nothing at all under the fields it was really for. The
+ * signature has its own card and its own Save now; these two fields have this
+ * one, and neither can commit the other's work.
+ */
+export function ProfileForm({ email, role, values }: ProfileFormProps) {
+	const { isSavingDetails, saveDetails } = useUserProfileMutations();
 
 	// Rebuilt only when the role does. The schema is a different object for a
 	// USER than for staff, and swapping it on every render would re-run the
 	// resolver against a new instance each keystroke.
-	const schema = useMemo(() => createUpdateProfileSchema(role), [role]);
+	const schema = useMemo(() => createProfileDetailsSchema(role), [role]);
 
 	const {
 		control,
 		formState: { isDirty },
 		handleSubmit,
 		reset,
-		setValue,
-	} = useAppForm<UpdateProfileValues>(schema, {
-		defaultValues: { name: "", position: null, signatureUrl: null },
+	} = useAppForm<ProfileDetailsValues>(schema, {
+		defaultValues: { name: "", position: null },
 		values,
 	});
 
-	const signatureUrl = useWatch({ control, name: "signatureUrl" });
-
-	useEffect(() => {
-		if (pendingSignatureUrl === undefined || pendingSignatureUrl === signatureUrl) return;
-
-		setValue("signatureUrl", pendingSignatureUrl, { shouldDirty: true });
-	}, [pendingSignatureUrl, setValue, signatureUrl]);
-
-	useEffect(() => {
-		onStateChange({ isDirty, isPending: isSaving, pendingLabel });
-	}, [isDirty, isSaving, onStateChange, pendingLabel]);
-
-	const onSubmit = async (submitted: UpdateProfileValues) => {
+	const onSubmit = async (submitted: ProfileDetailsValues) => {
 		try {
-			onSuccess(await saveProfile(submitted));
+			await saveDetails(submitted);
 		} catch {
-			// Already reported by `saveProfile`, which has the server's own message.
+			// Already reported by `saveDetails`, which has the server's own message.
 			// Swallowed HERE so react-hook-form's submit handler does not turn a
 			// handled failure into an unhandled rejection.
 		}
 	};
-
-	/*
-	 * No dependency array, deliberately. `onSubmit` closes over `onSuccess`, and
-	 * `onSuccess` closes over the page's record — which is null on the first
-	 * render and arrives with the query. A memoised handle would pin the version
-	 * that saw null, and the post-setup redirect would silently never fire.
-	 * Rebuilding it every render costs one object and cannot go stale.
-	 */
-	useImperativeHandle(ref, () => ({
-		// `reset()` with no argument returns to the last `values` — which is the
-		// record as saved, not the empty defaults.
-		discard: () => reset(),
-		submit: () => void handleSubmit(onSubmit)(),
-	}));
 
 	return (
 		<form
@@ -151,6 +90,38 @@ export function ProfileForm({
 				name="position"
 				placeholder="Select position"
 			/>
+
+			<div className="flex flex-wrap items-center justify-end gap-3 pt-2">
+				{isDirty ? (
+					<Typography
+						className="mr-auto"
+						color="muted"
+						type="body-xs"
+					>
+						Unsaved changes will be lost if you navigate away.
+					</Typography>
+				) : null}
+				<AppButton
+					isDisabled={!isDirty || isSavingDetails}
+					// `reset()` with no argument returns to the last `values` — which is
+					// the record as saved, not the empty defaults.
+					onPress={() => reset()}
+					// Explicit: this button sits inside the form, and a default of
+					// "submit" would make Discard save.
+					type="button"
+					variant="tertiary"
+				>
+					Discard
+				</AppButton>
+				<AppButton
+					isDisabled={!isDirty || isSavingDetails}
+					isPending={isSavingDetails}
+					type="submit"
+					variant="primary"
+				>
+					{isSavingDetails ? "Saving..." : "Save details"}
+				</AppButton>
+			</div>
 		</form>
 	);
 }

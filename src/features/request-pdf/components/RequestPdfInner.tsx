@@ -111,7 +111,7 @@ export function RequestPdfPreview({ request, signatures }: DocumentProps) {
 		<div
 			className="w-full"
 			data-cy="request-pdf-preview"
-			style={{ height: "calc(100vh - 260px)", minHeight: 600 }}
+			style={{ height: "calc(100vh - 200px)", minHeight: 600 }}
 		>
 			<PDFViewer
 				height="100%"

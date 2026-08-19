@@ -1,6 +1,5 @@
-import { AppChip, AppProfileBanner } from "@bernardsapida/web-ui";
+import { AppProfileBanner } from "@bernardsapida/web-ui";
 import { Skeleton } from "@heroui/react";
-import { BriefcaseBusiness } from "lucide-react";
 import { getRoleLabel } from "@/config/navigation.config";
 import { positionLabel } from "@/features/request-form/lib/request-options";
 import type { ProfileUser } from "@/features/user-profile/types";
@@ -31,23 +30,26 @@ export function ProfileInfoCard({ isLoading, user }: ProfileInfoCardProps) {
 		);
 	}
 
-	return (
-		<div className="flex flex-col gap-3">
-			<AppProfileBanner
-				isVerified={user.profileComplete}
-				name={user.name}
-				subtitle={`${getRoleLabel(user.role)} · ${user.email}`}
-				unverifiedNote="No signature on file yet — add one below."
-			/>
+	/*
+	 * Role, designation and email on the banner's own subtitle line.
+	 *
+	 * The designation used to be a chip rendered UNDER the banner, which read as
+	 * a stray label floating beside the strip rather than as a fact about the
+	 * person inside it — the tint, the border and the avatar all stopped one line
+	 * above it. `AppProfileBanner` has no slot to put a chip in, and giving it one
+	 * would be a change to a published component for a single page, so the fact
+	 * goes where the other facts about this person already are.
+	 */
+	const subtitle = [getRoleLabel(user.role), user.position ? positionLabel(user.position) : null, user.email]
+		.filter((part): part is string => Boolean(part))
+		.join(" · ");
 
-			{user.position ? (
-				<AppChip
-					icon={BriefcaseBusiness}
-					label={positionLabel(user.position)}
-					size="sm"
-					tone="accent"
-				/>
-			) : null}
-		</div>
+	return (
+		<AppProfileBanner
+			isVerified={user.profileComplete}
+			name={user.name}
+			subtitle={subtitle}
+			unverifiedNote="No signature on file yet — add one below."
+		/>
 	);
 }
