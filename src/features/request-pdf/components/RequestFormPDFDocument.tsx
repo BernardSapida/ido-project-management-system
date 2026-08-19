@@ -70,15 +70,17 @@ const S = StyleSheet.create({
 		objectFit: "contain",
 		width: 40,
 	},
-	subCell: { borderColor: BORDER, borderRightWidth: BW, padding: 3, width: "15%" },
+	/* 20% to put its right border under the logo cell's, and the right cell
+	   matches so the title stays centred on the page. */
+	subCell: { borderColor: BORDER, borderRightWidth: BW, padding: 3, width: "20%" },
 	subCellCenter: {
 		alignItems: "center",
 		borderColor: BORDER,
 		borderRightWidth: BW,
 		padding: 3,
-		width: "70%",
+		width: "60%",
 	},
-	subCellRight: { alignItems: "flex-end", padding: 3, width: "15%" },
+	subCellRight: { alignItems: "flex-end", padding: 3, width: "20%" },
 	subRow: {
 		borderColor: BORDER,
 		borderLeftWidth: BW,

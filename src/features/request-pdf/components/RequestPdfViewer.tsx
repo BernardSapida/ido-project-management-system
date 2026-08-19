@@ -53,12 +53,12 @@ interface Props {
 function PdfLoading() {
 	return (
 		<div
-			className="flex min-h-[600px] w-full items-center justify-center"
+			className="flex min-h-150 w-full items-center justify-center"
 			data-cy="request-pdf-loading"
 		>
 			<AppProgressCircle
 				isIndeterminate
-				label="Preparing the Building Design Request Form"
+				label="Preparing the Request Form"
 				size="lg"
 			/>
 		</div>

@@ -298,7 +298,7 @@ function PageVariantSection() {
 			 */}
 			<div className="overflow-hidden rounded-3xl border border-separator-tertiary/50 bg-surface">
 				<AppErrorState
-					className="min-h-[34rem]"
+					className="min-h-136"
 					data-cy="page-variant"
 					key={kind}
 					kind={kind}
