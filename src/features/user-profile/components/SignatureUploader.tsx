@@ -3,14 +3,25 @@ import { Typography } from "@heroui/react";
 import { PenLine, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { UPLOAD_ACCEPT_ATTRIBUTE, UPLOAD_MAX_BYTES } from "@/lib/upload-constraints";
+import { fileSrc } from "@/lib/upload-urls";
 import { useDeferredUpload } from "@/lib/use-deferred-upload";
 
 interface SignatureUploaderProps {
 	/** What is on file — the saved S3 URL, or the `blob:` of an unsaved pick. */
 	currentSignatureUrl: string | null;
 	isDisabled?: boolean;
-	/** A URL to store, or `null` to remove the signature on the next save. */
+	/**
+	 * The signature picked in this session, or `null` for "there is no pick".
+	 *
+	 * `null` here is NOT a removal. `AppFileUpload` reports an empty list at
+	 * moments nobody pressed anything — while a pick is still uploading, and
+	 * again when this component is remounted — so a caller that read empty as
+	 * "delete the signature" blanked a saved one on every page load. Removal has
+	 * its own press: see `onRemove`.
+	 */
 	onChange: (url: string | null) => void;
+	/** The Remove press, and the only thing that clears a SAVED signature. */
+	onRemove: () => void;
 }
 
 /**
@@ -25,7 +36,7 @@ interface SignatureUploaderProps {
  * replacing one is a deliberate act — the person can see what they are about to
  * overwrite. Removing is a separate press for the same reason.
  */
-export function SignatureUploader({ currentSignatureUrl, isDisabled, onChange }: SignatureUploaderProps) {
+export function SignatureUploader({ currentSignatureUrl, isDisabled, onChange, onRemove }: SignatureUploaderProps) {
 	const upload = useDeferredUpload("signatures");
 
 	// The drop zone's own rows. Local because the FORM stores one URL, not a file
@@ -39,7 +50,7 @@ export function SignatureUploader({ currentSignatureUrl, isDisabled, onChange }:
 
 	const handleRemove = () => {
 		setFiles([]);
-		onChange(null);
+		onRemove();
 	};
 
 	const hasPick = files.length > 0;
@@ -60,10 +71,13 @@ export function SignatureUploader({ currentSignatureUrl, isDisabled, onChange }:
 					{/* A white plate regardless of theme: a signature is black ink on
 					    paper, and on a dark surface it disappears entirely. */}
 					<div className="flex min-h-28 items-center justify-center rounded-xl border border-default-200 bg-white p-4">
+						{/* `fileSrc`, because the bucket is private: a saved signature is
+						    an S3 address that answers 403, and `blob:` for an unsaved pick
+						    passes through untouched. */}
 						<img
 							alt="Your saved signature"
 							className="max-h-24 object-contain"
-							src={currentSignatureUrl}
+							src={fileSrc(currentSignatureUrl)}
 						/>
 					</div>
 					<AppButton

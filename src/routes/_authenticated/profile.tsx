@@ -52,6 +52,14 @@ function ProfilePage() {
 	/**
 	 * The signature picked or removed in this session. `null` means untouched —
 	 * `{ url: null }` is the different thing, a removal waiting to be saved.
+	 *
+	 * The two arrive through two different props, and that is the whole reason
+	 * `onRemove` exists. The uploader reports an empty file list whenever it is
+	 * remounted — which this page does on purpose, keyed on the saved URL, every
+	 * time the record loads. Read as a removal, that turned "no rows in the drop
+	 * zone" into `{ url: null }` on every refresh: a saved signature read back as
+	 * "No signature on file", and the form sat dirty with `signatureUrl: null`
+	 * ready to delete it for real on the next Save.
 	 */
 	const [pick, setPick] = useState<{ url: string | null } | null>(null);
 
@@ -186,7 +194,8 @@ function ProfilePage() {
 								currentSignatureUrl={currentSignature}
 								isDisabled={formState.isPending}
 								key={`${record?.signatureUrl ?? "none"}:${resetNonce}`}
-								onChange={(url) => setPick({ url })}
+								onChange={(url) => setPick(url === null ? null : { url })}
+								onRemove={() => setPick({ url: null })}
 							/>
 						</Card.Content>
 					</Card>
