@@ -233,7 +233,7 @@ export function IdoFinalActionButtons({
 							icon={XCircle}
 							isDisabled={!canReview || isAnyPending}
 							onPress={() => setIsRejectOpen(true)}
-							variant="danger"
+							variant="danger-soft"
 						>
 							Reject
 						</AppButton>

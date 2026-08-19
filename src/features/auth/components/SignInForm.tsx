@@ -1,4 +1,4 @@
-import { AppInputGroup } from "@bernardsapida/web-ui";
+import { AppInputGroup, AppLogo } from "@bernardsapida/web-ui";
 import { Button, Card, Checkbox, Label } from "@heroui/react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Layout, Lock, Mail } from "lucide-react";
@@ -50,15 +50,15 @@ export function SignInForm({ onSuccess }: SignInFormProps) {
 	return (
 		<div className="w-full max-w-xl mb-24 rise-in text-center flex flex-col items-center">
 			<div className="flex flex-col items-center mb-12">
-				<Link
-					className="mb-8 flex h-12 w-12 items-center justify-center rounded-2xl bg-app-brand text-white shadow-xl shadow-app-brand/20 group hover:-translate-y-1 transition-transform"
-					to="/"
-				>
-					<Layout className="h-7 w-7" />
-				</Link>
+				<AppLogo
+					className="mb-8 hover:-translate-y-1 transition-transform"
+					href="/"
+					size="lg"
+					wordmark={false}
+				/>
 				<h1 className="text-4xl font-serif font-bold text-text-primary/90 mb-3 text-center">Welcome back</h1>
 				<p className="text-text-secondary/70 font-medium text-center w-full">
-					Log in to your account and continue building.
+					Log in to your account and manage your requests.
 				</p>
 			</div>
 
@@ -120,7 +120,7 @@ export function SignInForm({ onSuccess }: SignInFormProps) {
 								type="submit"
 								variant="primary"
 							>
-								{isLoading ? "Signing in..." : "Sign in to project"}
+								{isLoading ? "Signing in..." : "Sign in"}
 							</Button>
 						</div>
 					</form>

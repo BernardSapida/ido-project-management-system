@@ -134,7 +134,7 @@ You made a big promise in the hero. Now prove it. Show *how* you deliver on it.
     <h2 className="text-3xl lg:text-4xl font-semibold tracking-tight text-center mb-4">
       Everything you need to grow
     </h2>
-    <p className="text-default-500 text-center max-w-2xl mx-auto mb-16">
+    <p className="text-default-500 text-center mx-auto mb-16">
       Stop juggling tools. Everything works together, out of the box.
     </p>
     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">

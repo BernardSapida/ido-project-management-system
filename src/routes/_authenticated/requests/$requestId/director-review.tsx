@@ -1,7 +1,5 @@
-import { AppButton, AppCard, AppChip, AppPageHeader, AppQueryError } from "@bernardsapida/web-ui";
-import { Typography } from "@heroui/react";
+import { AppCard, AppChip, AppPageHeader, AppQueryError } from "@bernardsapida/web-ui";
 import { createFileRoute } from "@tanstack/react-router";
-import { FileText } from "lucide-react";
 import { seo } from "@/config/seo.config";
 import { assertAuthenticatedRoleFn } from "@/features/auth/functions/auth.functions";
 import { useAuth } from "@/features/auth/hooks/useAuth";
@@ -120,38 +118,18 @@ function DirectorReviewPage() {
 		<div className="flex flex-col gap-8">
 			<AppPageHeader
 				action={
-					<div className="flex flex-wrap items-center gap-3">
-						{/* Which document, and where it is. A director arrives here from a
-						    queue row and the page title says only "Director Review", so
-						    without these two the screen never names the thing being decided. */}
-						{stage ? (
-							<AppChip
-								data-cy="director-review-status"
-								icon={stage.icon}
-								label={stage.label}
-								tone={stage.tone}
-							/>
-						) : null}
-
-						{request.documentNumber ? (
-							<Typography
-								color="muted"
-								data-cy="director-review-document-number"
-								type="body-sm"
-							>
-								{request.documentNumber}
-							</Typography>
-						) : null}
-
-						<AppButton
-							data-cy="director-review-pdf"
-							icon={FileText}
-							onPress={openPdf}
-							variant="tertiary"
-						>
-							View PDF
-						</AppButton>
-					</div>
+					/* Which STAGE it is at, and nothing else. The document number used to
+					   sit beside it as a muted string; it is a field of the request, so it
+					   is read in the Request information card with the rest of them, and
+					   View PDF sits in the form's rail where every other role's does. */
+					stage ? (
+						<AppChip
+							data-cy="director-review-status"
+							icon={stage.icon}
+							label={stage.label}
+							tone={stage.tone}
+						/>
+					) : null
 				}
 				subtitle="Approve the recommended request, or reject it."
 				title="Director Review"
@@ -164,10 +142,12 @@ function DirectorReviewPage() {
 			<RequestForm
 				canSubmit={false}
 				defaultValues={toRequestFormValues(request)}
+				documentNumber={request.documentNumber}
 				forceReadOnly
 				idoEvaluationStatus={request.idoEvaluationStatus}
 				masterStatus={request.masterStatus}
 				mode="edit"
+				onViewPdf={openPdf}
 				processor={request.processor}
 				requestId={requestId}
 			/>
@@ -195,10 +175,6 @@ function DirectorReviewPage() {
 				headingLevel={2}
 				title="Activity"
 			>
-				{/* No filter. `REQUESTOR_VISIBLE_ACTIONS` narrows the feed to the things
-				    that ask the requestor for something; an approver needs the whole
-				    history, including what the IDO and budget desks have already
-				    recorded. */}
 				<RequestActivityFeed auditLogs={request.auditLogs} />
 			</AppCard>
 

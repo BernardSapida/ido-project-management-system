@@ -13,7 +13,7 @@ import { requestStatusSubtitle } from "@/features/request-detail/lib/status-subt
 import { RequestForm } from "@/features/request-form/components/RequestForm";
 import { useRequestById } from "@/features/request-form/hooks/use-user-request-queries";
 import { toRequestFormValues } from "@/features/request-form/validations/schema/request.schema";
-import { latestNegativeLog, REQUESTOR_VISIBLE_ACTIONS } from "@/lib/status-maps/audit-action";
+import { latestNegativeLog } from "@/lib/status-maps/audit-action";
 import { isEditableStatus, isNegativeStatus, masterStatusMap } from "@/lib/status-maps/request-status";
 
 export const Route = createFileRoute("/_authenticated/requests/$requestId/")({
@@ -109,27 +109,16 @@ function RequestDetailPage() {
 				<AppPageHeader
 					action={
 						status ? (
-							<div className="flex flex-wrap items-center gap-3">
-								<AppChip
-									data-cy="request-status"
-									icon={status.icon}
-									label={status.label}
-									tone={status.tone}
-								/>
-
-								{/* Nothing in its place before one is issued. A "Not yet
-								    assigned" placeholder next to the status would be a second
-								    fact to read that says nothing has happened. */}
-								{request.documentNumber ? (
-									<Typography
-										color="muted"
-										data-cy="request-document-number"
-										type="body-sm"
-									>
-										{request.documentNumber}
-									</Typography>
-								) : null}
-							</div>
+							/* The status alone. The document number moved into the Request
+							   information card below, where the rest of the document's fields
+							   are - and where a draft, which has no number yet, simply shows
+							   one field fewer instead of a gap beside the chip. */
+							<AppChip
+								data-cy="request-status"
+								icon={status.icon}
+								label={status.label}
+								tone={status.tone}
+							/>
 						) : null
 					}
 					subtitle={requestStatusSubtitle(request.masterStatus)}
@@ -174,6 +163,7 @@ function RequestDetailPage() {
 			<RequestForm
 				canSubmit={canAct}
 				defaultValues={toRequestFormValues(request)}
+				documentNumber={request.documentNumber}
 				forceReadOnly
 				idoEvaluationStatus={request.idoEvaluationStatus}
 				masterStatus={request.masterStatus}
@@ -189,12 +179,7 @@ function RequestDetailPage() {
 				headingLevel={2}
 				title="Activity"
 			>
-				<RequestActivityFeed
-					auditLogs={request.auditLogs}
-					// Staff pass no filter and see everything; a requestor sees the
-					// actions that ask them for something. See the note on the component.
-					visibleActions={isOwner ? REQUESTOR_VISIBLE_ACTIONS : undefined}
-				/>
+				<RequestActivityFeed auditLogs={request.auditLogs} />
 			</AppCard>
 
 			{/* Below the activity feed, because the two answer different questions in

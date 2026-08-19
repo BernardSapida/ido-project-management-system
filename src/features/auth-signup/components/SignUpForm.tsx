@@ -1,4 +1,4 @@
-import { AppAlert, AppButton, AppInputGroup, AppPasswordField, AppSelect } from "@bernardsapida/web-ui";
+import { AppAlert, AppButton, AppInputGroup, AppLogo, AppPasswordField, AppSelect } from "@bernardsapida/web-ui";
 import { Card, Typography } from "@heroui/react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, CircleAlert, Layout, Mail } from "lucide-react";
@@ -46,12 +46,12 @@ export function SignUpForm() {
 	return (
 		<div className="w-full max-w-xl mb-24 rise-in text-center flex flex-col items-center">
 			<div className="flex flex-col items-center mb-12">
-				<Link
-					className="mb-8 flex h-12 w-12 items-center justify-center rounded-2xl bg-app-brand text-white shadow-xl shadow-app-brand/20 group hover:-translate-y-1 transition-transform"
-					to="/"
-				>
-					<Layout className="h-7 w-7" />
-				</Link>
+				<AppLogo
+					className="mb-8 hover:-translate-y-1 transition-transform"
+					href="/"
+					size="lg"
+					wordmark={false}
+				/>
 				<Typography.Heading
 					className="mb-3"
 					level={1}

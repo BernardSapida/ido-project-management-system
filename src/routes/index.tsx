@@ -285,7 +285,7 @@ export const Route = createFileRoute("/")({
 /** Eyebrow, heading and lead - the three lines that open every section below. */
 function SectionHeading({ desc, eyebrow, title }: { desc?: string; eyebrow: string; title: string }) {
 	return (
-		<div className="mx-auto mb-14 max-w-2xl text-center">
+		<div className="mx-auto mb-14 text-center">
 			<p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-app-brand">{eyebrow}</p>
 			<h2 className="font-serif text-3xl font-bold leading-tight text-text-primary md:text-4xl">{title}</h2>
 			{desc ? <p className="mt-4 text-base leading-relaxed text-text-secondary">{desc}</p> : null}

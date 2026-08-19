@@ -25,10 +25,22 @@ export function RequestDetailSkeleton() {
 			<div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_340px]">
 				<Skeleton className="h-96 rounded-lg" />
 
-				<div className="flex flex-col gap-4">
+				{/* The rail in the order it actually arrives in: the actions, then the
+				    attachments under their heading, then the processor card. It was
+				    three equal blocks in the old order, so the buttons appeared where
+				    the skeleton had drawn a card and the page moved under the cursor. */}
+				<div className="flex flex-col gap-6">
+					<div className="flex flex-col gap-2">
+						<Skeleton className="h-10 rounded-lg" />
+						<Skeleton className="h-10 rounded-lg" />
+					</div>
+
+					<div className="flex flex-col gap-2">
+						<Skeleton className="h-5 w-32 rounded-lg" />
+						<Skeleton className="h-16 rounded-lg" />
+					</div>
+
 					<Skeleton className="h-28 rounded-lg" />
-					<Skeleton className="h-40 rounded-lg" />
-					<Skeleton className="h-32 rounded-lg" />
 				</div>
 			</div>
 		</div>

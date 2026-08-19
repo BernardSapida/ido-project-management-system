@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { TRPCError, type TRPCRouterRecord } from "@trpc/server";
 import { z } from "zod";
 import {
@@ -55,27 +56,65 @@ import { protectedProcedure, roleProcedure } from "../init";
 /**
  * Issue the next document number for the current year, as `YYYY-NNNN`.
  *
- * The upsert and the increment are one statement inside a transaction, never a
- * read-then-write: two people submitting in the same second must come out with
- * two different numbers, and a `findUnique` followed by an `update` gives them
- * the same one. The upsert also covers the year rollover for free - January's
- * first submit creates that year's row with `lastSequence: 1`.
+ * One statement, never a read-then-write: two people submitting in the same
+ * second must come out with two different numbers, and a `findUnique` followed
+ * by an `update` gives them the same one. It also covers the year rollover for
+ * free - January's first submit creates that year's row.
+ *
+ * ## Why it reads `requests` instead of trusting the counter
+ *
+ * `document_sequences` is a cache of "highest number issued", and nothing in the
+ * database enforces that. A restored dump, an imported backlog or a hand-seeded
+ * demo set writes `documentNumber`s without touching the counter, and the
+ * counter is then BEHIND the numbers already on paper. Trusting it hands the
+ * next requestor a number some 2026 request is already filed under, `submit`
+ * dies on the unique index, and it dies again on every retry - the request is
+ * permanently unsubmittable, and no amount of pressing the button fixes it.
+ *
+ * So the floor is the highest number actually recorded for the year, and the
+ * counter can only ever move above it. That makes the drift self-healing: the
+ * first submit after an import corrects the counter instead of failing. The
+ * `CASE` is what makes the `::int` safe - it is evaluated per row only when the
+ * regex matched, so a `documentNumber` in some other shape is skipped rather
+ * than aborting the statement.
+ *
+ * `id` and the timestamps are supplied by hand because raw SQL does not go
+ * through Prisma's `@default(cuid())` / `@updatedAt`, and the whole point of
+ * this being raw is that `GREATEST` inside `ON CONFLICT` has no Prisma
+ * equivalent - the read and the increment have to stay one atomic statement.
  *
  * Exported as a plain helper as well as a procedure, because `request.submit`
  * calls it inline rather than over the wire.
  */
 export async function generateDocumentNumber(): Promise<string> {
 	const year = new Date().getFullYear();
+	const pattern = `^${year}-[0-9]+$`;
 
-	const sequence = await prisma.$transaction(async (tx) =>
-		tx.documentSequence.upsert({
-			where: { year },
-			create: { year, lastSequence: 1 },
-			update: { lastSequence: { increment: 1 } },
-		}),
-	);
+	const [issued] = await prisma.$queryRaw<{ lastSequence: number }[]>`
+		WITH issued AS (
+			SELECT COALESCE(
+			         MAX(CASE WHEN "documentNumber" ~ ${pattern}
+			                  THEN split_part("documentNumber", '-', 2)::int END),
+			         0) AS high
+			  FROM requests
+		)
+		INSERT INTO document_sequences (id, year, "lastSequence", "createdAt", "updatedAt")
+		SELECT ${randomUUID()}, ${year}, issued.high + 1, NOW(), NOW() FROM issued
+		    ON CONFLICT (year) DO UPDATE
+		   SET "lastSequence" = GREATEST(document_sequences."lastSequence",
+		                                 (SELECT high FROM issued)) + 1,
+		       "updatedAt" = NOW()
+		 RETURNING "lastSequence";
+	`;
 
-	const padded = String(sequence.lastSequence).padStart(4, "0");
+	if (!issued) {
+		throw new TRPCError({
+			code: "INTERNAL_SERVER_ERROR",
+			message: "Could not issue a document number. Please try again.",
+		});
+	}
+
+	const padded = String(issued.lastSequence).padStart(4, "0");
 	return `${year}-${padded}`;
 }
 
@@ -238,7 +277,23 @@ const STAFF_QUEUE_SCOPE = {
 		{ budgetOfficerSignedAt: { not: null } },
 	],
 	DIRECTOR: [
-		{ directorReviewStatus: { in: ["UNDER_DIRECTOR_REVIEW", "DIRECTOR_APPROVED", "DIRECTOR_REJECTED"] } },
+		{
+			directorReviewStatus: {
+				/*
+				 * `UNDER_BUDGET_OFFICER_REVIEW` is in the DIRECTOR scope and it is not a
+				 * widening. `DIRECTOR_APPROVABLE_STATUSES` accepts it - the documented
+				 * two-path rule, budget-then-director or director alone - and without
+				 * this clause that second path exists only for a director who was handed
+				 * the URL. The symptom is exactly what it reads like on screen: a request
+				 * whose header says Director Review, absent from the director's own queue.
+				 *
+				 * Spec 009's scope description predates spec 012 and omits it. 012 wins:
+				 * a queue that hides what its own procedure permits is the narrower of
+				 * the two mistakes to make.
+				 */
+				in: ["UNDER_BUDGET_OFFICER_REVIEW", "UNDER_DIRECTOR_REVIEW", "DIRECTOR_APPROVED", "DIRECTOR_REJECTED"],
+			},
+		},
 		{ finalDirectorStatus: { in: ["UNDER_FINAL_DIRECTOR_APPROVAL", "APPROVED", "FINAL_REJECTED"] } },
 	],
 	IDO_CHAIRPERSON: [
@@ -256,6 +311,38 @@ type StaffRole = keyof typeof STAFF_QUEUE_SCOPE;
 
 const STAFF_QUEUE_ROLES = Object.keys(STAFF_QUEUE_SCOPE) as StaffRole[];
 
+/** The stage columns a "waiting" rule may be written against. */
+type StageColumn = "directorReviewStatus" | "finalDirectorStatus" | "idoFinalStatus" | "masterStatus";
+
+/**
+ * One "waiting" rule, as a column and the values on it, rather than as a ready
+ * `RequestWhereInput`.
+ *
+ * The extra indirection buys the NULL-safe negation below: a prebuilt `where`
+ * can only be negated by wrapping it in `NOT`, and that is exactly the thing
+ * that mis-counts a nullable column. Declared this way, the positive and the
+ * negative clause are both DERIVED, and cannot drift apart.
+ */
+interface StageClause {
+	column: StageColumn;
+	values: readonly string[];
+}
+
+/**
+ * The three stage columns declared `String?` in `prisma/models/request.prisma`,
+ * as opposed to `masterStatus`, which is `String @default("DRAFT")`.
+ *
+ * It is read by `handledWhere` and it has to match the schema: an `IS NULL`
+ * branch on `masterStatus` is not merely redundant, Prisma REFUSES it at
+ * runtime ("Argument `masterStatus` is missing"), and the computed key in that
+ * builder means the compiler will not tell you first.
+ */
+const NULLABLE_STAGE_COLUMNS: ReadonlySet<StageColumn> = new Set<StageColumn>([
+	"directorReviewStatus",
+	"finalDirectorStatus",
+	"idoFinalStatus",
+]);
+
 /**
  * The subset of the scope this desk can act on RIGHT NOW - the "Waiting on you"
  * tile, and the `stage=waiting` filter behind it.
@@ -266,17 +353,54 @@ const STAFF_QUEUE_ROLES = Object.keys(STAFF_QUEUE_SCOPE) as StaffRole[];
  * both - is a staff member's counters disagreeing with their own table.
  */
 const STAFF_WAITING_SCOPE = {
-	BUDGET_OFFICER: [{ directorReviewStatus: "UNDER_BUDGET_OFFICER_REVIEW" }],
+	BUDGET_OFFICER: [{ column: "directorReviewStatus", values: ["UNDER_BUDGET_OFFICER_REVIEW"] }],
 	DIRECTOR: [
-		{ directorReviewStatus: "UNDER_DIRECTOR_REVIEW" },
-		{ finalDirectorStatus: "UNDER_FINAL_DIRECTOR_APPROVAL" },
+		/*
+		 * Both approver sub-stages, because "can act RIGHT NOW" is decided by
+		 * `DIRECTOR_APPROVABLE_STATUSES` and that accepts both. Filing an
+		 * approvable request under "Handled" instead would tell the director they
+		 * had already dealt with something they have never seen.
+		 */
+		{ column: "directorReviewStatus", values: ["UNDER_BUDGET_OFFICER_REVIEW", "UNDER_DIRECTOR_REVIEW"] },
+		{ column: "finalDirectorStatus", values: ["UNDER_FINAL_DIRECTOR_APPROVAL"] },
 	],
 	IDO_CHAIRPERSON: [
-		{ masterStatus: { in: ["SUBMITTED", "UNDER_IDO_REVIEW"] } },
-		{ idoFinalStatus: "UNDER_IDO_FINAL_REVIEW" },
+		{ column: "masterStatus", values: ["SUBMITTED", "UNDER_IDO_REVIEW"] },
+		{ column: "idoFinalStatus", values: ["UNDER_IDO_FINAL_REVIEW"] },
 	],
-	IDO_OFFICER: [{ masterStatus: { in: ["SUBMITTED", "UNDER_IDO_REVIEW"] } }],
-} satisfies Record<StaffRole, RequestWhereInput[]>;
+	IDO_OFFICER: [{ column: "masterStatus", values: ["SUBMITTED", "UNDER_IDO_REVIEW"] }],
+} satisfies Record<StaffRole, StageClause[]>;
+
+/** The rows this desk can act on now. */
+function waitingWhere(role: StaffRole): RequestWhereInput {
+	return { OR: STAFF_WAITING_SCOPE[role].map(({ column, values }) => ({ [column]: { in: values } })) };
+}
+
+/**
+ * Its complement, and the NULL is the whole reason this is a function rather
+ * than `{ NOT: waiting }`.
+ *
+ * Three of the four stage columns are nullable, and in SQL `NOT (col IN (…))` is
+ * NULL - not TRUE - when `col` is NULL, so a wrapped `NOT` silently drops every
+ * request that has not reached that stage yet. The symptom is arithmetic on
+ * screen: a director reading "5 in your queue" above a table of 8 rows, because
+ * the three requests with no `finalDirectorStatus` counted in neither tile.
+ *
+ * De Morgan by hand, with the NULL branch spelled out: NOT (a OR b) is
+ * (NOT a) AND (NOT b), and "NOT a" for a nullable column is "null OR not in".
+ * Derived from the same declaration the waiting clause is, because two lists
+ * that are meant to partition a queue and are written out separately will not.
+ */
+function handledWhere(role: StaffRole): RequestWhereInput {
+	return {
+		AND: STAFF_WAITING_SCOPE[role].map(({ column, values }): RequestWhereInput => {
+			const notIn: RequestWhereInput = { [column]: { notIn: values } };
+
+			// A NOT NULL column needs no null branch, and Prisma rejects one.
+			return NULLABLE_STAGE_COLUMNS.has(column) ? { OR: [{ [column]: null }, notIn] } : notIn;
+		}),
+	};
+}
 
 /**
  * Narrows `ctx.user.role` to the four keys above.
@@ -347,11 +471,10 @@ type StaffListInput = z.infer<typeof staffListInputSchema>;
  */
 function staffQueueWhere(role: StaffRole, input: Omit<StaffListInput, "page" | "pageSize">): RequestWhereInput {
 	const search = input.search?.trim();
-	const waiting: RequestWhereInput = { OR: STAFF_WAITING_SCOPE[role] };
 	const conditions: RequestWhereInput[] = [{ OR: STAFF_QUEUE_SCOPE[role] }];
 
-	if (input.stage === "waiting") conditions.push(waiting);
-	if (input.stage === "handled") conditions.push({ NOT: waiting });
+	if (input.stage === "waiting") conditions.push(waitingWhere(role));
+	if (input.stage === "handled") conditions.push(handledWhere(role));
 	if (input.status) conditions.push({ masterStatus: input.status });
 	if (input.priority) conditions.push({ priority: input.priority });
 
@@ -774,6 +897,36 @@ function asAlreadyApprovedError(error: unknown): unknown {
 	return error;
 }
 
+/**
+ * The write conflict a requestor can actually be told about.
+ *
+ * `documentNumber` is unique, so a number that is already on another 2026
+ * request fails the `submit` update with P2002 - and Prisma's message for it
+ * names the server file, the line, the invocation and the column. tRPC has no
+ * error formatter here, so that whole string is what the toast prints; the
+ * screenshot of this bug is a requestor reading an absolute path on somebody's
+ * laptop.
+ *
+ * Narrowed to `documentNumber` on purpose. A P2002 on any other column is not
+ * something a retry fixes, and telling the user to press Submit again would send
+ * them round a loop that cannot end - so anything else is re-thrown untouched.
+ */
+function asDuplicateDocumentNumberError(error: unknown): unknown {
+	const isDuplicateNumber =
+		error instanceof Prisma.PrismaClientKnownRequestError &&
+		error.code === "P2002" &&
+		String(error.meta?.target ?? "").includes("documentNumber");
+
+	if (isDuplicateNumber) {
+		return new TRPCError({
+			code: "CONFLICT",
+			message: "That document number was taken while you were submitting. Press Submit Request again.",
+		});
+	}
+
+	return error;
+}
+
 /** How long one signature image gets before the printed form goes out without
  *  it. Short on purpose: three of these run in parallel behind a page somebody
  *  is watching, and a bucket that has stopped answering must not hold the
@@ -945,25 +1098,35 @@ export const requestRouter = {
 
 		const documentNumber = existing.documentNumber ?? (await generateDocumentNumber());
 
-		return await prisma.$transaction(async (tx) => {
-			const request = await tx.request.update({
-				where: { id },
-				data: { documentNumber, idoEvaluationStatus: null, masterStatus: "SUBMITTED" },
-				select: { documentNumber: true, id: true, masterStatus: true },
-			});
+		try {
+			return await prisma.$transaction(async (tx) => {
+				const request = await tx.request.update({
+					where: { id },
+					data: { documentNumber, idoEvaluationStatus: null, masterStatus: "SUBMITTED" },
+					select: { documentNumber: true, id: true, masterStatus: true },
+				});
 
-			await tx.auditLog.create({
-				data: {
-					action: "SUBMITTED",
-					actorId: user.id,
-					fromStatus: existing.masterStatus,
-					requestId: id,
-					toStatus: "SUBMITTED",
-				},
-			});
+				await tx.auditLog.create({
+					data: {
+						action: "SUBMITTED",
+						actorId: user.id,
+						fromStatus: existing.masterStatus,
+						requestId: id,
+						toStatus: "SUBMITTED",
+					},
+				});
 
-			return request;
-		});
+				return request;
+			});
+		} catch (error) {
+			// `generateDocumentNumber` is what stops this, and it is the backstop
+			// rather than the fix: two submits that raced past each other's counter
+			// read leave the loser here, and the raw P2002 that Prisma throws travels
+			// to the browser as a toast quoting a file path on the server and the
+			// name of the column that clashed. The requestor gets a sentence they
+			// can act on instead, and pressing Submit again picks up a fresh number.
+			throw asDuplicateDocumentNumberError(error);
+		}
 	}),
 
 	/**
@@ -1278,11 +1441,10 @@ export const requestRouter = {
 		if (!isStaffRole(role)) throw notStaffError();
 
 		const scope: RequestWhereInput = { OR: STAFF_QUEUE_SCOPE[role] };
-		const waiting: RequestWhereInput = { OR: STAFF_WAITING_SCOPE[role] };
 
 		const [handledCount, waitingCount] = await prisma.$transaction([
-			prisma.request.count({ where: { AND: [scope, { NOT: waiting }] } }),
-			prisma.request.count({ where: { AND: [scope, waiting] } }),
+			prisma.request.count({ where: { AND: [scope, handledWhere(role)] } }),
+			prisma.request.count({ where: { AND: [scope, waitingWhere(role)] } }),
 		]);
 
 		return { handled: handledCount, waiting: waitingCount };
@@ -2157,6 +2319,7 @@ export const requestRouter = {
 				idoEvaluationStatus: true,
 				idoFinalSignatureUrl: true,
 				idoFinalSignedAt: true,
+				idoFinalStatus: true,
 				masterStatus: true,
 				position: true,
 				reference: true,
@@ -2166,22 +2329,69 @@ export const requestRouter = {
 				userId: true,
 				user: { select: { signatureUrl: true } },
 				/*
-				 * `take: 1` over an ascending sort: a request can be submitted more than
-				 * once - returned, fixed, sent again - and the form records when it was
-				 * FIRST filed, which is what the office's own numbering is keyed to.
+				 * Three values are read out of this one ascending list, and the sort is
+				 * what makes each of them right.
+				 *
+				 * `SUBMITTED` is taken FIRST: a request can be submitted more than once -
+				 * returned, fixed, sent again - and the form records when it was first
+				 * filed, which is what the office's own numbering is keyed to. The two
+				 * approvals are taken LAST, because those stages are terminal and a later
+				 * entry could only ever be the one that counts.
+				 *
+				 * The actor is JOINED rather than read off the request, because the row
+				 * carries no column for either name. `processor` is not it - that is the
+				 * officer who did the FIRST review, a different desk and usually a
+				 * different person from the chairperson who signs at the end.
 				 */
 				auditLogs: {
 					orderBy: { createdAt: "asc" },
-					select: { createdAt: true },
-					take: 1,
-					where: { action: "SUBMITTED" },
+					select: {
+						action: true,
+						actor: { select: { firstname: true, lastname: true, name: true } },
+						createdAt: true,
+					},
+					where: { action: { in: ["SUBMITTED", "IDO_FINAL_APPROVED", "FINAL_DIRECTOR_APPROVED"] } },
 				},
 			},
 		});
 
 		assertCanReadRequest(request, user);
 
-		const isApproved = request.finalDirectorStatus === "APPROVED";
+		/*
+		 * TWO gates, not one, and each desk opens its own.
+		 *
+		 * The form accumulates signatures the way the paper does: the IDO
+		 * Chairperson's block fills when THEY sign, and the Campus Director's when
+		 * they do. An earlier version withheld both until the final approval, which
+		 * printed an empty IDO block on a request the chairperson had already signed
+		 * - a form that disagreed with the workflow that produced it.
+		 *
+		 * What is still withheld is a signature nobody has given. Neither gate can
+		 * open early: `idoFinalStatus` only reads `IDO_FINAL_APPROVED` once
+		 * `idoFinalApprove` has committed, and `finalDirectorStatus` only reads
+		 * `APPROVED` once `finalDirectorApprove` has. A rejection at either desk
+		 * leaves that desk's gate shut for good, which is why a refused form prints
+		 * with the refusing desk blank.
+		 */
+		const isIdoSigned = request.idoFinalStatus === "IDO_FINAL_APPROVED";
+		const isFinalApproved = request.finalDirectorStatus === "APPROVED";
+
+		/*
+		 * The name printed BESIDE a signature, released on exactly the rule that
+		 * signature is. A name alone still announces the decision - "approved by" is
+		 * the whole content of the cell - so the two travel together.
+		 *
+		 * `null` rather than `reviewerName`'s "IDO" fallback when there is no entry:
+		 * the fallback is a sensible label for an IDO desk and a wrong one for a
+		 * Campus Director, and an empty cell is what the paper form has anyway.
+		 */
+		const approverName = (action: string, isReleased: boolean): string | null => {
+			if (!isReleased) return null;
+
+			const actor = request.auditLogs.filter((entry) => entry.action === action).at(-1)?.actor;
+
+			return actor ? reviewerName(actor) : null;
+		};
 
 		/*
 		 * `satisfies` rather than a bare return: the renderer is laid out cell by
@@ -2193,21 +2403,28 @@ export const requestRouter = {
 			approverNote: request.approverNote,
 			details: request.details,
 			documentNumber: request.documentNumber,
-			finalDirectorSignatureUrl: isApproved ? request.finalDirectorSignatureUrl : null,
-			finalDirectorSignedAt: isApproved ? (request.finalDirectorSignedAt?.toISOString() ?? null) : null,
+			finalDirectorSignatureUrl: isFinalApproved ? request.finalDirectorSignatureUrl : null,
+			finalDirectorName: approverName("FINAL_DIRECTOR_APPROVED", isFinalApproved),
+			finalDirectorSignedAt: isFinalApproved ? (request.finalDirectorSignedAt?.toISOString() ?? null) : null,
 			finalDirectorStatus: request.finalDirectorStatus,
 			finalTitle: request.finalTitle,
 			id: request.id,
 			idoEvaluationStatus: request.idoEvaluationStatus,
-			idoFinalSignatureUrl: isApproved ? request.idoFinalSignatureUrl : null,
-			idoFinalSignedAt: isApproved ? (request.idoFinalSignedAt?.toISOString() ?? null) : null,
+			idoFinalApproverName: approverName("IDO_FINAL_APPROVED", isIdoSigned),
+			idoFinalSignatureUrl: isIdoSigned ? request.idoFinalSignatureUrl : null,
+			idoFinalSignedAt: isIdoSigned ? (request.idoFinalSignedAt?.toISOString() ?? null) : null,
+			/* Unredacted: it is a status, not a signature, and it is what the renderer
+			   re-derives its own IDO gate from. `masterStatus` beside it is
+			   unredacted for the same reason. */
+			idoFinalStatus: request.idoFinalStatus,
 			masterStatus: request.masterStatus,
 			nameOfBuildingArea: request.finalTitle ?? request.title,
 			position: request.position,
 			reference: request.reference,
 			requestedBy: request.requestedBy,
 			requestorSignatureUrl: request.user.signatureUrl,
-			requestSubmittedAt: request.auditLogs[0]?.createdAt.toISOString() ?? null,
+			requestSubmittedAt:
+				request.auditLogs.find((entry) => entry.action === "SUBMITTED")?.createdAt.toISOString() ?? null,
 			title: request.title,
 			typeOfRequest: request.typeOfRequest,
 		} satisfies RequestPdfData;
@@ -2247,6 +2464,7 @@ export const requestRouter = {
 					finalDirectorSignatureUrl: true,
 					finalDirectorStatus: true,
 					idoFinalSignatureUrl: true,
+					idoFinalStatus: true,
 					userId: true,
 					user: { select: { signatureUrl: true } },
 				},
@@ -2254,12 +2472,17 @@ export const requestRouter = {
 
 			assertCanReadRequest(request, user);
 
-			const isApproved = request.finalDirectorStatus === "APPROVED";
+			// The same two gates `getForPdf` applies, applied again rather than trusted
+			// from there - this procedure is callable on its own, and a version that
+			// only split the rule in the other one would hand out both images to
+			// anybody who skipped it.
+			const isIdoSigned = request.idoFinalStatus === "IDO_FINAL_APPROVED";
+			const isFinalApproved = request.finalDirectorStatus === "APPROVED";
 
 			const [requestorSignatureBase64, idoFinalSignatureBase64, finalDirectorSignatureBase64] = await Promise.all([
 				signatureAsDataUri(request.user.signatureUrl),
-				isApproved ? signatureAsDataUri(request.idoFinalSignatureUrl) : null,
-				isApproved ? signatureAsDataUri(request.finalDirectorSignatureUrl) : null,
+				isIdoSigned ? signatureAsDataUri(request.idoFinalSignatureUrl) : null,
+				isFinalApproved ? signatureAsDataUri(request.finalDirectorSignatureUrl) : null,
 			]);
 
 			return {

@@ -1,7 +1,5 @@
-import { AppChip, AppStepper } from "@bernardsapida/web-ui";
-import { Typography } from "@heroui/react";
-import { ClipboardCheck, FileText, Gavel, Search, Send, ShieldCheck, Undo2 } from "lucide-react";
-import { masterStatusMap } from "@/lib/status-maps/request-status";
+import { AppStepper } from "@bernardsapida/web-ui";
+import { ClipboardCheck, FileText, Gavel, Search, Send, ShieldCheck } from "lucide-react";
 
 interface WorkflowStepperProps {
 	idoEvaluationStatus?: string | null;
@@ -16,6 +14,13 @@ interface WorkflowStepperProps {
  * and brings the thing that version never had: a bar reading "Step 2 of 7" below
  * `sm`, because seven labelled circles on a 390px screen are seven truncated
  * words and no sense of progress.
+ *
+ * **It carries no status chip and no "Progress" caption.** Every page that
+ * renders this also renders `AppPageHeader` with the status chip in it, so a
+ * second chip a few pixels below said "Draft" twice on one screen - and the
+ * caption named the one thing on the page that needs no naming. What the stepper
+ * says that the chip cannot is WHERE in the sequence the request stopped, which
+ * is the marker, not a label beside it.
  */
 const WORKFLOW_STEPS = [
 	{ icon: FileText, key: "DRAFT", label: "Draft" },
@@ -80,36 +85,11 @@ export function WorkflowStepper({ idoEvaluationStatus, masterStatus }: WorkflowS
 		return { ...step, label: isReturned ? "Returned" : "Rejected" };
 	});
 
-	const status = masterStatusMap[masterStatus];
-
 	return (
-		<div className="flex flex-col gap-4">
-			<div className="flex flex-wrap items-center justify-between gap-3">
-				<Typography
-					color="muted"
-					type="body-sm"
-				>
-					Progress
-				</Typography>
-
-				{/* The chip is what says WHICH no it was. The stepper can only show
-				    where the request stopped - "Rejected" at the director's stage does
-				    not distinguish the budget officer's refusal from the director's. */}
-				{status ? (
-					<AppChip
-						icon={isReturned ? Undo2 : status.icon}
-						label={status.label}
-						size="sm"
-						tone={status.tone}
-					/>
-				) : null}
-			</div>
-
-			<AppStepper
-				currentStep={currentStep}
-				data-cy="request-workflow"
-				steps={steps}
-			/>
-		</div>
+		<AppStepper
+			currentStep={currentStep}
+			data-cy="request-workflow"
+			steps={steps}
+		/>
 	);
 }

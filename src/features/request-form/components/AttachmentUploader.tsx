@@ -1,4 +1,5 @@
 import { AppFileUpload, AppList, type UploadedFile } from "@bernardsapida/web-ui";
+import { Typography } from "@heroui/react";
 import { Paperclip } from "lucide-react";
 import type { FormAttachment } from "@/features/request-form/validations/schema/request.schema";
 import { UPLOAD_ATTACHMENT_ACCEPT_ATTRIBUTE, UPLOAD_MAX_BYTES, UPLOAD_MAX_FILES } from "@/lib/upload-constraints";
@@ -48,25 +49,50 @@ export function AttachmentUploader({ isDisabled, isReadOnly, onChange, value }: 
 
 	if (isReadOnly) {
 		return (
-			<AppList
-				data-cy="request-attachments-list"
-				empty={{ description: "No files were attached to this request.", reason: "no-data" }}
-				items={value.map((attachment) => ({
-					key: attachment.id,
-					leading: { icon: Paperclip, kind: "icon" as const },
-					meta: formatBytes(attachment.size),
-					primary: attachment.name,
-				}))}
-				label="Attachments"
-				// A new tab rather than a router navigation: these are S3 objects on
-				// another origin, and half of them are PDFs the browser will render
-				// itself. Replacing the page with one would lose the request behind it.
-				onSelectItem={(item) => {
-					const attachment = value.find((row) => row.id === item.key);
+			/* The heading is drawn here rather than by a card around the list.
+			   `AppList`'s `label` names it for a screen reader only, so read-only
+			   attachments used to arrive as an unlabelled row of files in the rail -
+			   and the card that was wrapping it put a second border and a second
+			   padding around a surface that already had both. */
+			<div className="flex flex-col gap-2">
+				{/* AppCard's own title size and weight, so this section and the
+				    Processor card beside it in the rail read as peers. */}
+				<h3 className="text-base leading-6 font-semibold">Attachments</h3>
 
-					if (attachment) window.open(attachment.url, "_blank", "noopener,noreferrer");
-				}}
-			/>
+				{/* One line, not `AppList`'s illustrated empty state. That state is
+				    built for a page's main column, where a 200px panel with a glyph in
+				    it is the right way to say "nothing here"; in a 340px rail beside a
+				    document it is the tallest thing on the screen, and what it has to
+				    report is that there is nothing to report. */}
+				{value.length === 0 ? (
+					<Typography
+						color="muted"
+						data-cy="request-attachments-empty"
+						type="body-sm"
+					>
+						No files were attached to this request.
+					</Typography>
+				) : (
+					<AppList
+						data-cy="request-attachments-list"
+						items={value.map((attachment) => ({
+							key: attachment.id,
+							leading: { icon: Paperclip, kind: "icon" as const },
+							meta: formatBytes(attachment.size),
+							primary: attachment.name,
+						}))}
+						label="Attachments"
+						// A new tab rather than a router navigation: these are S3 objects on
+						// another origin, and half of them are PDFs the browser will render
+						// itself. Replacing the page with one would lose the request behind it.
+						onSelectItem={(item) => {
+							const attachment = value.find((row) => row.id === item.key);
+
+							if (attachment) window.open(attachment.url, "_blank", "noopener,noreferrer");
+						}}
+					/>
+				)}
+			</div>
 		);
 	}
 

@@ -109,22 +109,6 @@ export function negativeKindOf(action: string): NegativeKind | null {
 }
 
 /**
- * What a requestor is shown on their own request: the returns, the rejections
- * and the deferral, and nothing else. Internal recommendations and per-stage
- * approvals are staff detail and stay on the staff pages.
- *
- * DERIVED from `negative` rather than written out, which is the answer to the
- * failure this list would otherwise have. A hand-kept whitelist is one a new
- * rejection is added without, and the symptom is silent - the requestor's feed
- * simply never mentions the thing that stopped their request.
- */
-export const REQUESTOR_VISIBLE_ACTIONS: ReadonlySet<string> = new Set(
-	Object.entries(auditActionMap)
-		.filter(([, entry]) => entry.negative)
-		.map(([action]) => action),
-);
-
-/**
  * The newest entry that stopped or reversed the request, or `null`.
  *
  * Newest and not first: a request can be returned, fixed, resubmitted and

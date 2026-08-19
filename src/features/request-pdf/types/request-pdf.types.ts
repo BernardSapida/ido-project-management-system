@@ -19,10 +19,13 @@
  * Everything the form PRINTS, and nothing else.
  *
  * The four approval fields - both signature URLs and both signed-at stamps -
- * are `null` on the wire until `finalDirectorStatus === "APPROVED"`. That
- * redaction happens in `getForPdf`, not here and not in the renderer: a type
- * cannot enforce it, and a check in the renderer publishes the values to
- * anybody who opens the network tab.
+ * are `null` on the wire until the desk that owns them has signed. TWO rules,
+ * not one: the IDO pair is released by `idoFinalStatus === "IDO_FINAL_APPROVED"`
+ * and the Campus Director's by `finalDirectorStatus === "APPROVED"`, so the form
+ * fills desk by desk the way the paper one does. Both redactions happen in
+ * `getForPdf`, not here and not in the renderer: a type cannot enforce them, and
+ * a check in the renderer publishes the values to anybody who opens the network
+ * tab.
  *
  * Dates are ISO strings rather than `Date`. superjson would carry a `Date`
  * through, but the renderer formats every one of them to `MMMM DD, YYYY`
@@ -32,14 +35,23 @@ export type RequestPdfData = {
 	approverNote: string | null;
 	details: string;
 	documentNumber: string | null;
+	/** Who gave the final approval, for the name cell beside their signature.
+	 *  Redacted with the signatures, and `null` on a form nobody has signed. */
+	finalDirectorName: string | null;
 	finalDirectorSignatureUrl: string | null;
 	finalDirectorSignedAt: string | null;
 	finalDirectorStatus: string | null;
 	finalTitle: string | null;
 	id: string;
 	idoEvaluationStatus: string | null;
+	/** Who signed the IDO final review - the chairperson, not the officer who did
+	 *  the first review. Redacted with the signatures. */
+	idoFinalApproverName: string | null;
 	idoFinalSignatureUrl: string | null;
 	idoFinalSignedAt: string | null;
+	/** The IDO Chairperson's own stage. Never redacted - it is a status, and it is
+	 *  what the renderer re-derives its IDO signature gate from. */
+	idoFinalStatus: string | null;
 	masterStatus: string;
 	/** `finalTitle ?? title` - the name the form's second row prints, resolved on
 	 *  the server so the renderer never has to decide which title is current. */

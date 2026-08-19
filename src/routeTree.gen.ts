@@ -131,6 +131,7 @@ import { Route as AuthenticatedRequestsRequestIdFinalDirectorApprovalRouteImport
 import { Route as AuthenticatedRequestsRequestIdFinalReviewRouteImport } from './routes/_authenticated/requests/$requestId/final-review'
 import { Route as AuthenticatedRequestsRequestIdPdfRouteImport } from './routes/_authenticated/requests/$requestId/pdf'
 import { Route as AuthenticatedRequestsRequestIdReviewRouteImport } from './routes/_authenticated/requests/$requestId/review'
+import { Route as AuthenticatedRequestsPdfDemoRouteImport } from './routes/_authenticated/requests/pdf/demo'
 import { Route as AuthenticatedStaffDashboardIndexRouteImport } from './routes/_authenticated/staff/dashboard/index'
 
 const IndexRoute = IndexRouteImport.update({
@@ -837,6 +838,12 @@ const AuthenticatedRequestsRequestIdReviewRoute =
     path: '/requests/$requestId/review',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedRequestsPdfDemoRoute =
+  AuthenticatedRequestsPdfDemoRouteImport.update({
+    id: '/requests/pdf/demo',
+    path: '/requests/pdf/demo',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedStaffDashboardIndexRoute =
   AuthenticatedStaffDashboardIndexRouteImport.update({
     id: '/staff/dashboard/',
@@ -965,6 +972,7 @@ export interface FileRoutesByFullPath {
   '/requests/$requestId/final-review': typeof AuthenticatedRequestsRequestIdFinalReviewRoute
   '/requests/$requestId/pdf': typeof AuthenticatedRequestsRequestIdPdfRoute
   '/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
+  '/requests/pdf/demo': typeof AuthenticatedRequestsPdfDemoRoute
   '/requests/$requestId/': typeof AuthenticatedRequestsRequestIdIndexRoute
   '/staff/dashboard/': typeof AuthenticatedStaffDashboardIndexRoute
 }
@@ -1087,6 +1095,7 @@ export interface FileRoutesByTo {
   '/requests/$requestId/final-review': typeof AuthenticatedRequestsRequestIdFinalReviewRoute
   '/requests/$requestId/pdf': typeof AuthenticatedRequestsRequestIdPdfRoute
   '/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
+  '/requests/pdf/demo': typeof AuthenticatedRequestsPdfDemoRoute
   '/requests/$requestId': typeof AuthenticatedRequestsRequestIdIndexRoute
   '/staff/dashboard': typeof AuthenticatedStaffDashboardIndexRoute
 }
@@ -1213,6 +1222,7 @@ export interface FileRoutesById {
   '/_authenticated/requests/$requestId/final-review': typeof AuthenticatedRequestsRequestIdFinalReviewRoute
   '/_authenticated/requests/$requestId/pdf': typeof AuthenticatedRequestsRequestIdPdfRoute
   '/_authenticated/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
+  '/_authenticated/requests/pdf/demo': typeof AuthenticatedRequestsPdfDemoRoute
   '/_authenticated/requests/$requestId/': typeof AuthenticatedRequestsRequestIdIndexRoute
   '/_authenticated/staff/dashboard/': typeof AuthenticatedStaffDashboardIndexRoute
 }
@@ -1339,6 +1349,7 @@ export interface FileRouteTypes {
     | '/requests/$requestId/final-review'
     | '/requests/$requestId/pdf'
     | '/requests/$requestId/review'
+    | '/requests/pdf/demo'
     | '/requests/$requestId/'
     | '/staff/dashboard/'
   fileRoutesByTo: FileRoutesByTo
@@ -1461,6 +1472,7 @@ export interface FileRouteTypes {
     | '/requests/$requestId/final-review'
     | '/requests/$requestId/pdf'
     | '/requests/$requestId/review'
+    | '/requests/pdf/demo'
     | '/requests/$requestId'
     | '/staff/dashboard'
   id:
@@ -1586,6 +1598,7 @@ export interface FileRouteTypes {
     | '/_authenticated/requests/$requestId/final-review'
     | '/_authenticated/requests/$requestId/pdf'
     | '/_authenticated/requests/$requestId/review'
+    | '/_authenticated/requests/pdf/demo'
     | '/_authenticated/requests/$requestId/'
     | '/_authenticated/staff/dashboard/'
   fileRoutesById: FileRoutesById
@@ -2471,6 +2484,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRequestsRequestIdReviewRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/requests/pdf/demo': {
+      id: '/_authenticated/requests/pdf/demo'
+      path: '/requests/pdf/demo'
+      fullPath: '/requests/pdf/demo'
+      preLoaderRoute: typeof AuthenticatedRequestsPdfDemoRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/staff/dashboard/': {
       id: '/_authenticated/staff/dashboard/'
       path: '/staff/dashboard'
@@ -2506,6 +2526,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedRequestsRequestIdFinalReviewRoute: typeof AuthenticatedRequestsRequestIdFinalReviewRoute
   AuthenticatedRequestsRequestIdPdfRoute: typeof AuthenticatedRequestsRequestIdPdfRoute
   AuthenticatedRequestsRequestIdReviewRoute: typeof AuthenticatedRequestsRequestIdReviewRoute
+  AuthenticatedRequestsPdfDemoRoute: typeof AuthenticatedRequestsPdfDemoRoute
   AuthenticatedRequestsRequestIdIndexRoute: typeof AuthenticatedRequestsRequestIdIndexRoute
   AuthenticatedStaffDashboardIndexRoute: typeof AuthenticatedStaffDashboardIndexRoute
 }
@@ -2532,6 +2553,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedRequestsRequestIdPdfRoute,
   AuthenticatedRequestsRequestIdReviewRoute:
     AuthenticatedRequestsRequestIdReviewRoute,
+  AuthenticatedRequestsPdfDemoRoute: AuthenticatedRequestsPdfDemoRoute,
   AuthenticatedRequestsRequestIdIndexRoute:
     AuthenticatedRequestsRequestIdIndexRoute,
   AuthenticatedStaffDashboardIndexRoute: AuthenticatedStaffDashboardIndexRoute,

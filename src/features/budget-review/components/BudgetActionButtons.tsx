@@ -204,7 +204,7 @@ export function BudgetActionButtons({
 							icon={XCircle}
 							isDisabled={!canApprove || isAnyPending}
 							onPress={() => setIsRejectOpen(true)}
-							variant="danger"
+							variant="danger-soft"
 						>
 							Reject
 						</AppButton>

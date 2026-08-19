@@ -23,12 +23,6 @@ export interface AuditLogEntry {
 interface RequestActivityFeedProps {
 	auditLogs: AuditLogEntry[];
 	isLoading?: boolean;
-	/**
-	 * The actions this reader may see. Omit it and every entry renders, which is
-	 * what the staff review pages (specs 010-014) want; the requestor's page
-	 * passes `REQUESTOR_VISIBLE_ACTIONS`.
-	 */
-	visibleActions?: ReadonlySet<string>;
 }
 
 /** "Submitted → Returned by IDO", through the same map the chips read. */
@@ -52,48 +46,44 @@ function transitionSummary(fromStatus: string | null, toStatus: string | null): 
  * None of that is written here. The rail, the day grouping, the relative stamps
  * and the collapsed bodies are the component's.
  *
- * ## Oldest-first, and it is not a preference
+ * ## Newest-first, and the reversal is ours to do
  *
- * A request is a process being followed through, not a feed being watched. The
- * order matches `request.getById`'s `orderBy` rather than re-sorting, because a
- * feed that sorts its own input can only end up disagreeing with the array the
- * banner above it picked its entry from.
+ * The question being asked of this card is "what just happened to my request",
+ * and the answer to it should not be at the bottom of a trail that grows every
+ * time someone touches the request.
  *
- * ## The filter is a whitelist, and it is derived
+ * `AppTimeline` does not sort. It renders `entries` in array order, and `order`
+ * only tells it which end new arrivals land at, for the "new entries" pill. So
+ * the reverse happens here, on the mapped copy - `request.getById` still returns
+ * these ascending, and `latestNegativeLog` and the banner above read that same
+ * ascending array back-to-front. Reversing the *prop* would break both.
  *
- * A requestor is shown the returns, the rejections and the deferral - the things
- * that ask them for something - and not the internal recommendations and
- * per-stage approvals, which are a reviewer's working notes about somebody
- * else's desk. `REQUESTOR_VISIBLE_ACTIONS` is computed from which actions are
- * declared negative rather than listed by hand, so a rejection added by a later
- * spec does not silently vanish from the feed of the person it happened to.
+ * ## Every reader sees the same trail
  *
- * That whitelist is also why the empty copy changes with it: a filtered feed
- * that is empty is GOOD NEWS for a requestor, and "No activity yet" on a request
- * three desks have already signed would be a plain lie.
+ * There is no per-role filter. The requestor's page used to hide everything but
+ * the returns and rejections, and the result was a feed that contradicted the
+ * stepper above it - a request sitting in Director Review whose activity card
+ * claimed one thing had ever happened to it. An audit trail that shows a
+ * different history depending on who is reading is not one.
  */
-export function RequestActivityFeed({ auditLogs, isLoading, visibleActions }: RequestActivityFeedProps) {
-	const visible = visibleActions ? auditLogs.filter((log) => visibleActions.has(log.action)) : auditLogs;
-
-	const entries: TimelineEntry[] = visible.map((log) => ({
-		actor: `${log.actor.firstname} ${log.actor.lastname}`.trim() || "Someone",
-		detail: log.note?.trim() ? <Typography type="body-sm">{log.note}</Typography> : undefined,
-		key: log.id,
-		summary: transitionSummary(log.fromStatus, log.toStatus),
-		timestamp: log.createdAt,
-		title: auditActionLabel(log.action),
-		type: auditActionTimelineType(log.action),
-	}));
+export function RequestActivityFeed({ auditLogs, isLoading }: RequestActivityFeedProps) {
+	// `map` copies, so the `reverse` below turns the copy and never `auditLogs`.
+	const entries: TimelineEntry[] = auditLogs
+		.map((log) => ({
+			actor: `${log.actor.firstname} ${log.actor.lastname}`.trim() || "Someone",
+			detail: log.note?.trim() ? <Typography type="body-sm">{log.note}</Typography> : undefined,
+			key: log.id,
+			summary: transitionSummary(log.fromStatus, log.toStatus),
+			timestamp: log.createdAt,
+			title: auditActionLabel(log.action),
+			type: auditActionTimelineType(log.action),
+		}))
+		.reverse();
 
 	return (
 		<AppTimeline
 			data-cy="request-activity"
-			empty={{
-				description: visibleActions
-					? "Nothing has been sent back to you. Anything a reviewer returns, rejects or defers will appear here."
-					: undefined,
-				reason: "no-data",
-			}}
+			empty={{ reason: "no-data" }}
 			entries={entries}
 			// h3: the page's title is the h1 and the section heading above this feed
 			// is the h2, so the day headers inside it are the third level. A document
@@ -101,7 +91,7 @@ export function RequestActivityFeed({ auditLogs, isLoading, visibleActions }: Re
 			headingLevel={3}
 			isLoading={isLoading}
 			label="Request activity"
-			order="oldest-first"
+			order="newest-first"
 		/>
 	);
 }

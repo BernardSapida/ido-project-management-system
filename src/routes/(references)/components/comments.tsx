@@ -63,7 +63,7 @@ function LabSection({ children, description, title }: LabSectionProps) {
 
 /** A thread in its own panel, at the width one really gets. */
 function Frame({ children }: { children: ReactNode }) {
-	return <div className="max-w-2xl rounded-3xl border border-border bg-surface p-4 sm:p-5">{children}</div>;
+	return <div className="rounded-3xl border border-border bg-surface p-4 sm:p-5">{children}</div>;
 }
 
 /* -------------------------------------------------------------------------- */

@@ -3,6 +3,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { hashPassword } from "better-auth/crypto";
 import { PrismaClient } from "./generated/client";
 import type { Action, Role, STATUS } from "./generated/enums";
+import { type FlowActors, seedFlows } from "./seed-flows";
+import { signatureDataUri } from "./seed-signature";
 
 const adapter = new PrismaPg({
 	connectionString: process.env.DATABASE_URL!,
@@ -59,7 +61,17 @@ const ACCOUNTS = [
 		position: "FACULTY_REPRESENTATIVE",
 		status: "active" as STATUS,
 		profileComplete: true,
-		signatureUrl: null,
+		/*
+		 * The requestor signs too, and leaving this null was wrong for the demo
+		 * data even though flow 01 step 2 is where a real user uploads theirs.
+		 * Every seeded request is ALREADY filed, and the requestor's signature is
+		 * on the form from the moment it is - so a null here printed fifteen
+		 * historical forms with the Faculty Representative row carrying a date and
+		 * a time under an empty name and an empty signature box. Step 2 is still
+		 * demonstrable from Profile, and a genuinely new sign-up still has nothing
+		 * here until they upload one.
+		 */
+		signatureUrl: signatureDataUri("Juan Dela Cruz"),
 	},
 	{
 		email: "ido-officer@gmail.com",
@@ -70,7 +82,7 @@ const ACCOUNTS = [
 		position: null,
 		status: "active" as STATUS,
 		profileComplete: true,
-		signatureUrl: null,
+		signatureUrl: signatureDataUri("Ida Reyes"),
 	},
 	{
 		email: "ido-chairperson@gmail.com",
@@ -81,7 +93,7 @@ const ACCOUNTS = [
 		position: null,
 		status: "active" as STATUS,
 		profileComplete: true,
-		signatureUrl: null,
+		signatureUrl: signatureDataUri("Carlos Santos"),
 	},
 	{
 		email: "director@gmail.com",
@@ -92,7 +104,7 @@ const ACCOUNTS = [
 		position: null,
 		status: "active" as STATUS,
 		profileComplete: true,
-		signatureUrl: null,
+		signatureUrl: signatureDataUri("Divina Ramos"),
 	},
 	{
 		email: "budget-officer@gmail.com",
@@ -103,7 +115,7 @@ const ACCOUNTS = [
 		position: null,
 		status: "active" as STATUS,
 		profileComplete: true,
-		signatureUrl: null,
+		signatureUrl: signatureDataUri("Ben Cruz"),
 	},
 ];
 
@@ -133,6 +145,9 @@ async function main() {
 	// verifies with the same one, so anything else produces an account that
 	// exists and can never sign in.
 	const hashedPassword = await hashPassword(PASSWORD);
+
+	/** Every seeded account by role, so the flow fixtures can name their actors. */
+	const byRole = new Map<Role, { id: string; name: string; signatureUrl: string }>();
 
 	for (const account of ACCOUNTS) {
 		const { email, ...fields } = account;
@@ -174,6 +189,12 @@ async function main() {
 			});
 		}
 
+		byRole.set(account.role, {
+			id: user.id,
+			name: account.name,
+			signatureUrl: account.signatureUrl ?? "",
+		});
+
 		const grants = actions.length ? ` — ${actions.length} permissions` : "";
 		console.log(`  ✓ ${email} (${account.role})${grants}${existingCredential ? " — password left as-is" : ""}`);
 	}
@@ -184,7 +205,68 @@ async function main() {
 		console.log(`  ✓ ${TEST_POSTS.length} demo posts`);
 	}
 
+	await seedFlowDemo();
+
 	console.log("✅ Seeding complete");
+
+	/**
+	 * The demo data for `IRMS-old/flows/`, and the document counter that has to
+	 * agree with it.
+	 *
+	 * Nested so it can read `byRole` without threading six ids through a
+	 * parameter list, and it runs last because every fixture references an account
+	 * the loop above has just created.
+	 */
+	async function seedFlowDemo(): Promise<void> {
+		const actors: FlowActors = {
+			budgetOfficer: requireActor("BUDGET_OFFICER"),
+			chairperson: requireActor("IDO_CHAIRPERSON"),
+			director: requireActor("DIRECTOR"),
+			idoOfficer: requireActor("IDO_OFFICER"),
+			requestor: requireActor("USER"),
+		};
+
+		const { count, highestSequence, walkthrough } = await seedFlows(prisma, actors);
+
+		/*
+		 * The counter has to be told what the fixtures used, and this is the whole
+		 * reason it is here rather than left at whatever it was. `document_sequences`
+		 * is what `generateDocumentNumber` counts from; seeding sixteen requests
+		 * numbered 2026-0001 upward while the counter still reads 0 hands the next
+		 * real submit a number one of them already holds, and the unique index kills
+		 * it. The generator now floors itself against the requests table so it would
+		 * survive that, but a seed that leaves a knowingly-wrong counter behind is
+		 * still a seed that plants the bug.
+		 */
+		const year = new Date().getFullYear();
+
+		await prisma.documentSequence.upsert({
+			create: { lastSequence: highestSequence, year },
+			update: { lastSequence: highestSequence },
+			where: { year },
+		});
+
+		console.log(`  ✓ ${count} flow demo requests — document numbers up to ${year}-${String(highestSequence).padStart(4, "0")}`);
+		console.log("");
+		console.log("  Walkthrough (IRMS-old/flows):");
+		for (const line of walkthrough) {
+			console.log(`    ${line}`);
+		}
+		console.log("");
+	}
+
+	/** A missing actor is a broken seed, not something to paper over: the fixtures
+	 *  reference it by id, and a silent fallback would file the whole demo under
+	 *  the wrong account. */
+	function requireActor(role: Role): { id: string; name: string; signatureUrl: string } {
+		const actor = byRole.get(role);
+
+		if (!actor) {
+			throw new Error(`Seed is missing the ${role} account the flow demo data needs.`);
+		}
+
+		return actor;
+	}
 }
 
 main()

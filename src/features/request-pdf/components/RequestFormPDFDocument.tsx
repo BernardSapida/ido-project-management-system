@@ -22,12 +22,17 @@ import type { RequestPdfData } from "../types/request-pdf.types";
  *
  * ## The signature gate is NOT here
  *
- * `isApproved` decides what is DRAWN, and it is the second belt. The first is on
- * the server: `getForPdf` nulls the four approval fields and
- * `getSignaturesAsBase64` refuses to convert the two approval images until the
- * Campus Director has finally approved. Moving the gate here - "the renderer
- * already checks" - would ship every unapproved signature to anybody who opens
- * the network tab.
+ * `isIdoSigned` and `isFinalApproved` decide what is DRAWN, and they are the
+ * second belt. The first is on the server: `getForPdf` nulls each desk's
+ * approval fields and `getSignaturesAsBase64` refuses to convert that desk's
+ * image until it has signed. Moving the gate here - "the renderer already
+ * checks" - would ship every unsigned signature to anybody who opens the network
+ * tab.
+ *
+ * TWO booleans rather than one, because the two desks sign at different times:
+ * the IDO Chairperson's block fills at their own approval, and the Campus
+ * Director's at theirs. A single flag printed an empty IDO block on a request
+ * the chairperson had already signed.
  *
  * ## How the grid holds together
  *
@@ -57,14 +62,12 @@ const S = StyleSheet.create({
 		padding: 6,
 		width: "20%",
 	},
-	/* A grey box, exactly as IRMS-old shipped it. Swap it for the real TUP mark
-	   before this form is filed anywhere - a placeholder on an official document
-	   is a defect somebody will report. */
-	logoPlaceholder: {
-		backgroundColor: "#E8E8E8",
-		borderColor: BORDER,
-		borderWidth: BW,
+	/* The TUP mark, square in the source, so the box is square too - letting
+	   react-pdf letterbox it would leave the seal floating off-centre in the
+	   header cell. */
+	logo: {
 		height: 40,
+		objectFit: "contain",
 		width: 40,
 	},
 	subCell: { borderColor: BORDER, borderRightWidth: BW, padding: 3, width: "15%" },
@@ -87,10 +90,25 @@ const S = StyleSheet.create({
 
 	/* The table grid */
 	cell: { borderColor: BORDER, borderRightWidth: BW, padding: 3 },
+	/* Vertical centring for the cells of a row a SIGNATURE image has made tall.
+	   Applied per cell rather than to the row, because `alignItems` on the row
+	   would stop the cells stretching and their right borders would then span
+	   their own content instead of the full height of the row.
+
+	   NOT folded into `cell` itself: the DETAILS cell is tall for a different
+	   reason - a long paragraph - and a paragraph centred in its box instead of
+	   starting at the top reads as a caption. */
+	cellMiddle: { justifyContent: "center" },
 	cellLast: { padding: 3 },
 	row: { borderBottomColor: BORDER, borderBottomWidth: BW, flexDirection: "row" },
 	rowLast: { flexDirection: "row" },
 	section: { borderColor: BORDER, borderWidth: BW, marginTop: -BW },
+	/* Two headings side by side over a signature block that spans both - see the
+	   note in section 6. The bottom rule is here rather than on either column,
+	   because the two end at different heights. */
+	splitLeft: { borderColor: BORDER, borderRightWidth: BW, width: "50%" },
+	splitRight: { width: "50%" },
+	splitRow: { borderBottomColor: BORDER, borderBottomWidth: BW, flexDirection: "row" },
 	shadedRow: {
 		backgroundColor: SHADE,
 		borderBottomColor: BORDER,
@@ -170,7 +188,10 @@ interface Props {
 	idoFinalSignatureBase64: string | null;
 	/** `finalDirectorStatus === "APPROVED"`. The server has already redacted on
 	 *  the same rule; this only decides what is drawn. */
-	isApproved: boolean;
+	isFinalApproved: boolean;
+	/** `idoFinalStatus === "IDO_FINAL_APPROVED"` - the chairperson's own signature,
+	 *  which lands one desk before the final approval. */
+	isIdoSigned: boolean;
 	request: RequestPdfData;
 	requestorSignatureBase64: string | null;
 }
@@ -178,7 +199,8 @@ interface Props {
 export function RequestFormPDFDocument({
 	finalDirectorSignatureBase64,
 	idoFinalSignatureBase64,
-	isApproved,
+	isFinalApproved,
+	isIdoSigned,
 	request,
 	requestorSignatureBase64,
 }: Props) {
@@ -191,6 +213,42 @@ export function RequestFormPDFDocument({
 
 	const isRecommended = request.idoEvaluationStatus === "RECOMMENDED_BY_IDO";
 	const directorStatus = request.finalDirectorStatus;
+	/*
+	 * The IDO Chairperson's own verdict, and it drives section 6's ACTION column.
+	 *
+	 * The two ACTION blocks belong to two different desks, which is easy to miss
+	 * because they carry the same three boxes: section 6's sits beside the IDO
+	 * recommendation and over the chairperson's signature, and section 7's is the
+	 * Campus Director's. Both used to read `finalDirectorStatus`, so the IDO's
+	 * Approved box stayed empty on a request they had already approved and signed,
+	 * and then ticked itself when somebody else acted.
+	 */
+	const idoFinalStatus = request.idoFinalStatus;
+
+	/*
+	 * Section 6's three ACTION boxes, which record what the IDO DESK did - across
+	 * both of its reviews, not just the final one.
+	 *
+	 * The desk acts twice: the first review can recommend, return, reject or defer,
+	 * and the final review can approve or reject. The paper form gives that one row
+	 * of three boxes, so the two reviews share it:
+	 *
+	 *   - Approved   - the chairperson signed off at the final review. Recommending
+	 *                  at the FIRST review is not this; that is the Yes box on the
+	 *                  left, and the request still has to come back here.
+	 *   - Disapproved - IDO refused it, at EITHER review. Which of the two said no
+	 *                  does not change that the answer came from this desk, and a
+	 *                  first-review rejection with nothing ticked here would print a
+	 *                  refused form that looks unactioned.
+	 *   - Resubmit   - returned to the requestor to be fixed. Only the first review
+	 *                  can do this; there is no return from the final one.
+	 *
+	 * Deferring to next year's PPMP ticks nothing, because the form has no box for
+	 * it - the reason travels in the Reason cell instead.
+	 */
+	const isIdoApproved = idoFinalStatus === "IDO_FINAL_APPROVED";
+	const isIdoDisapproved = idoFinalStatus === "IDO_FINAL_REJECTED" || request.idoEvaluationStatus === "REJECTED_BY_IDO";
+	const isIdoResubmit = request.idoEvaluationStatus === "RETURNED_TO_REQUESTOR";
 
 	/*
 	 * The requestor signs ONE row of this form, and which row is decided by the
@@ -198,6 +256,7 @@ export function RequestFormPDFDocument({
 	 * a request can never print the same signature in two representative rows.
 	 */
 	const signatureFor = (position: string) => (request.position === position ? requestorSignatureBase64 : null);
+	const nameFor = (position: string) => (request.position === position ? request.requestedBy : "");
 	const dateFor = (position: string) => (request.position === position ? submittedDate : "");
 	const timeFor = (position: string) => (request.position === position ? submittedTime : "");
 
@@ -212,7 +271,10 @@ export function RequestFormPDFDocument({
 				{/* -- 1 - Header ----------------------------------------------------- */}
 				<View style={S.headerWrap}>
 					<View style={S.logoCell}>
-						<View style={S.logoPlaceholder} />
+						<Image
+							src="/images/logo.png"
+							style={S.logo}
+						/>
 					</View>
 					<View style={S.infoCell}>
 						<Text style={[S.bold, S.textCenter]}>Technological University of the Philippines</Text>
@@ -285,17 +347,26 @@ export function RequestFormPDFDocument({
 
 				{/* -- 3 - Requestor -------------------------------------------------- */}
 				<View style={S.section}>
+					{/*
+					 * 25/30/10/35, and the two rows of this section have to agree on the
+					 * first three: they are the same vertical rules drawn twice, and a
+					 * width changed on one row alone puts a kink in the table.
+					 *
+					 * The last cell runs to 100% rather than stopping at 85% the way it
+					 * used to. The missing 15% drew no border, so it read as part of the
+					 * signature cell while the image was centred in the wrong half of it.
+					 */}
 					<View style={S.row}>
-						<View style={[S.cell, { width: "25%" }]}>
+						<View style={[S.cell, S.cellMiddle, { width: "25%" }]}>
 							<Text style={S.bold}>REQUESTED BY</Text>
 						</View>
-						<View style={[S.cell, { width: "35%" }]}>
+						<View style={[S.cell, S.cellMiddle, { width: "30%" }]}>
 							<Text>{request.requestedBy}</Text>
 						</View>
-						<View style={[S.cell, { alignItems: "center", width: "10%" }]}>
-							<Text style={[S.bold, S.textCenter]}>SIGNATURE</Text>
+						<View style={[S.cell, S.cellMiddle, { width: "10%" }]}>
+							<Text style={S.bold}>SIGNATURE</Text>
 						</View>
-						<View style={[S.cellLast, { alignItems: "center", width: "15%" }]}>
+						<View style={[S.cellLast, S.cellMiddle, { alignItems: "center", width: "35%" }]}>
 							{/* Blank when the profile carries no signature, and the rest of the
 							    form still prints - that is a form to be signed by hand, not a
 							    document that failed to render. */}
@@ -311,7 +382,7 @@ export function RequestFormPDFDocument({
 						<View style={[S.cell, { width: "25%" }]}>
 							<Text style={S.bold}>POSITION/DESIGNATION</Text>
 						</View>
-						<View style={[S.cell, { width: "35%" }]}>
+						<View style={[S.cell, { width: "30%" }]}>
 							{/* The LABEL, never the stored enum. "FACULTY_REPRESENTATIVE" on a
 							    filed form is a bug the office reports. */}
 							<Text>{positionLabel(request.position)}</Text>
@@ -325,7 +396,11 @@ export function RequestFormPDFDocument({
 						<View style={[S.cell, { width: "8%" }]}>
 							<Text style={S.bold}>TIME</Text>
 						</View>
-						<View style={[S.cellLast, { width: "7%" }]}>
+						{/* 12%, not 7%. At 7% the cell had about 31pt of room and "09:00 AM"
+						    needs roughly 36pt, so every filed form wrapped the time onto a
+						    second line and grew the row. The width came out of the position
+						    cell, which had the most to spare. */}
+						<View style={[S.cellLast, { width: "12%" }]}>
 							<Text>{submittedTime}</Text>
 						</View>
 					</View>
@@ -333,8 +408,16 @@ export function RequestFormPDFDocument({
 
 				{/* -- 4 - Related Personnel ------------------------------------------ */}
 				<View style={S.section}>
+					{/* An empty shaded bar, which the paper form puts here to break the
+					    requestor's own block off from the representatives' one. The space
+					    is the whole content - the `Text` holds a single space so the bar
+					    takes the same height as every other shaded row rather than
+					    collapsing to its padding. */}
+					<View style={S.shadedRow}>
+						<Text> </Text>
+					</View>
 					<View style={[S.row, { padding: 3 }]}>
-						<Text style={[S.italic, S.sz7]}>NOTE: To be accomplished by Related Personnel (At least 2)</Text>
+						<Text style={[S.bold, S.sz7]}>NOTE: To be accomplished by Related Personnel (At least 2)</Text>
 					</View>
 					{REPRESENTATIVE_POSITIONS.map((representative, index) => {
 						const signature = signatureFor(representative.value);
@@ -343,17 +426,23 @@ export function RequestFormPDFDocument({
 						return (
 							<View key={representative.value}>
 								<View style={S.row}>
-									<View style={[S.cell, { width: "40%" }]}>
+									<View style={[S.cell, S.cellMiddle, { width: "40%" }]}>
 										<Text style={S.bold}>{representative.label}</Text>
 									</View>
-									{/* The name cell stays blank on purpose. The system knows one
-									    person - the requestor - and the other representatives sign
-									    the printed sheet by hand. */}
-									<View style={[S.cell, { width: "25%" }]} />
-									<View style={[S.cell, { alignItems: "center", width: "10%" }]}>
-										<Text style={[S.bold, S.textCenter]}>SIGNATURE</Text>
+									{/* Blank on every row but the requestor's own. The system knows
+									    one person, and the other representatives sign the printed
+									    sheet by hand - but on the row that IS theirs the name has to
+									    print, because `dateFor` and `timeFor` below already fill
+									    against the same match. A row carrying a date and a time under
+									    a nameless heading reads as a form somebody started and
+									    abandoned. */}
+									<View style={[S.cell, S.cellMiddle, { width: "25%" }]}>
+										<Text>{nameFor(representative.value)}</Text>
 									</View>
-									<View style={[S.cellLast, { alignItems: "center", width: "25%" }]}>
+									<View style={[S.cell, S.cellMiddle, { width: "10%" }]}>
+										<Text style={S.bold}>SIGNATURE</Text>
+									</View>
+									<View style={[S.cellLast, S.cellMiddle, { alignItems: "center", width: "25%" }]}>
 										{signature ? (
 											<Image
 												src={signature}
@@ -387,14 +476,18 @@ export function RequestFormPDFDocument({
 						<Text style={S.bold}>NOTED</Text>
 					</View>
 					<View style={S.row}>
-						<View style={[S.cell, { width: "40%" }]}>
+						<View style={[S.cell, S.cellMiddle, { width: "40%" }]}>
 							<Text style={S.bold}>DEPT. HEAD/IMMEDIATE SUPERVISOR</Text>
 						</View>
-						<View style={[S.cell, { width: "25%" }]} />
-						<View style={[S.cell, { alignItems: "center", width: "10%" }]}>
-							<Text style={[S.bold, S.textCenter]}>SIGNATURE</Text>
+						{/* Fills on the same rule as section 4: only when the requestor holds
+						    this position, which is the one case the system can name. */}
+						<View style={[S.cell, S.cellMiddle, { width: "25%" }]}>
+							<Text>{nameFor("DEPARTMENT_HEAD")}</Text>
 						</View>
-						<View style={[S.cellLast, { alignItems: "center", width: "25%" }]}>
+						<View style={[S.cell, S.cellMiddle, { width: "10%" }]}>
+							<Text style={S.bold}>SIGNATURE</Text>
+						</View>
+						<View style={[S.cellLast, S.cellMiddle, { alignItems: "center", width: "25%" }]}>
 							{departmentHeadSignature ? (
 								<Image
 									src={departmentHeadSignature}
@@ -420,141 +513,132 @@ export function RequestFormPDFDocument({
 				</View>
 
 				{/* -- 6 - Recommendation by IDO | Action ----------------------------- */}
-				<View style={[S.section, { flexDirection: "row" }]}>
-					<View style={{ borderColor: BORDER, borderRightWidth: BW, width: "50%" }}>
-						<View style={S.shadedRow}>
-							<Text style={S.bold}>RECOMMENDATION BY IDO</Text>
-						</View>
-						<View style={S.row}>
-							<View style={[S.cellLast, { padding: 3 }]}>
-								<Text style={S.bold}>Recommending Approval?</Text>
-								<View style={[S.checkRow, { marginTop: 2 }]}>
-									<View style={S.checkItem}>
-										<Checkbox checked={isRecommended} />
-										<Text>Yes</Text>
-									</View>
-									<View style={S.checkItem}>
-										{/* "No" means the IDO has DECIDED and did not recommend, so
-										    neither box is ticked while the stage is still open. A
-										    RETURNED request therefore prints as No, which is the
-										    existing IRMS-old behaviour - confirm with the office
-										    before changing it. */}
-										<Checkbox checked={!isRecommended && request.idoEvaluationStatus !== null} />
-										<Text>No</Text>
+				{/*
+				 * The two headings sit over their own cells, and the signature block
+				 * below spans BOTH of them.
+				 *
+				 * That is what the paper form does, and it is easy to get wrong: `IDO`
+				 * and `DATE` are on the left, `SIGNATURE` and `TIME` on the right, and
+				 * the rule between them is the same 50% line the two headings share. It
+				 * reads as one four-cell row, not as a signature block per column.
+				 * Giving the ACTION column its own CAMPUS DIRECTOR / DATE / TIME rows
+				 * printed the director's signature twice - once here, and once in
+				 * section 7 where the form actually asks for it.
+				 *
+				 * The bottom border belongs to the CONTAINER rather than to each
+				 * column's last row. The two columns hold different amounts of text and
+				 * end at different heights, so a border per column draws two short lines
+				 * at two heights instead of the one straight rule the rows below start
+				 * from.
+				 */}
+				<View style={S.section}>
+					<View style={S.splitRow}>
+						<View style={S.splitLeft}>
+							<View style={S.shadedRow}>
+								<Text style={S.bold}>RECOMMENDATION BY IDO</Text>
+							</View>
+							<View style={S.row}>
+								<View style={[S.cellLast, { padding: 3 }]}>
+									<Text style={S.bold}>Recommending Approval?</Text>
+									<View style={[S.checkRow, { marginTop: 2 }]}>
+										<View style={S.checkItem}>
+											<Checkbox checked={isRecommended} />
+											<Text>Yes</Text>
+										</View>
+										<View style={S.checkItem}>
+											{/* "No" means the IDO has DECIDED and did not recommend, so
+											    neither box is ticked while the stage is still open. A
+											    RETURNED request therefore prints as No, which is the
+											    existing IRMS-old behaviour - confirm with the office
+											    before changing it. */}
+											<Checkbox checked={!isRecommended && request.idoEvaluationStatus !== null} />
+											<Text>No</Text>
+										</View>
 									</View>
 								</View>
 							</View>
-						</View>
-						<View style={S.row}>
-							<View style={[S.cellLast, { padding: 3 }]}>
-								{/* `approverNote` is ONE column printed in three cells - here and
-								    in both Notes cells below. A later stage that overwrites it
-								    changes all three together. */}
-								<Text>
-									<Bold>Reason: </Bold>
-									{request.approverNote ?? ""}
-								</Text>
+							<View style={S.rowLast}>
+								<View style={[S.cellLast, { padding: 3 }]}>
+									{/* `approverNote` is ONE column printed in three cells - here and
+									    in both Notes cells below. A later stage that overwrites it
+									    changes all three together. */}
+									<Text>
+										<Bold>Reason: </Bold>
+										{request.approverNote ?? ""}
+									</Text>
+								</View>
 							</View>
 						</View>
-						<View style={S.row}>
-							<View style={[S.cell, { width: "25%" }]}>
-								<Text style={S.bold}>IDO</Text>
+
+						<View style={S.splitRight}>
+							<View style={S.shadedRow}>
+								<Text style={S.bold}>ACTION</Text>
 							</View>
-							<View style={[S.cell, { width: "25%" }]}>
-								<Text style={[S.bold, S.textCenter]}>SIGNATURE</Text>
+							<View style={S.row}>
+								<View style={[S.cellLast, { padding: 3 }]}>
+									<View style={S.checkRow}>
+										<View style={S.checkItem}>
+											<Checkbox checked={isIdoApproved} />
+											<Text>Approved</Text>
+										</View>
+										<View style={S.checkItem}>
+											<Checkbox checked={isIdoDisapproved} />
+											<Text>Disapproved</Text>
+										</View>
+										<View style={S.checkItem}>
+											<Checkbox checked={isIdoResubmit} />
+											<Text>Resubmit Request</Text>
+										</View>
+									</View>
+								</View>
 							</View>
-							<View style={[S.cellLast, { alignItems: "center", width: "50%" }]}>
-								{isApproved && idoFinalSignatureBase64 ? (
-									<Image
-										src={idoFinalSignatureBase64}
-										style={S.sig}
-									/>
-								) : null}
-							</View>
-						</View>
-						<View style={S.rowLast}>
-							<View style={[S.cell, { width: "25%" }]}>
-								<Text style={S.bold}>DATE</Text>
-							</View>
-							<View style={[S.cell, { width: "25%" }]}>
-								<Text>{isApproved ? idoSignedDate : ""}</Text>
-							</View>
-							<View style={[S.cell, { width: "25%" }]}>
-								<Text style={S.bold}>TIME</Text>
-							</View>
-							<View style={[S.cellLast, { width: "25%" }]}>
-								<Text>{isApproved ? idoSignedTime : ""}</Text>
+							<View style={S.rowLast}>
+								<View style={[S.cellLast, { padding: 3 }]}>
+									<Text>
+										<Bold>Notes: </Bold>
+										{request.approverNote ?? ""}
+									</Text>
+								</View>
 							</View>
 						</View>
 					</View>
 
-					<View style={{ width: "50%" }}>
-						<View style={S.shadedRow}>
-							<Text style={S.bold}>ACTION</Text>
+					{/* 15/35 twice, so the divider between the name and the signature halves
+					    lands on the same 50% line as the two headings above. */}
+					<View style={S.row}>
+						<View style={[S.cell, S.cellMiddle, { width: "15%" }]}>
+							<Text style={S.bold}>IDO</Text>
 						</View>
-						<View style={S.row}>
-							<View style={[S.cellLast, { padding: 3 }]}>
-								<View style={S.checkRow}>
-									<View style={S.checkItem}>
-										<Checkbox checked={directorStatus === "APPROVED"} />
-										<Text>Approved</Text>
-									</View>
-									<View style={S.checkItem}>
-										<Checkbox checked={directorStatus === "FINAL_REJECTED"} />
-										<Text>Disapproved</Text>
-									</View>
-									<View style={S.checkItem}>
-										{/* Never ticked. There is no "resubmit" outcome at the final
-										    director stage - a request sent back goes through the IDO
-										    desk, which is this section's left column. The box exists
-										    because the paper form has it. */}
-										<Checkbox checked={false} />
-										<Text>Resubmit Request</Text>
-									</View>
-								</View>
-							</View>
+						<View style={[S.cell, S.cellMiddle, { width: "35%" }]}>
+							<Text>{request.idoFinalApproverName ?? ""}</Text>
 						</View>
-						<View style={S.row}>
-							<View style={[S.cellLast, { padding: 3 }]}>
-								<Text>
-									<Bold>Notes: </Bold>
-									{request.approverNote ?? ""}
-								</Text>
-							</View>
+						<View style={[S.cell, S.cellMiddle, { width: "15%" }]}>
+							<Text style={S.bold}>SIGNATURE</Text>
 						</View>
-						<View style={S.row}>
-							<View style={[S.cell, { paddingBottom: 4, paddingTop: 4, width: "25%" }]}>
-								<Text style={S.bold}>{"CAMPUS\nDIRECTOR"}</Text>
-							</View>
-							<View style={[S.cell, { width: "25%" }]}>
-								<Text style={[S.bold, S.textCenter]}>SIGNATURE</Text>
-							</View>
-							<View style={[S.cellLast, { alignItems: "center", width: "50%" }]}>
-								{isApproved && finalDirectorSignatureBase64 ? (
-									<Image
-										src={finalDirectorSignatureBase64}
-										style={S.sig}
-									/>
-								) : null}
-							</View>
+						<View style={[S.cellLast, S.cellMiddle, { alignItems: "center", width: "35%" }]}>
+							{isIdoSigned && idoFinalSignatureBase64 ? (
+								<Image
+									src={idoFinalSignatureBase64}
+									style={S.sig}
+								/>
+							) : null}
 						</View>
-						<View style={S.rowLast}>
-							<View style={[S.cell, { width: "25%" }]}>
-								<Text style={S.bold}>DATE</Text>
-							</View>
-							<View style={[S.cell, { width: "25%" }]}>
-								<Text>{isApproved ? directorSignedDate : ""}</Text>
-							</View>
-							<View style={[S.cell, { width: "25%" }]}>
-								<Text style={S.bold}>TIME</Text>
-							</View>
-							<View style={[S.cellLast, { width: "25%" }]}>
-								<Text>{isApproved ? directorSignedTime : ""}</Text>
-							</View>
+					</View>
+					<View style={S.rowLast}>
+						<View style={[S.cell, { width: "15%" }]}>
+							<Text style={S.bold}>DATE</Text>
+						</View>
+						<View style={[S.cell, { width: "35%" }]}>
+							<Text>{isIdoSigned ? idoSignedDate : ""}</Text>
+						</View>
+						<View style={[S.cell, { width: "15%" }]}>
+							<Text style={S.bold}>TIME</Text>
+						</View>
+						<View style={[S.cellLast, { width: "35%" }]}>
+							<Text>{isIdoSigned ? idoSignedTime : ""}</Text>
 						</View>
 					</View>
 				</View>
-
 				{/* -- 7 - Action, Campus Director, full width ------------------------ */}
 				<View style={S.section}>
 					<View style={S.shadedRow}>
@@ -587,17 +671,24 @@ export function RequestFormPDFDocument({
 						</View>
 					</View>
 					<View style={S.row}>
-						<View style={[S.cell, { width: "20%" }]}>
+						<View style={[S.cell, S.cellMiddle, { width: "20%" }]}>
 							<Text style={S.bold}>CAMPUS DIRECTOR</Text>
 						</View>
-						<View style={[S.cell, { width: "30%" }]} />
-						<View style={[S.cell, { alignItems: "center", width: "20%" }]}>
-							<Text style={[S.bold, S.textCenter]}>SIGNATURE</Text>
+						{/* Their NAME, beside their signature. It comes from the audit entry
+						    for the final approval rather than from a column on the request -
+						    `processor` is the officer who did the first review, which is a
+						    different desk. Redacted with the signatures, so it is blank on a
+						    form nobody has finally approved. */}
+						<View style={[S.cell, S.cellMiddle, { width: "30%" }]}>
+							<Text>{request.finalDirectorName ?? ""}</Text>
+						</View>
+						<View style={[S.cell, S.cellMiddle, { width: "20%" }]}>
+							<Text style={S.bold}>SIGNATURE</Text>
 						</View>
 						{/* `"30%"`, not `"30"` - IRMS-old shipped the unitless value here and
 						    the cell collapsed, pushing the signature against the border. */}
-						<View style={[S.cellLast, { alignItems: "center", width: "30%" }]}>
-							{isApproved && finalDirectorSignatureBase64 ? (
+						<View style={[S.cellLast, S.cellMiddle, { alignItems: "center", width: "30%" }]}>
+							{isFinalApproved && finalDirectorSignatureBase64 ? (
 								<Image
 									src={finalDirectorSignatureBase64}
 									style={S.sig}
@@ -610,13 +701,13 @@ export function RequestFormPDFDocument({
 							<Text style={S.bold}>DATE</Text>
 						</View>
 						<View style={[S.cell, { width: "30%" }]}>
-							<Text>{isApproved ? directorSignedDate : ""}</Text>
+							<Text>{isFinalApproved ? directorSignedDate : ""}</Text>
 						</View>
 						<View style={[S.cell, { width: "20%" }]}>
 							<Text style={S.bold}>TIME</Text>
 						</View>
 						<View style={[S.cellLast, { width: "30%" }]}>
-							<Text>{isApproved ? directorSignedTime : ""}</Text>
+							<Text>{isFinalApproved ? directorSignedTime : ""}</Text>
 						</View>
 					</View>
 				</View>

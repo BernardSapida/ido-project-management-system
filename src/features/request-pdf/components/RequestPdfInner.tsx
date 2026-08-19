@@ -56,9 +56,11 @@ function buildDocument({ request, signatures }: DocumentProps) {
 		<RequestFormPDFDocument
 			finalDirectorSignatureBase64={signatures.finalDirectorSignatureBase64}
 			idoFinalSignatureBase64={signatures.idoFinalSignatureBase64}
-			// The server has already redacted on this rule. Re-derived here so the
-			// renderer never draws a signature the payload happens to carry.
-			isApproved={request.finalDirectorStatus === "APPROVED"}
+			// The server has already redacted on these rules. Re-derived here so the
+			// renderer never draws a signature the payload happens to carry - one flag
+			// per desk, because the two sign at different points in the workflow.
+			isFinalApproved={request.finalDirectorStatus === "APPROVED"}
+			isIdoSigned={request.idoFinalStatus === "IDO_FINAL_APPROVED"}
 			request={request}
 			requestorSignatureBase64={signatures.requestorSignatureBase64}
 		/>

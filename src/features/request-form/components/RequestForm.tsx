@@ -1,19 +1,12 @@
-import {
-	AppButton,
-	AppCard,
-	AppDialog,
-	AppInputGroup,
-	AppReadOnlyField,
-	AppSelect,
-	AppTextArea,
-} from "@bernardsapida/web-ui";
-import { Card, Typography } from "@heroui/react";
+import { AppButton, AppCard, AppDialog, AppInputGroup, AppSelect, AppTextArea } from "@bernardsapida/web-ui";
+import { Typography } from "@heroui/react";
 import { useBlocker, useRouter } from "@tanstack/react-router";
 import { FileText, Pencil, Save, Send, TriangleAlert, X } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import type { DefaultValues } from "react-hook-form";
 import { useWatch } from "react-hook-form";
 import { AttachmentUploader } from "@/features/request-form/components/AttachmentUploader";
+import { RequestDocumentField } from "@/features/request-form/components/RequestDocumentField";
 import { WorkflowStepper } from "@/features/request-form/components/WorkflowStepper";
 import { useUserRequestMutations } from "@/features/request-form/hooks/use-user-request-mutations";
 import {
@@ -43,6 +36,20 @@ interface RequestFormProps {
 	 */
 	canSubmit?: boolean;
 	defaultValues?: Partial<RequestFormValues>;
+	/**
+	 * The issued `YYYY-NNNN`, shown beside the Title in the read-only card.
+	 *
+	 * Here rather than in each page's `AppPageHeader`, where it used to sit as a
+	 * muted string beside the status chip: six pages each placed it themselves and
+	 * the requestor's page put it beside a DIFFERENT title from the staff pages'.
+	 * It is a field of the document, so it is read where the document's other
+	 * fields are read.
+	 *
+	 * `null` on a draft - nothing is issued until submit - and the field is then
+	 * absent rather than showing a placeholder, which is why Title takes the full
+	 * width in that case.
+	 */
+	documentNumber?: string | null;
 	/** Read-only regardless of status — the detail page (spec 006) viewing a draft. */
 	forceReadOnly?: boolean;
 	hideAttachments?: boolean;
@@ -107,12 +114,14 @@ const EMPTY_VALUES = {
  * lists and the order the values print in are the same in all three, and the day
  * a field is added it has to appear in all three or the PDF gains a blank cell.
  *
- * ## Read-only is `AppReadOnlyField`, not a disabled input
+ * ## Read-only is a document, not a form with the inputs turned off
  *
  * A disabled input still looks like something you failed to be allowed to type
  * in: it has a border, a focus ring that never arrives, and a value greyed to
- * the contrast of a placeholder. A request under review is not a form somebody
- * is locked out of, it is a document — so it renders as one.
+ * the contrast of a placeholder — and, being one line tall, it truncated the two
+ * paragraphs every desk downstream reads. A request under review is not a form
+ * somebody is locked out of, it is a document, so `RequestDocumentField` renders
+ * it as one: a muted label over wrapping text, no box at all.
  *
  * ## Submitting is two mutations, and the gap between them is designed for
  *
@@ -125,6 +134,7 @@ const EMPTY_VALUES = {
 export function RequestForm({
 	canSubmit = true,
 	defaultValues,
+	documentNumber,
 	forceReadOnly,
 	hideAttachments,
 	idoEvaluationStatus,
@@ -306,6 +316,28 @@ export function RequestForm({
 
 	const canSubmitDirectly = canSubmit && Boolean(requestId) && isEditableStatus(masterStatus);
 
+	/*
+	 * Whether the read-only rail has an action in it AT ALL.
+	 *
+	 * All three are conditional, and every combination of them is reachable: a
+	 * reviewer reading a completed request may submit nothing, edit nothing and
+	 * still see the PDF, and a reviewer on a draft that is not theirs gets none of
+	 * the three. Rendering the group unconditionally put an empty bordered box in
+	 * the rail on exactly those screens.
+	 */
+	const hasReadOnlyActions = canSubmitDirectly || Boolean(onEdit) || Boolean(onViewPdf);
+
+	/*
+	 * The processor, only once there is something to report.
+	 *
+	 * On a draft there is nothing: IDO names one when it recommends the request,
+	 * so before it is even sent the card can only say "Not yet assigned" - a
+	 * titled box whose entire content is that nothing has happened yet, sitting
+	 * above the button that would make something happen. Past DRAFT the absence
+	 * IS information, because by then somebody could have been assigned.
+	 */
+	const showProcessor = Boolean(processor) || effectiveStatus !== "DRAFT";
+
 	return (
 		<div className="flex flex-col gap-6">
 			<WorkflowStepper
@@ -314,266 +346,296 @@ export function RequestForm({
 			/>
 
 			<div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_340px]">
-				<Card>
-					<Card.Content className="flex flex-col gap-6 p-6">
-						<Typography.Heading level={2}>Request information</Typography.Heading>
+				{/*
+				 * `AppCard`, not `Card` + `Card.Content className="p-6"`. HeroUI's
+				 * `.card` already carries `p-4` and its content slot carries none, so
+				 * the padding written here NESTED: 16 + 24 = a 40px inset on the widest
+				 * thing on the page, against 16px on the card beside it. AppCard owns
+				 * the number, and it is the same number on every card in the app.
+				 */}
+				<AppCard
+					data-cy="request-information"
+					headingLevel={2}
+					title="Request information"
+				>
+					{isReadOnly ? (
+						/* A document, not a locked form. See `RequestDocumentField` for
+						   why these are text rather than disabled inputs - in one word,
+						   Details, which is a paragraph and was being shown one line of. */
+						<div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
+							{/* Title gives up half its row to the document number, and takes
+							    the full width back when there is none. A Title that always
+							    spanned both columns would leave the number stranded on a row
+							    of its own next to empty space. */}
+							<RequestDocumentField
+								className={documentNumber ? undefined : "sm:col-span-2"}
+								label="Title"
+								value={values.title ?? ""}
+							/>
+							{documentNumber ? (
+								<RequestDocumentField
+									data-cy="request-document-number"
+									label="Document No."
+									value={documentNumber}
+								/>
+							) : null}
+							<RequestDocumentField
+								label="Type of Request"
+								value={typeOfRequestLabel(values.typeOfRequest)}
+							/>
+							<RequestDocumentField
+								label="Priority"
+								value={priorityLabel(values.priority)}
+							/>
+							<RequestDocumentField
+								label="Requested By"
+								value={values.requestedBy ?? ""}
+							/>
+							<RequestDocumentField
+								label="Position"
+								value={positionLabel(values.position)}
+							/>
+							<RequestDocumentField
+								className="sm:col-span-2"
+								label="Details"
+								value={values.details ?? ""}
+							/>
+							<RequestDocumentField
+								className="sm:col-span-2"
+								label="Justification"
+								value={justificationLabel(values.justification)}
+							/>
+							<RequestDocumentField
+								className="sm:col-span-2"
+								label="Work Scope"
+								value={values.workScope ?? ""}
+							/>
+						</div>
+					) : (
+						/* Enter saves a DRAFT, never submits. A native submit on a form
+						   this long is a keystroke away from filing a request to IDO
+						   from the middle of the Title field; saving is the reversible
+						   half of the same intention. */
+						<form
+							className="grid grid-cols-1 gap-6 sm:grid-cols-2"
+							onSubmit={handleSaveDraft}
+						>
+							<AppInputGroup
+								className="sm:col-span-2"
+								control={control}
+								data-cy="request-title"
+								isRequired
+								label="Title"
+								name="title"
+								placeholder="Enter request title"
+							/>
+							<AppSelect
+								control={control}
+								data-cy="request-type"
+								isRequired
+								items={TYPE_OF_REQUEST_OPTIONS}
+								label="Type of Request"
+								name="typeOfRequest"
+								placeholder="Select type"
+							/>
+							<AppSelect
+								control={control}
+								data-cy="request-priority"
+								isRequired
+								items={PRIORITY_OPTIONS}
+								label="Priority"
+								name="priority"
+								placeholder="Select priority"
+							/>
+							<AppInputGroup
+								control={control}
+								description="Taken from your account. It is printed on the form as the requestor."
+								isRequired
+								label="Requested By"
+								name="requestedBy"
+								placeholder="Full name of the requestor"
+							/>
+							<AppSelect
+								control={control}
+								description="Decides which representative row you sign on."
+								isRequired
+								items={POSITION_OPTIONS}
+								label="Position"
+								name="position"
+								placeholder="Select position"
+							/>
+							<AppTextArea
+								className="sm:col-span-2"
+								control={control}
+								data-cy="request-details"
+								description="Describe what is being requested and the problem it solves."
+								isRequired
+								label="Details"
+								name="details"
+								placeholder="Describe the request in detail"
+								rows={5}
+							/>
+							<AppSelect
+								className="sm:col-span-2"
+								control={control}
+								isRequired
+								items={JUSTIFICATION_OPTIONS}
+								label="Justification"
+								name="justification"
+								placeholder="Select justification"
+							/>
+							<AppTextArea
+								className="sm:col-span-2"
+								control={control}
+								description="Describe the physical or technical scope of the work involved."
+								isRequired
+								label="Work Scope"
+								name="workScope"
+								placeholder="Describe the scope of work"
+								rows={4}
+							/>
+						</form>
+					)}
+				</AppCard>
 
-						{isReadOnly ? (
-							<div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-								<AppReadOnlyField
-									className="sm:col-span-2"
-									label="Title"
-									value={values.title ?? "—"}
-								/>
-								<AppReadOnlyField
-									label="Type of Request"
-									value={typeOfRequestLabel(values.typeOfRequest)}
-								/>
-								<AppReadOnlyField
-									label="Priority"
-									value={priorityLabel(values.priority)}
-								/>
-								<AppReadOnlyField
-									label="Requested By"
-									value={values.requestedBy ?? "—"}
-								/>
-								<AppReadOnlyField
-									label="Position"
-									value={positionLabel(values.position)}
-								/>
-								<AppReadOnlyField
-									className="sm:col-span-2"
-									label="Details"
-									value={values.details ?? "—"}
-								/>
-								<AppReadOnlyField
-									className="sm:col-span-2"
-									label="Justification"
-									value={justificationLabel(values.justification)}
-								/>
-								<AppReadOnlyField
-									className="sm:col-span-2"
-									label="Work Scope"
-									value={values.workScope ?? "—"}
-								/>
+				{/*
+				 * The rail, and the actions are at the TOP of it.
+				 *
+				 * They used to be third, under a processor card and an uploader, which
+				 * on the create page put Submit below the fold behind the tallest thing
+				 * on the screen. What the reader came here to DO goes first; 24px
+				 * between the groups and 8px inside each is what keeps them reading as
+				 * separate groups now that two of the three have no border to say so.
+				 */}
+				<div className="flex flex-col gap-6">
+					{isReadOnly ? (
+						hasReadOnlyActions ? (
+							<div className="flex flex-col gap-2">
+								{canSubmitDirectly ? (
+									<AppButton
+										fullWidth
+										icon={Send}
+										isDisabled={isSaving}
+										isPending={pendingAction === "submit"}
+										onPress={() => handleSubmitRequest()}
+										variant="primary"
+									>
+										{pendingAction === "submit" ? (pendingLabel ?? "Submitting...") : "Submit Request"}
+									</AppButton>
+								) : null}
+
+								{onEdit ? (
+									<AppButton
+										fullWidth
+										icon={Pencil}
+										onPress={onEdit}
+										variant="secondary"
+									>
+										Edit Request
+									</AppButton>
+								) : null}
+
+								{onViewPdf ? (
+									<AppButton
+										fullWidth
+										icon={FileText}
+										onPress={onViewPdf}
+										variant="tertiary"
+									>
+										View PDF
+									</AppButton>
+								) : null}
 							</div>
-						) : (
-							/* Enter saves a DRAFT, never submits. A native submit on a form
-							   this long is a keystroke away from filing a request to IDO
-							   from the middle of the Title field; saving is the reversible
-							   half of the same intention. */
-							<form
-								className="grid grid-cols-1 gap-6 sm:grid-cols-2"
-								onSubmit={handleSaveDraft}
-							>
-								<AppInputGroup
-									className="sm:col-span-2"
-									control={control}
-									data-cy="request-title"
-									isRequired
-									label="Title"
-									name="title"
-									placeholder="Enter request title"
-								/>
-								<AppSelect
-									control={control}
-									data-cy="request-type"
-									isRequired
-									items={TYPE_OF_REQUEST_OPTIONS}
-									label="Type of Request"
-									name="typeOfRequest"
-									placeholder="Select type"
-								/>
-								<AppSelect
-									control={control}
-									data-cy="request-priority"
-									isRequired
-									items={PRIORITY_OPTIONS}
-									label="Priority"
-									name="priority"
-									placeholder="Select priority"
-								/>
-								<AppInputGroup
-									control={control}
-									description="Taken from your account. It is printed on the form as the requestor."
-									isRequired
-									label="Requested By"
-									name="requestedBy"
-									placeholder="Full name of the requestor"
-								/>
-								<AppSelect
-									control={control}
-									description="Decides which representative row you sign on."
-									isRequired
-									items={POSITION_OPTIONS}
-									label="Position"
-									name="position"
-									placeholder="Select position"
-								/>
-								<AppTextArea
-									className="sm:col-span-2"
-									control={control}
-									data-cy="request-details"
-									description="Describe what is being requested and the problem it solves."
-									isRequired
-									label="Details"
-									name="details"
-									placeholder="Describe the request in detail"
-									rows={5}
-								/>
-								<AppSelect
-									className="sm:col-span-2"
-									control={control}
-									isRequired
-									items={JUSTIFICATION_OPTIONS}
-									label="Justification"
-									name="justification"
-									placeholder="Select justification"
-								/>
-								<AppTextArea
-									className="sm:col-span-2"
-									control={control}
-									description="Describe the physical or technical scope of the work involved."
-									isRequired
-									label="Work Scope"
-									name="workScope"
-									placeholder="Describe the scope of work"
-									rows={4}
-								/>
-							</form>
-						)}
-					</Card.Content>
-				</Card>
-
-				<div className="flex flex-col gap-4">
-					<AppCard
-						description="Assigned by IDO when the request is recommended."
-						title="Processor"
-					>
-						{processor ? (
-							<Typography type="body">{processor}</Typography>
-						) : (
-							<Typography
-								className="italic"
-								color="muted"
-								type="body-sm"
-							>
-								Not yet assigned
-							</Typography>
-						)}
-					</AppCard>
-
-					{hideAttachments ? null : (
-						<Card>
-							<Card.Content className="p-6">
-								<AttachmentUploader
+						) : null
+					) : (
+						<div className="flex flex-col gap-3">
+							<div className="flex flex-col gap-2">
+								{/* Both disabled while EITHER runs - two presses on a create page
+								    are two requests, and the second one is a duplicate nobody
+								    asked for - but only the pressed one spins, and only it
+								    carries the upload percentage. */}
+								<AppButton
+									data-cy="submit-request"
+									fullWidth
+									icon={Send}
 									isDisabled={isSaving}
-									isReadOnly={isReadOnly}
-									onChange={(next) => setValue("attachments", next, { shouldDirty: true })}
-									value={attachments}
-								/>
-							</Card.Content>
-						</Card>
+									isPending={pendingAction === "submit"}
+									onPress={() => handleSubmitRequest()}
+									variant="primary"
+								>
+									{pendingAction === "submit" ? (pendingLabel ?? "Submitting...") : "Submit Request"}
+								</AppButton>
+
+								<AppButton
+									data-cy="save-draft"
+									fullWidth
+									icon={Save}
+									isDisabled={isSaving}
+									isPending={pendingAction === "draft"}
+									onPress={() => handleSaveDraft()}
+									variant="secondary"
+								>
+									{pendingAction === "draft" ? (pendingLabel ?? "Saving...") : "Save Draft"}
+								</AppButton>
+
+								{/* Last, and the quietest of the three. It is the only one of
+								    them that throws work away, and the unsaved-changes guard is
+								    what stands between it and a form somebody has typed in. */}
+								{onCancel ? (
+									<AppButton
+										data-cy="cancel-edit"
+										fullWidth
+										icon={X}
+										isDisabled={isSaving}
+										onPress={onCancel}
+										variant="tertiary"
+									>
+										Cancel
+									</AppButton>
+								) : null}
+							</div>
+
+							<Typography
+								color="muted"
+								type="body-xs"
+							>
+								Submitting sends this request to IDO for review. Saving as a draft keeps it on your desk so you can
+								finish it later. Both check every required field first.
+							</Typography>
+						</div>
 					)}
 
-					<Card>
-						<Card.Content className="flex flex-col gap-4 p-6">
-							{isReadOnly ? (
-								<div className="flex flex-col gap-2">
-									{canSubmitDirectly ? (
-										<AppButton
-											fullWidth
-											icon={Send}
-											isDisabled={isSaving}
-											isPending={pendingAction === "submit"}
-											onPress={() => handleSubmitRequest()}
-											variant="primary"
-										>
-											{pendingAction === "submit" ? (pendingLabel ?? "Submitting...") : "Submit Request"}
-										</AppButton>
-									) : null}
+					{/* No card around it. Read-only it is an `AppList`, which owns a
+					    surface of its own - a card there was two borders and two paddings
+					    around one list - and in edit mode the drop zone draws its own
+					    outline. Both carry their own "Attachments" heading. */}
+					{hideAttachments ? null : (
+						<AttachmentUploader
+							isDisabled={isSaving}
+							isReadOnly={isReadOnly}
+							onChange={(next) => setValue("attachments", next, { shouldDirty: true })}
+							value={attachments}
+						/>
+					)}
 
-									{onEdit ? (
-										<AppButton
-											fullWidth
-											icon={Pencil}
-											onPress={onEdit}
-											variant="secondary"
-										>
-											Edit Request
-										</AppButton>
-									) : null}
-
-									{onViewPdf ? (
-										<AppButton
-											fullWidth
-											icon={FileText}
-											onPress={onViewPdf}
-											variant="tertiary"
-										>
-											View PDF
-										</AppButton>
-									) : null}
-								</div>
+					{showProcessor ? (
+						<AppCard
+							description="Assigned by IDO when the request is recommended."
+							title="Processor"
+						>
+							{processor ? (
+								<Typography type="body">{processor}</Typography>
 							) : (
-								<>
-									<div className="flex flex-col gap-2">
-										{/* Both disabled while EITHER runs - two presses on a create page
-										    are two requests, and the second one is a duplicate nobody
-										    asked for - but only the pressed one spins, and only it
-										    carries the upload percentage. */}
-										<AppButton
-											data-cy="submit-request"
-											fullWidth
-											icon={Send}
-											isDisabled={isSaving}
-											isPending={pendingAction === "submit"}
-											onPress={() => handleSubmitRequest()}
-											variant="primary"
-										>
-											{pendingAction === "submit" ? (pendingLabel ?? "Submitting...") : "Submit Request"}
-										</AppButton>
-
-										<AppButton
-											data-cy="save-draft"
-											fullWidth
-											icon={Save}
-											isDisabled={isSaving}
-											isPending={pendingAction === "draft"}
-											onPress={() => handleSaveDraft()}
-											variant="secondary"
-										>
-											{pendingAction === "draft" ? (pendingLabel ?? "Saving...") : "Save Draft"}
-										</AppButton>
-
-										{/* Last, and the quietest of the three. It is the only one of
-										    them that throws work away, and the unsaved-changes guard is
-										    what stands between it and a form somebody has typed in. */}
-										{onCancel ? (
-											<AppButton
-												data-cy="cancel-edit"
-												fullWidth
-												icon={X}
-												isDisabled={isSaving}
-												onPress={onCancel}
-												variant="tertiary"
-											>
-												Cancel
-											</AppButton>
-										) : null}
-									</div>
-
-									<Typography
-										color="muted"
-										type="body-xs"
-									>
-										Submitting sends this request to IDO for review. Saving as a draft keeps it on your desk so you can
-										finish it later. Both check every required field first.
-									</Typography>
-								</>
+								<Typography
+									className="italic"
+									color="muted"
+									type="body-sm"
+								>
+									Not yet assigned
+								</Typography>
 							)}
-						</Card.Content>
-					</Card>
+						</AppCard>
+					) : null}
 				</div>
 			</div>
 
