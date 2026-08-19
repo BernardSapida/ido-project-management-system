@@ -1,5 +1,6 @@
 import { createTRPCRouter } from "./init";
 import { adminAccountsRouter } from "./routers/admin-accounts.router";
+import { adminCsmRouter } from "./routers/admin-csm.router";
 import { adminPermissionsRouter } from "./routers/admin-permissions.router";
 import { authSignupRouter } from "./routers/auth-signup.router";
 import { commentRouter } from "./routers/comment.router";
@@ -13,6 +14,7 @@ import { userRouter } from "./routers/user.router";
 export const trpcRouter = createTRPCRouter({
 	user: userRouter,
 	adminAccounts: adminAccountsRouter,
+	adminCsm: adminCsmRouter,
 	adminPermissions: adminPermissionsRouter,
 	authSignup: authSignupRouter,
 	comment: commentRouter,

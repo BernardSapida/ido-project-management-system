@@ -86,6 +86,23 @@ function RequestDetailPage() {
 	 */
 	const isSubmitted = request.masterStatus !== "DRAFT";
 
+	/*
+	 * There is feedback to read, and `completionStatus` is the only column that
+	 * says so from this payload.
+	 *
+	 * `COMPLETED` is written in ONE place - the transaction inside `csm.submitCsm`
+	 * that fills the `Csm` row - so it cannot be true of a request whose form
+	 * nobody has answered. `CSM_PENDING` is the state before that, and it belongs
+	 * to the banner above rather than to this action: a link to a form the reader
+	 * cannot fill in is not something to offer a reviewer.
+	 *
+	 * No ownership check, deliberately - unlike Edit, Submit and the banner. Every
+	 * role that got as far as reading this request may read the feedback it
+	 * earned, which is the set `csm.getForRequest` serves, and the destination
+	 * re-checks it rather than trusting this line.
+	 */
+	const hasFeedback = request.completionStatus === "COMPLETED";
+
 	// Only while the request is STILL sitting on the bad answer. The audit entry
 	// stays in the log forever - that is what a log is - but a request returned in
 	// March, fixed and resubmitted is under review, and a banner still repeating
@@ -101,6 +118,7 @@ function RequestDetailPage() {
 	 * no way to open one in a second tab.
 	 */
 	const goToEdit = () => void router.navigate({ params: { requestId }, to: "/requests/$requestId/edit" });
+	const goToFeedback = () => void router.navigate({ params: { requestId }, to: "/requests/$requestId/csm" });
 	const openPdf = () => window.open(`/requests/${requestId}/pdf`, "_blank", "noopener,noreferrer");
 
 	return (
@@ -169,6 +187,7 @@ function RequestDetailPage() {
 				masterStatus={request.masterStatus}
 				mode="edit"
 				onEdit={canAct ? goToEdit : undefined}
+				onViewFeedback={hasFeedback ? goToFeedback : undefined}
 				onViewPdf={isSubmitted ? openPdf : undefined}
 				processor={request.processor}
 				requestId={requestId}

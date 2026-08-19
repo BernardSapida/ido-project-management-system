@@ -122,6 +122,8 @@ import { Route as ApiDevSeedRouteImport } from './routes/api/dev/seed'
 import { Route as ApiDevToggleMaintenanceRouteImport } from './routes/api/dev/toggle-maintenance'
 import { Route as ApiPusherAuthRouteImport } from './routes/api/pusher/auth'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api.trpc.$'
+import { Route as AuthenticatedAdminCsmIndexRouteImport } from './routes/_authenticated/admin/csm/index'
+import { Route as AuthenticatedAdminCsmCsmIdRouteImport } from './routes/_authenticated/admin/csm/$csmId'
 import { Route as AuthenticatedRequestsRequestIdIndexRouteImport } from './routes/_authenticated/requests/$requestId/index'
 import { Route as AuthenticatedRequestsRequestIdBudgetReviewRouteImport } from './routes/_authenticated/requests/$requestId/budget-review'
 import { Route as AuthenticatedRequestsRequestIdCsmRouteImport } from './routes/_authenticated/requests/$requestId/csm'
@@ -784,6 +786,18 @@ const ApiTrpcSplatRoute = ApiTrpcSplatRouteImport.update({
   path: '/api/trpc/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedAdminCsmIndexRoute =
+  AuthenticatedAdminCsmIndexRouteImport.update({
+    id: '/csm/',
+    path: '/csm/',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminCsmCsmIdRoute =
+  AuthenticatedAdminCsmCsmIdRouteImport.update({
+    id: '/csm/$csmId',
+    path: '/csm/$csmId',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedRequestsRequestIdIndexRoute =
   AuthenticatedRequestsRequestIdIndexRouteImport.update({
     id: '/requests/$requestId/',
@@ -964,6 +978,7 @@ export interface FileRoutesByFullPath {
   '/components/': typeof referencesComponentsIndexRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/requests/': typeof AuthenticatedRequestsIndexRoute
+  '/admin/csm/$csmId': typeof AuthenticatedAdminCsmCsmIdRoute
   '/requests/$requestId/budget-review': typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
   '/requests/$requestId/csm': typeof AuthenticatedRequestsRequestIdCsmRoute
   '/requests/$requestId/director-review': typeof AuthenticatedRequestsRequestIdDirectorReviewRoute
@@ -973,6 +988,7 @@ export interface FileRoutesByFullPath {
   '/requests/$requestId/pdf': typeof AuthenticatedRequestsRequestIdPdfRoute
   '/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
   '/requests/pdf/demo': typeof AuthenticatedRequestsPdfDemoRoute
+  '/admin/csm/': typeof AuthenticatedAdminCsmIndexRoute
   '/requests/$requestId/': typeof AuthenticatedRequestsRequestIdIndexRoute
   '/staff/dashboard/': typeof AuthenticatedStaffDashboardIndexRoute
 }
@@ -1087,6 +1103,7 @@ export interface FileRoutesByTo {
   '/components': typeof referencesComponentsIndexRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/requests': typeof AuthenticatedRequestsIndexRoute
+  '/admin/csm/$csmId': typeof AuthenticatedAdminCsmCsmIdRoute
   '/requests/$requestId/budget-review': typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
   '/requests/$requestId/csm': typeof AuthenticatedRequestsRequestIdCsmRoute
   '/requests/$requestId/director-review': typeof AuthenticatedRequestsRequestIdDirectorReviewRoute
@@ -1096,6 +1113,7 @@ export interface FileRoutesByTo {
   '/requests/$requestId/pdf': typeof AuthenticatedRequestsRequestIdPdfRoute
   '/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
   '/requests/pdf/demo': typeof AuthenticatedRequestsPdfDemoRoute
+  '/admin/csm': typeof AuthenticatedAdminCsmIndexRoute
   '/requests/$requestId': typeof AuthenticatedRequestsRequestIdIndexRoute
   '/staff/dashboard': typeof AuthenticatedStaffDashboardIndexRoute
 }
@@ -1214,6 +1232,7 @@ export interface FileRoutesById {
   '/(references)/components/': typeof referencesComponentsIndexRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/requests/': typeof AuthenticatedRequestsIndexRoute
+  '/_authenticated/admin/csm/$csmId': typeof AuthenticatedAdminCsmCsmIdRoute
   '/_authenticated/requests/$requestId/budget-review': typeof AuthenticatedRequestsRequestIdBudgetReviewRoute
   '/_authenticated/requests/$requestId/csm': typeof AuthenticatedRequestsRequestIdCsmRoute
   '/_authenticated/requests/$requestId/director-review': typeof AuthenticatedRequestsRequestIdDirectorReviewRoute
@@ -1223,6 +1242,7 @@ export interface FileRoutesById {
   '/_authenticated/requests/$requestId/pdf': typeof AuthenticatedRequestsRequestIdPdfRoute
   '/_authenticated/requests/$requestId/review': typeof AuthenticatedRequestsRequestIdReviewRoute
   '/_authenticated/requests/pdf/demo': typeof AuthenticatedRequestsPdfDemoRoute
+  '/_authenticated/admin/csm/': typeof AuthenticatedAdminCsmIndexRoute
   '/_authenticated/requests/$requestId/': typeof AuthenticatedRequestsRequestIdIndexRoute
   '/_authenticated/staff/dashboard/': typeof AuthenticatedStaffDashboardIndexRoute
 }
@@ -1341,6 +1361,7 @@ export interface FileRouteTypes {
     | '/components/'
     | '/admin/'
     | '/requests/'
+    | '/admin/csm/$csmId'
     | '/requests/$requestId/budget-review'
     | '/requests/$requestId/csm'
     | '/requests/$requestId/director-review'
@@ -1350,6 +1371,7 @@ export interface FileRouteTypes {
     | '/requests/$requestId/pdf'
     | '/requests/$requestId/review'
     | '/requests/pdf/demo'
+    | '/admin/csm/'
     | '/requests/$requestId/'
     | '/staff/dashboard/'
   fileRoutesByTo: FileRoutesByTo
@@ -1464,6 +1486,7 @@ export interface FileRouteTypes {
     | '/components'
     | '/admin'
     | '/requests'
+    | '/admin/csm/$csmId'
     | '/requests/$requestId/budget-review'
     | '/requests/$requestId/csm'
     | '/requests/$requestId/director-review'
@@ -1473,6 +1496,7 @@ export interface FileRouteTypes {
     | '/requests/$requestId/pdf'
     | '/requests/$requestId/review'
     | '/requests/pdf/demo'
+    | '/admin/csm'
     | '/requests/$requestId'
     | '/staff/dashboard'
   id:
@@ -1590,6 +1614,7 @@ export interface FileRouteTypes {
     | '/(references)/components/'
     | '/_authenticated/admin/'
     | '/_authenticated/requests/'
+    | '/_authenticated/admin/csm/$csmId'
     | '/_authenticated/requests/$requestId/budget-review'
     | '/_authenticated/requests/$requestId/csm'
     | '/_authenticated/requests/$requestId/director-review'
@@ -1599,6 +1624,7 @@ export interface FileRouteTypes {
     | '/_authenticated/requests/$requestId/pdf'
     | '/_authenticated/requests/$requestId/review'
     | '/_authenticated/requests/pdf/demo'
+    | '/_authenticated/admin/csm/'
     | '/_authenticated/requests/$requestId/'
     | '/_authenticated/staff/dashboard/'
   fileRoutesById: FileRoutesById
@@ -2421,6 +2447,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiTrpcSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/admin/csm/': {
+      id: '/_authenticated/admin/csm/'
+      path: '/csm'
+      fullPath: '/admin/csm/'
+      preLoaderRoute: typeof AuthenticatedAdminCsmIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/csm/$csmId': {
+      id: '/_authenticated/admin/csm/$csmId'
+      path: '/csm/$csmId'
+      fullPath: '/admin/csm/$csmId'
+      preLoaderRoute: typeof AuthenticatedAdminCsmCsmIdRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/requests/$requestId/': {
       id: '/_authenticated/requests/$requestId/'
       path: '/requests/$requestId'
@@ -2503,10 +2543,14 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
+  AuthenticatedAdminCsmCsmIdRoute: typeof AuthenticatedAdminCsmCsmIdRoute
+  AuthenticatedAdminCsmIndexRoute: typeof AuthenticatedAdminCsmIndexRoute
 }
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
+  AuthenticatedAdminCsmCsmIdRoute: AuthenticatedAdminCsmCsmIdRoute,
+  AuthenticatedAdminCsmIndexRoute: AuthenticatedAdminCsmIndexRoute,
 }
 
 const AuthenticatedAdminRouteWithChildren =

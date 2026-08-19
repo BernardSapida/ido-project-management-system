@@ -7,7 +7,7 @@ import {
 	type NavGroup as UiNavGroup,
 	type NavItem as UiNavItem,
 } from "@bernardsapida/web-ui";
-import { FilePlus, FileText, LayoutDashboard, UserCircle, Users } from "lucide-react";
+import { FilePlus, FileText, LayoutDashboard, Star, UserCircle, Users } from "lucide-react";
 import type { UserRole } from "@/utils/config";
 
 // --- Types ---
@@ -56,6 +56,17 @@ export const navigationItems: NavItem[] = [
 		title: "Accounts",
 		description: "Manage user accounts",
 		icon: Users,
+		roles: ["ADMIN"],
+		// `exact`, now that /admin has a second page under it. Without it the
+		// prefix test lights Accounts up on /admin/csm as well, and two items are
+		// active at once - which tells the reader neither of them is where they are.
+		exact: true,
+	},
+	{
+		href: "/admin/csm",
+		title: "Satisfaction",
+		description: "What requestors said about how their requests were handled",
+		icon: Star,
 		roles: ["ADMIN"],
 	},
 ];

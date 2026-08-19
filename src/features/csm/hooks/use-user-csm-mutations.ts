@@ -47,7 +47,7 @@ export function useUserCsmMutations(requestId: string) {
 			}
 
 			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: trpc.csm.getMyCsm.queryKey({ requestId }) }),
+				queryClient.invalidateQueries({ queryKey: trpc.csm.getForRequest.queryKey({ requestId }) }),
 				queryClient.invalidateQueries({ queryKey: trpc.request.getById.queryKey({ id: requestId }) }),
 				queryClient.invalidateQueries({ queryKey: trpc.request.myList.queryKey() }),
 				queryClient.invalidateQueries({ queryKey: trpc.request.mySummary.queryKey() }),

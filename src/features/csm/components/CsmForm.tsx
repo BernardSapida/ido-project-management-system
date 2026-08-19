@@ -11,7 +11,7 @@ import {
 import { useAppForm } from "@/hooks/use-app-form";
 
 interface CsmFormProps {
-	/** The `SUBMIT_CSM` grant, from `getMyCsm`. False disables the button and says
+	/** The `SUBMIT_CSM` grant, from `getForRequest`. False disables the button and says
 	 *  why rather than removing it - `submitCsm` refuses regardless. */
 	canSubmit: boolean;
 	/** Where to go once the request is complete. The page owns the destination. */

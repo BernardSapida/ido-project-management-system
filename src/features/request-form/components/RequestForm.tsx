@@ -1,7 +1,7 @@
 import { AppButton, AppCard, AppDialog, AppInputGroup, AppSelect, AppTextArea } from "@bernardsapida/web-ui";
 import { Typography } from "@heroui/react";
 import { useBlocker, useRouter } from "@tanstack/react-router";
-import { FileText, Pencil, Save, Send, TriangleAlert, X } from "lucide-react";
+import { FileText, Pencil, Save, Send, Star, TriangleAlert, X } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import type { DefaultValues } from "react-hook-form";
 import { useWatch } from "react-hook-form";
@@ -59,6 +59,17 @@ interface RequestFormProps {
 	/** Leave without saving. Absent on the create page, where "back" is the sidebar. */
 	onCancel?: () => void;
 	onEdit?: () => void;
+	/**
+	 * Open the satisfaction feedback recorded against this request.
+	 *
+	 * Absent until there IS feedback, which the detail page decides from
+	 * `completionStatus` - the request is COMPLETED only because somebody answered
+	 * the form. Offered to every role that can read the request rather than to the
+	 * owner alone: a reviewer who approved something has as much reason to see how
+	 * it landed as the person who asked for it, and `csm.getForRequest` grants
+	 * exactly that set.
+	 */
+	onViewFeedback?: () => void;
 	/**
 	 * A chance for the page to take a SAVE failure and show it in its own words.
 	 *
@@ -143,6 +154,7 @@ export function RequestForm({
 	onCancel,
 	onEdit,
 	onSaveError,
+	onViewFeedback,
 	onViewPdf,
 	processor,
 	requestId,
@@ -325,7 +337,7 @@ export function RequestForm({
 	 * the three. Rendering the group unconditionally put an empty bordered box in
 	 * the rail on exactly those screens.
 	 */
-	const hasReadOnlyActions = canSubmitDirectly || Boolean(onEdit) || Boolean(onViewPdf);
+	const hasReadOnlyActions = canSubmitDirectly || Boolean(onEdit) || Boolean(onViewFeedback) || Boolean(onViewPdf);
 
 	/*
 	 * The processor, only once there is something to report.
@@ -532,6 +544,22 @@ export function RequestForm({
 										variant="secondary"
 									>
 										Edit Request
+									</AppButton>
+								) : null}
+
+								{/* Above the PDF and below Edit, which is where its consequence
+								    puts it: the signed form is the document, the feedback is what
+								    happened after it, and neither is the thing a requestor with an
+								    editable draft came here to press. */}
+								{onViewFeedback ? (
+									<AppButton
+										data-cy="view-feedback"
+										fullWidth
+										icon={Star}
+										onPress={onViewFeedback}
+										variant="secondary"
+									>
+										View Feedback
 									</AppButton>
 								) : null}
 

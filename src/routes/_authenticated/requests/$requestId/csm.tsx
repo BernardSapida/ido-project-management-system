@@ -4,20 +4,22 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { seo } from "@/config/seo.config";
 import { assertAuthenticatedFn } from "@/features/auth/functions/auth.functions";
+import { CsmAwaitingState } from "@/features/csm/components/CsmAwaitingState";
 import { CsmCompletedState } from "@/features/csm/components/CsmCompletedState";
 import { CsmForm } from "@/features/csm/components/CsmForm";
-import { useMyCsm } from "@/features/csm/hooks/use-user-csm-queries";
+import { useRequestCsm } from "@/features/csm/hooks/use-user-csm-queries";
 
 export const Route = createFileRoute("/_authenticated/requests/$requestId/csm")({
 	/**
 	 * Signed in, and that is all the route can say.
 	 *
 	 * Not role-gated, deliberately, and for the opposite reason to the review
-	 * pages: the question here is not what the reader IS but whose request this
+	 * pages: the question here is not what the reader IS but which request this
 	 * is. A staff member files requests of their own and must be able to answer
 	 * for them, and a `USER` list would let every other requestor through to a
-	 * page about somebody else's request. `getMyCsm` answers that per request -
-	 * `null` for anyone but the owner - and `submitCsm` re-checks it on the write.
+	 * page about somebody else's request. `getForRequest` answers that per request
+	 * - it borrows the request's own read rule - and `submitCsm` re-checks
+	 * ownership on the write, which is the gate that actually matters.
 	 */
 	beforeLoad: async () => {
 		return await assertAuthenticatedFn();
@@ -27,11 +29,10 @@ export const Route = createFileRoute("/_authenticated/requests/$requestId/csm")(
 	}),
 	staticData: {
 		breadcrumb: "Feedback",
-		/* `prose`, and it is the narrowest measure any page in this app asks for.
-		   There are two questions here and the whole screen is one column of them;
-		   at `wide` the stars and the comment box would sit in a field of empty
-		   space with nothing to line up against. */
-		mainWidth: "prose",
+		/* `full` - no cap. It was `prose`, the narrowest measure in the app, on the
+		   reasoning that two questions in one column want a short measure; on a
+		   wide monitor that read as a form pushed into a corner of its own page. */
+		mainWidth: "full",
 	},
 	component: CsmPage,
 });
@@ -39,22 +40,23 @@ export const Route = createFileRoute("/_authenticated/requests/$requestId/csm")(
 function CsmPage() {
 	const { requestId } = Route.useParams();
 	const navigate = useNavigate();
-	const { data: csm, error, isError, isPending, refetch } = useMyCsm(requestId);
+	const { data: csm, error, isError, isPending, refetch } = useRequestCsm(requestId);
 
 	const goToRequest = () => void navigate({ params: { requestId }, to: "/requests/$requestId" });
 
 	/*
-	 * The silent redirect, and both cases it covers.
+	 * The silent redirect, and the one case it still covers.
 	 *
-	 * `null` means either that the request was never finally approved - so no
-	 * `Csm` row exists - or that it is not the caller's request. The procedure
-	 * refuses to tell the two apart on purpose, and the page does not need it to:
-	 * landing back on the request IS the answer. `replace` so the browser's Back
-	 * button does not bounce the requestor straight into the redirect again.
+	 * `null` now means exactly one thing: the request was never finally approved,
+	 * so no `Csm` row exists. It used to mean "or it is not yours" as well, and
+	 * that half is a thrown FORBIDDEN since the read rule widened - which is why
+	 * there IS an error branch below now where the old comment said there could
+	 * not be one.
 	 *
-	 * No toast. Nothing failed, and an error the person cannot act on - they did
-	 * not choose to come here, the URL did - is noise on top of a page they never
-	 * asked to see.
+	 * `replace` so the browser's Back button does not bounce the reader straight
+	 * into the redirect again. No toast: nothing failed, and an error the person
+	 * cannot act on - they did not choose to come here, the URL did - is noise on
+	 * top of a page they never asked to see.
 	 */
 	useEffect(() => {
 		if (!isPending && !isError && csm === null) {
@@ -71,8 +73,18 @@ function CsmPage() {
 
 	return (
 		<div className="flex flex-col gap-8">
+			{/*
+			 * One subtitle for every state and every reader, rather than one that
+			 * follows the record.
+			 *
+			 * Three audiences reach this page - the requestor with the form still to
+			 * fill in, the requestor coming back to what they wrote, and a reviewer
+			 * reading it - and a line tailored to any of them would be rewritten
+			 * under the previous one the moment the query resolves. The card below
+			 * carries the words that change, because it is the thing that changes.
+			 */}
 			<AppPageHeader
-				subtitle="Tell us how your request was handled. This completes the request."
+				subtitle="The satisfaction form recorded against this request."
 				title="Satisfaction Feedback"
 			/>
 
@@ -91,7 +103,7 @@ function CsmPage() {
 }
 
 interface CsmBodyProps {
-	csm: ReturnType<typeof useMyCsm>["data"];
+	csm: ReturnType<typeof useRequestCsm>["data"];
 	error: unknown;
 	isError: boolean;
 	isPending: boolean;
@@ -102,7 +114,7 @@ interface CsmBodyProps {
 }
 
 /**
- * The four things below the header, in the order they can happen.
+ * The five things below the header, in the order they can happen.
  *
  * Split out so the header renders identically in every one of them: the page
  * title is true while the record is loading, while it is redirecting, and after
@@ -123,10 +135,13 @@ function CsmBody({ csm, error, isError, isPending, onBackToRequest, onRetry, onV
 	}
 
 	/*
-	 * A genuine failure - the network, or a session that expired between the
-	 * route's own check and this query. NOT the "you may not see this" case: that
-	 * one comes back as `null` and is handled by the redirect above, which is why
-	 * there is no FORBIDDEN branch to write here.
+	 * A genuine failure - the network, a session that expired between the route's
+	 * own check and this query, or a reader who may not see this request at all.
+	 * That last one is new: `getForRequest` throws FORBIDDEN where it used to
+	 * answer `null`, and `AppQueryError` classifies the two apart, which is the
+	 * whole reason for widening it that way. "You are not allowed" and "something
+	 * went wrong" are different things to be told, and only one is worth pressing
+	 * Retry over.
 	 */
 	if (isError) {
 		return (
@@ -146,10 +161,26 @@ function CsmBody({ csm, error, isError, isPending, onBackToRequest, onRetry, onV
 		return (
 			<CsmCompletedState
 				comment={csm.comment}
+				isOwner={csm.isOwner}
 				onBackToRequest={onBackToRequest}
 				onViewPdf={onViewPdf}
 				rating={csm.rating}
 				submittedAt={csm.submittedAt}
+			/>
+		);
+	}
+
+	/*
+	 * Unanswered, and the reader is not the person who can answer it. A reviewer
+	 * only reaches this by URL - the request page offers the action once the
+	 * feedback exists and not before - so the page says what is missing instead of
+	 * bouncing them somewhere with no explanation.
+	 */
+	if (!csm.isOwner) {
+		return (
+			<CsmAwaitingState
+				onBackToRequest={onBackToRequest}
+				onViewPdf={onViewPdf}
 			/>
 		);
 	}

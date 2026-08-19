@@ -63,7 +63,7 @@ export function useFinalDirectorApprovalMutations(requestId: string) {
 	 * move `masterStatus` to a terminal value, so the requestor's list and
 	 * counters are stale the moment either commits.
 	 *
-	 * `csm.getMyCsm` joined them when spec 015 landed: the approval is what CREATES
+	 * `csm.getForRequest` joined them when spec 015 landed: the approval is what CREATES
 	 * the satisfaction record, so a requestor whose CSM page was open on another
 	 * tab is holding a cached `null` - which that page reads as "there is nothing
 	 * to answer here" and turns into a redirect.
@@ -84,7 +84,7 @@ export function useFinalDirectorApprovalMutations(requestId: string) {
 			queryClient.invalidateQueries({ queryKey: trpc.request.staffSummary.queryKey() }),
 			queryClient.invalidateQueries({ queryKey: trpc.request.myList.queryKey() }),
 			queryClient.invalidateQueries({ queryKey: trpc.request.mySummary.queryKey() }),
-			queryClient.invalidateQueries({ queryKey: trpc.csm.getMyCsm.queryKey() }),
+			queryClient.invalidateQueries({ queryKey: trpc.csm.getForRequest.queryKey() }),
 		]);
 	}, [queryClient, trpc]);
 

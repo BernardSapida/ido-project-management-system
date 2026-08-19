@@ -1,21 +1,27 @@
 import { TRPCError, type TRPCRouterRecord } from "@trpc/server";
-import { getMyCsmSchema, submitCsmSchema } from "@/features/csm/validations/schema/submit-csm.schema";
+import { csmForRequestSchema, submitCsmSchema } from "@/features/csm/validations/schema/submit-csm.schema";
 import { assertPermission, hasPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { assertCanReadRequest } from "@/lib/request-access";
 import { protectedProcedure } from "../init";
 
 /**
  * The satisfaction form: the last thing that happens to a request, and the only
  * step in the workflow the REQUESTOR takes after their request was approved.
  *
- * ## Ownership is the gate, and it is the only one
+ * ## Ownership is the WRITE gate, and reading follows the request
  *
- * There is no role check anywhere in this router, deliberately. A DIRECTOR who
- * calls `submitCsm` on somebody's request is refused for the same reason another
- * USER is - they do not own it - and not for being a director. A role gate here
- * would be both wrong (a staff member can also file their own request, and then
- * they DO own it) and beside the point: the measure is worthless the moment
- * anybody but the person who was served can answer it.
+ * There is no role check on `submitCsm`, deliberately. A DIRECTOR who calls it
+ * on somebody's request is refused for the same reason another USER is - they do
+ * not own it - and not for being a director. A role gate there would be both
+ * wrong (a staff member can also file their own request, and then they DO own
+ * it) and beside the point: the measure is worthless the moment anybody but the
+ * person who was served can answer it.
+ *
+ * READING is a different question, and since spec 018 it has a different answer:
+ * whoever may read the request may read the feedback it earned. That rule is
+ * borrowed from `assertCanReadRequest` rather than restated here - see the note
+ * on `getForRequest`.
  *
  * ## Neither procedure creates a `Csm` row
  *
@@ -37,29 +43,51 @@ const CSM_SELECT = {
 
 export const csmRouter = {
 	/**
-	 * The caller's own satisfaction record for one request, or `null`.
+	 * The satisfaction record for one request, for anybody allowed to READ that
+	 * request - its owner, and the four review desks.
 	 *
-	 * ## Why `null` and not an error
+	 * ## Why this is `assertCanReadRequest` rather than an ownership check
 	 *
-	 * Three different situations arrive here - no such request, a request that
-	 * belongs to somebody else, and a request that was never finally approved and
-	 * so has no `Csm` row - and the page's correct answer to all three is the same
-	 * silent redirect back to the request. Answering `NOT_FOUND` for one and
-	 * `FORBIDDEN` for another would turn this endpoint into a way to ask whether a
-	 * given request id exists and who owns it, which is a question a stranger has
-	 * no business getting an answer to.
+	 * It WAS ownership-only, and answering `null` to everybody else was the right
+	 * shape while this record fed a form and nothing else. It stopped being right
+	 * the moment the desks that handled a request were given a way to read the
+	 * feedback it earned: a reviewer following that action from the request they
+	 * approved would have been bounced back to it with no explanation.
 	 *
-	 * ## Why it carries `canSubmit`
+	 * So the visibility here IS the request's visibility, borrowed from the one
+	 * place that defines it - exactly as `comment.list` borrows it. A second list
+	 * of roles in this file is the failure `request-access.ts` exists to prevent:
+	 * widen one copy, forget the other, and what was said ABOUT a request outlives
+	 * the reader's access to the request itself.
+	 *
+	 * ADMIN is still refused here, and that is not an oversight either. An
+	 * administrator reads satisfaction data through `adminCsm`, which serves the
+	 * CSM columns plus enough of the request to identify it and nothing more - see
+	 * the note at the top of that router.
+	 *
+	 * ## `null` now means one thing only
+	 *
+	 * A request that was never finally approved, and so has no `Csm` row. "Not
+	 * yours" is a thrown FORBIDDEN now rather than a `null`, and that is not a new
+	 * leak: `request.getById` already answers that same question about that same
+	 * id, and neither answer carries anything ABOUT the request - no title, no
+	 * owner, no status.
+	 *
+	 * ## Why it carries `canSubmit` and `isOwner`
 	 *
 	 * `SUBMIT_CSM` is a per-user grant an admin can revoke without touching the
 	 * role, so the browser has no way to know it is gone - the session carries a
 	 * role and nothing else. Without this the page would offer a live button whose
-	 * only possible answer is FORBIDDEN. It decides nothing: `submitCsm` asserts
-	 * the grant itself. The same courtesy `comment.list` pays with `canComment`,
-	 * and for the same reason - one indexed lookup on a query the page already
-	 * makes, rather than a second round trip for one boolean.
+	 * only possible answer is FORBIDDEN. `isOwner` is what chooses between the form
+	 * and the read-only record.
+	 *
+	 * Both are DISPLAY flags and decide nothing: `submitCsm` re-checks ownership
+	 * and the grant itself, and remains the only gate on the write. The same
+	 * courtesy `comment.list` pays with `canComment`, and for the same reason - one
+	 * indexed lookup on a query the page already makes, rather than a second round
+	 * trip for one boolean.
 	 */
-	getMyCsm: protectedProcedure.input(getMyCsmSchema).query(async ({ ctx, input }) => {
+	getForRequest: protectedProcedure.input(csmForRequestSchema).query(async ({ ctx, input }) => {
 		const { user } = ctx;
 
 		const request = await prisma.request.findUnique({
@@ -67,19 +95,23 @@ export const csmRouter = {
 			select: { userId: true },
 		});
 
-		if (!request || request.userId !== user.id) return null;
+		assertCanReadRequest(request, user);
 
-		// In parallel, after ownership: the grant is only READ here, so asking for
-		// it beside the record costs one indexed lookup and saves a round trip on
-		// the path that matters - the one where the form is about to be drawn.
-		const [csm, canSubmit] = await Promise.all([
+		const isOwner = request.userId === user.id;
+
+		// In parallel, after the access check. The grant is only READ here, so asking
+		// for it beside the record costs one indexed lookup and saves a round trip on
+		// the path that matters - the one where the form is about to be drawn. Only
+		// for the owner: nobody else can submit whatever grants they hold, so paying
+		// the read to tell a reviewer `false` would change nothing.
+		const [csm, hasGrant] = await Promise.all([
 			prisma.csm.findUnique({ where: { requestId: input.requestId }, select: CSM_SELECT }),
-			hasPermission(user.id, "SUBMIT_CSM"),
+			isOwner ? hasPermission(user.id, "SUBMIT_CSM") : Promise.resolve(false),
 		]);
 
 		if (!csm) return null;
 
-		return { ...csm, canSubmit };
+		return { ...csm, canSubmit: isOwner && hasGrant, isOwner };
 	}),
 
 	/**

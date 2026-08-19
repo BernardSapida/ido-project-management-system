@@ -63,8 +63,8 @@ export const csmFormSchema = submitCsmSchema.omit({ requestId: true });
 export type SubmitCsmInput = z.infer<typeof submitCsmSchema>;
 export type CsmFormValues = z.infer<typeof csmFormSchema>;
 
-/** The query's input. Inline in the router would do; it is here so both
+/** The read query's input. Inline in the router would do; it is here so both
  *  procedures' shapes live beside each other. */
-export const getMyCsmSchema = z.object({
+export const csmForRequestSchema = z.object({
 	requestId: z.string().min(1, "Request ID is required"),
 });

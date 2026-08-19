@@ -5,6 +5,16 @@ import { CircleCheckBig, FileSignature, Undo2 } from "lucide-react";
 interface CsmCompletedStateProps {
 	/** What they wrote, or `null`. The comment was always optional. */
 	comment: string | null;
+	/**
+	 * Whose feedback this is, from `getForRequest`.
+	 *
+	 * It changes only the words, never what is shown: a reviewer reading a record
+	 * thanked for feedback they did not give would be reading a page about
+	 * somebody else in the second person. Nothing here is a gate - a staff reader
+	 * gets this component because `assertCanReadRequest` let them read the request
+	 * it hangs off, not because of this flag.
+	 */
+	isOwner: boolean;
 	/** Back to the request. The page owns the destination. */
 	onBackToRequest: () => void;
 	/** Opens the signed form. Also the page's, so one place knows where it lives. */
@@ -39,6 +49,7 @@ interface CsmCompletedStateProps {
  */
 export function CsmCompletedState({
 	comment,
+	isOwner,
 	onBackToRequest,
 	onViewPdf,
 	rating,
@@ -49,10 +60,14 @@ export function CsmCompletedState({
 	return (
 		<AppCard
 			data-cy="csm-completed"
-			description={`You submitted your feedback on ${submittedOn}. This request is complete.`}
+			description={
+				isOwner
+					? `You submitted your feedback on ${submittedOn}. This request is complete.`
+					: `The requestor submitted this on ${submittedOn}. The request is complete.`
+			}
 			headingLevel={2}
 			icon={CircleCheckBig}
-			title="Thank you for your feedback"
+			title={isOwner ? "Thank you for your feedback" : "Satisfaction feedback"}
 		>
 			<div className="flex flex-col gap-6">
 				<AppChip
@@ -92,7 +107,7 @@ export function CsmCompletedState({
 							color="muted"
 							type="body-xs"
 						>
-							What you said
+							{isOwner ? "What you said" : "What they said"}
 						</Typography>
 
 						{/* `whitespace-pre-line` so the paragraphs they typed survive. The
@@ -109,7 +124,10 @@ export function CsmCompletedState({
 
 				{/* Two ways onward, because a page with nothing to do on it is where a
 				    completed request usually strands somebody. The signed form is the
-				    thing they came for; the request is where everything else is. */}
+				    thing they came for; the request is where everything else is. Both
+				    are right for a reviewer too - the PDF is readable by all five roles
+				    that can open the request (spec 016), which is the same five that can
+				    reach this page. */}
 				<div className="flex flex-col gap-2 sm:flex-row">
 					<AppButton
 						data-cy="csm-completed-pdf"
