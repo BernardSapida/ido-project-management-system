@@ -1,6 +1,7 @@
-import { AppPageHeader } from "@bernardsapida/web-ui";
+import { AppAlert, AppPageHeader } from "@bernardsapida/web-ui";
 import { Typography } from "@heroui/react";
 import { createFileRoute } from "@tanstack/react-router";
+import { ImageOff } from "lucide-react";
 import { seo } from "@/config/seo.config";
 import { assertAuthenticatedFn } from "@/features/auth/functions/auth.functions";
 import { RequestPdfDownload } from "@/features/request-pdf/components/RequestPdfDownload";
@@ -30,6 +31,25 @@ export const Route = createFileRoute("/_authenticated/requests/$requestId/pdf")(
 	},
 	component: RequestPdfPage,
 });
+
+/**
+ * The sentence naming which boxes are blank and why.
+ *
+ * Written out per count rather than assembled from fragments: one box can fail
+ * on its own, and "the requestor's signature is" against "the requestor's and
+ * the Campus Director's signatures are" is the difference between a notice
+ * somebody acts on and one they have to decode. Three is the most there can be.
+ */
+function unavailableSignatureMessage(labels: string[]): string {
+	const joined = labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`;
+	// Sentence case here rather than in the labels, because any one of the three
+	// can be the one that failed and so any one of them can come first.
+	const named = `${joined.charAt(0).toUpperCase()}${joined.slice(1)}`;
+	const subject = labels.length === 1 ? "signature is" : "signatures are";
+	const boxes = labels.length === 1 ? "that box prints" : "those boxes print";
+
+	return `${named} ${subject} on file, but the image could not be read from storage, so ${boxes} blank. Upload it again on the Profile page, then reopen this form.`;
+}
 
 function RequestPdfPage() {
 	const { requestId } = Route.useParams();
@@ -81,6 +101,33 @@ function RequestPdfPage() {
 	 */
 	const isAwaitingSignatures = Boolean(request) && request?.finalDirectorStatus !== "APPROVED";
 
+	/*
+	 * A signature the payload PROMISED and the server could not deliver.
+	 *
+	 * The two are different states with the same picture. `null` on both sides is
+	 * an unsigned desk, and the line above already explains that. A URL on the row
+	 * with no image behind it is a fault - the object has gone from the bucket, or
+	 * was written against a different one - and it printed as the same blank box
+	 * with nothing anywhere to say so: the demo route kept working throughout,
+	 * because its signatures are baked `data:` URIs rather than stored files.
+	 *
+	 * Read off the two payloads rather than from a flag, so it cannot go stale:
+	 * `getSignaturesAsBase64` resolves every failure to `null` (see
+	 * `signatureAsDataUri`), which makes "URL present, image absent" the exact
+	 * shape of the fault.
+	 */
+	const unloadableSignatures = [
+		{ base64: signatures?.requestorSignatureBase64, label: "the requestor's", url: request?.requestorSignatureUrl },
+		{ base64: signatures?.idoFinalSignatureBase64, label: "the IDO Chairperson's", url: request?.idoFinalSignatureUrl },
+		{
+			base64: signatures?.finalDirectorSignatureBase64,
+			label: "the Campus Director's",
+			url: request?.finalDirectorSignatureUrl,
+		},
+	]
+		.filter(({ base64, url }) => Boolean(url) && !base64)
+		.map(({ label }) => label);
+
 	return (
 		<div className="flex w-full flex-col gap-4">
 			<AppPageHeader
@@ -93,6 +140,16 @@ function RequestPdfPage() {
 				subtitle={subtitle}
 				title="Request Form"
 			/>
+
+			{unloadableSignatures.length > 0 ? (
+				<AppAlert
+					data-cy="request-pdf-signature-unavailable"
+					description={unavailableSignatureMessage(unloadableSignatures)}
+					icon={ImageOff}
+					status="warning"
+					title="A signature could not be loaded"
+				/>
+			) : null}
 
 			{isAwaitingSignatures ? (
 				<Typography

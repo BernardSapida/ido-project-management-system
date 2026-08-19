@@ -935,6 +935,15 @@ function asDuplicateDocumentNumberError(error: unknown): unknown {
  *  document hostage. */
 const SIGNATURE_FETCH_TIMEOUT_MS = 5000;
 
+/** Blank ONE box, and leave a line in the server log saying which URL and why.
+ *  Returns `null` so every branch of `signatureAsDataUri` below stays a single
+ *  `return`. */
+function signatureUnavailable(url: string, why: string): null {
+	console.warn(`[signature] ${why} - printing an empty box for ${url.slice(0, 200)}`);
+
+	return null;
+}
+
 /**
  * One signature image, fetched by the SERVER and returned as a `data:` URI.
  *
@@ -951,11 +960,19 @@ const SIGNATURE_FETCH_TIMEOUT_MS = 5000;
  * still the path for everything else: a seeded `data:` signature, and any link
  * that is not ours.
  *
- * **Every failure resolves to `null`.** A missing object, a timeout, a 403, a
- * body that is not an image: each of those blanks ONE cell on a form that still
- * prints. Throwing would take the whole document down over a picture, which is
- * the wrong trade on a page whose other twenty fields are correct - a signature
- * cell is a thing the paper form expects to be signed by hand anyway.
+ * **Every failure resolves to `null`, and says so.** A missing object, a
+ * timeout, a 403, a body that is not an image: each of those blanks ONE cell on
+ * a form that still prints. Throwing would take the whole document down over a
+ * picture, which is the wrong trade on a page whose other twenty fields are
+ * correct - a signature cell is a thing the paper form expects to be signed by
+ * hand anyway.
+ *
+ * The `console.warn` is the other half of that trade, and it was missing. A row
+ * whose object has gone - deleted from the bucket, uploaded against a different
+ * one - printed a blank box on every form that user ever filed, with nothing in
+ * any log to say why, and the demo route kept working because its signatures are
+ * baked `data:` URIs. The page tells the reader (see `pdf.tsx`); this tells
+ * whoever has to go and look at the bucket.
  *
  * The content-type check is what stops S3's error XML being base64'd and handed
  * to the renderer as an image: a bucket answering 403 returns a body, and
@@ -970,11 +987,12 @@ async function signatureAsDataUri(url: string | null): Promise<string | null> {
 		if (key !== null) {
 			const object = await readUploadedObject(key);
 
-			if (!object) return null;
+			if (!object) return signatureUnavailable(url, "no such object in the bucket");
 
 			const contentType = object.contentType ?? "";
 
-			if (!contentType.startsWith("image/")) return null;
+			if (!contentType.startsWith("image/"))
+				return signatureUnavailable(url, `stored as ${contentType || "an unknown type"}`);
 
 			const buffer = await new Response(object.body).arrayBuffer();
 
@@ -983,17 +1001,18 @@ async function signatureAsDataUri(url: string | null): Promise<string | null> {
 
 		const response = await fetch(url, { signal: AbortSignal.timeout(SIGNATURE_FETCH_TIMEOUT_MS) });
 
-		if (!response.ok) return null;
+		if (!response.ok) return signatureUnavailable(url, `the host answered ${response.status}`);
 
 		const contentType = response.headers.get("content-type") ?? "";
 
-		if (!contentType.startsWith("image/")) return null;
+		if (!contentType.startsWith("image/"))
+			return signatureUnavailable(url, `served as ${contentType || "an unknown type"}`);
 
 		const buffer = await response.arrayBuffer();
 
 		return `data:${contentType};base64,${Buffer.from(buffer).toString("base64")}`;
-	} catch {
-		return null;
+	} catch (error) {
+		return signatureUnavailable(url, error instanceof Error ? error.message : "the fetch failed");
 	}
 }
 
