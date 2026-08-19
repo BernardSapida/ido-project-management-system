@@ -7,7 +7,7 @@ import {
 	type NavGroup as UiNavGroup,
 	type NavItem as UiNavItem,
 } from "@bernardsapida/web-ui";
-import { FilePlus, FileText, LayoutDashboard, Star, UserCircle, Users } from "lucide-react";
+import { FileText, LayoutDashboard, Star, UserCircle, Users } from "lucide-react";
 import type { UserRole } from "@/utils/config";
 
 // --- Types ---
@@ -36,13 +36,6 @@ export const navigationItems: NavItem[] = [
 		icon: FileText,
 		roles: ["USER"],
 		exact: true,
-	},
-	{
-		href: "/requests/new",
-		title: "New Request",
-		description: "Create a new request",
-		icon: FilePlus,
-		roles: ["USER"],
 	},
 	{
 		href: "/staff/dashboard",
