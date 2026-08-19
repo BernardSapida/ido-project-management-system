@@ -1,6 +1,6 @@
 import { AppButton, AppCard, AppChip, AppRatingSummary, formatAbsolute, toDate } from "@bernardsapida/web-ui";
 import { Typography } from "@heroui/react";
-import { CircleCheckBig, FileSignature, Undo2 } from "lucide-react";
+import { CircleCheckBig, FileSignature } from "lucide-react";
 
 interface CsmCompletedStateProps {
 	/** What they wrote, or `null`. The comment was always optional. */
@@ -15,9 +15,7 @@ interface CsmCompletedStateProps {
 	 * it hangs off, not because of this flag.
 	 */
 	isOwner: boolean;
-	/** Back to the request. The page owns the destination. */
-	onBackToRequest: () => void;
-	/** Opens the signed form. Also the page's, so one place knows where it lives. */
+	/** Opens the signed form. The page's, so one place knows where it lives. */
 	onViewPdf: () => void;
 	/** What they gave. `null` on a CSM acknowledged before this spec shipped -
 	 *  those rows have a `submittedAt` and no rating, and that is not an error. */
@@ -47,14 +45,7 @@ interface CsmCompletedStateProps {
  * `count={1}` because that is what it is: one person's answer, not an average.
  * The count is what keeps the number honest, so it stays visible.
  */
-export function CsmCompletedState({
-	comment,
-	isOwner,
-	onBackToRequest,
-	onViewPdf,
-	rating,
-	submittedAt,
-}: CsmCompletedStateProps) {
+export function CsmCompletedState({ comment, isOwner, onViewPdf, rating, submittedAt }: CsmCompletedStateProps) {
 	const submittedOn = formatAbsolute(toDate(submittedAt));
 
 	return (
@@ -122,13 +113,15 @@ export function CsmCompletedState({
 					</div>
 				) : null}
 
-				{/* Two ways onward, because a page with nothing to do on it is where a
-				    completed request usually strands somebody. The signed form is the
-				    thing they came for; the request is where everything else is. Both
-				    are right for a reviewer too - the PDF is readable by all five roles
-				    that can open the request (spec 016), which is the same five that can
-				    reach this page. */}
-				<div className="flex flex-col gap-2 sm:flex-row">
+				{/* Still two ways onward - a page with nothing to do on it is where a
+				    completed request usually strands somebody - but only one of them is
+				    the card's. The signed form is the thing they came for and it belongs
+				    to the record; the request is where everything else is, and that way
+				    back is the page's, at the top, so it survives the loading and error
+				    states this card never renders in. The PDF is right for a reviewer
+				    too - readable by all five roles that can open the request (spec 016),
+				    which is the same five that can reach this page. */}
+				<div>
 					<AppButton
 						data-cy="csm-completed-pdf"
 						icon={FileSignature}
@@ -136,15 +129,6 @@ export function CsmCompletedState({
 						variant="secondary"
 					>
 						Open the signed form
-					</AppButton>
-
-					<AppButton
-						data-cy="csm-completed-back"
-						icon={Undo2}
-						onPress={onBackToRequest}
-						variant="tertiary"
-					>
-						Back to the request
 					</AppButton>
 				</div>
 			</div>

@@ -1,6 +1,7 @@
-import { AppPageHeader, AppQueryError } from "@bernardsapida/web-ui";
+import { AppButton, AppPageHeader, AppQueryError } from "@bernardsapida/web-ui";
 import { Skeleton } from "@heroui/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Undo2 } from "lucide-react";
 import { seo } from "@/config/seo.config";
 import { AdminCsmRecord } from "@/features/admin-csm/components/AdminCsmRecord";
 import { useAdminCsmRecord } from "@/features/admin-csm/hooks/use-admin-csm-queries";
@@ -44,6 +45,27 @@ function AdminCsmRecordPage() {
 
 	return (
 		<div className="flex flex-col gap-8">
+			{/*
+			 * Above the title, and outside the three states below - the way out of a
+			 * screen cannot depend on the screen having loaded. It used to be the last
+			 * thing in the record card, so a failed fetch rendered an error and no
+			 * control at all, and a reader who arrived by link had nothing to press.
+			 *
+			 * `-mb-4` against the column's `gap-8`: this reads as part of the title
+			 * block, not as a section of its own standing a full gap away from it.
+			 */}
+			<div className="-mb-4">
+				<AppButton
+					data-cy="admin-csm-record-back"
+					icon={Undo2}
+					onPress={goToReport}
+					size="sm"
+					variant="tertiary"
+				>
+					Back to the report
+				</AppButton>
+			</div>
+
 			<AppPageHeader
 				subtitle="One requestor's answer, and the request it was recorded against."
 				title="Satisfaction Record"
@@ -66,10 +88,7 @@ function AdminCsmRecordPage() {
 					onRetry={() => void refetch()}
 				/>
 			) : (
-				<AdminCsmRecord
-					onBack={goToReport}
-					record={record}
-				/>
+				<AdminCsmRecord record={record} />
 			)}
 		</div>
 	);

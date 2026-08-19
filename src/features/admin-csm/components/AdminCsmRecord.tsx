@@ -1,20 +1,9 @@
-import {
-	AppButton,
-	AppCard,
-	AppChip,
-	AppRatingSummary,
-	AppReadOnlyField,
-	formatAbsolute,
-	toDate,
-} from "@bernardsapida/web-ui";
+import { AppCard, AppChip, AppRatingSummary, AppReadOnlyField, formatAbsolute, toDate } from "@bernardsapida/web-ui";
 import { Typography } from "@heroui/react";
-import { Undo2 } from "lucide-react";
 import { statusChip } from "../lib/csm-options";
 import type { AdminCsmRow } from "../types";
 
 interface AdminCsmRecordProps {
-	/** Back to the report. The page owns the destination. */
-	onBack: () => void;
 	record: AdminCsmRow;
 }
 
@@ -22,6 +11,11 @@ interface AdminCsmRecordProps {
  * One satisfaction record, in full.
  *
  * ## What is NOT here
+ *
+ * The way back. It is the page's, above the title, because it has to be there
+ * in the error and loading states too - and this card renders in neither. It
+ * used to sit at the bottom of this card, which meant a record that failed to
+ * load left an administrator with no control at all.
  *
  * A link to the request. An administrator cannot read one - they are left out of
  * `REQUEST_READER_ROLES` deliberately - so the document number and title on this
@@ -37,7 +31,7 @@ interface AdminCsmRecordProps {
  * and its own line breaks - `whitespace-pre-line`, because the paragraphs they
  * typed are the record.
  */
-export function AdminCsmRecord({ onBack, record }: AdminCsmRecordProps) {
+export function AdminCsmRecord({ record }: AdminCsmRecordProps) {
 	const status = statusChip(record.submittedAt);
 
 	return (
@@ -149,17 +143,6 @@ export function AdminCsmRecord({ onBack, record }: AdminCsmRecordProps) {
 						)}
 					</div>
 				) : null}
-
-				<div>
-					<AppButton
-						data-cy="admin-csm-record-back"
-						icon={Undo2}
-						onPress={onBack}
-						variant="tertiary"
-					>
-						Back to the report
-					</AppButton>
-				</div>
 			</div>
 		</AppCard>
 	);

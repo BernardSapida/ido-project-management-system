@@ -1,6 +1,7 @@
-import { AppPageHeader, AppQueryError } from "@bernardsapida/web-ui";
+import { AppButton, AppPageHeader, AppQueryError } from "@bernardsapida/web-ui";
 import { Skeleton } from "@heroui/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Undo2 } from "lucide-react";
 import { useEffect } from "react";
 import { seo } from "@/config/seo.config";
 import { assertAuthenticatedFn } from "@/features/auth/functions/auth.functions";
@@ -74,6 +75,29 @@ function CsmPage() {
 	return (
 		<div className="flex flex-col gap-8">
 			{/*
+			 * The way back, above the title and outside `CsmBody` - which is to say
+			 * outside all five of its states. It used to be the last button in the
+			 * completed and awaiting cards, and those two are exactly the states in
+			 * which a reader is least stuck: the loading skeleton, the error panel and
+			 * the frame the redirect takes had no way out at all, and this page is
+			 * reachable by URL, so browser Back is not a given either.
+			 *
+			 * `-mb-4` against the column's `gap-8`, so it reads as part of the title
+			 * block rather than a section standing a full gap away from it.
+			 */}
+			<div className="-mb-4">
+				<AppButton
+					data-cy="csm-back"
+					icon={Undo2}
+					onPress={goToRequest}
+					size="sm"
+					variant="tertiary"
+				>
+					Back to the request
+				</AppButton>
+			</div>
+
+			{/*
 			 * One subtitle for every state and every reader, rather than one that
 			 * follows the record.
 			 *
@@ -93,8 +117,8 @@ function CsmPage() {
 				error={error}
 				isError={isError}
 				isPending={isPending}
-				onBackToRequest={goToRequest}
 				onRetry={() => void refetch()}
+				onSubmitted={goToRequest}
 				onViewPdf={openPdf}
 				requestId={requestId}
 			/>
@@ -107,8 +131,9 @@ interface CsmBodyProps {
 	error: unknown;
 	isError: boolean;
 	isPending: boolean;
-	onBackToRequest: () => void;
 	onRetry: () => void;
+	/** Where a freshly submitted form lands. NOT a back control - that is the page's. */
+	onSubmitted: () => void;
 	onViewPdf: () => void;
 	requestId: string;
 }
@@ -121,7 +146,7 @@ interface CsmBodyProps {
  * the feedback has been given, and a component that returned early would make it
  * appear and disappear underneath the breadcrumb.
  */
-function CsmBody({ csm, error, isError, isPending, onBackToRequest, onRetry, onViewPdf, requestId }: CsmBodyProps) {
+function CsmBody({ csm, error, isError, isPending, onRetry, onSubmitted, onViewPdf, requestId }: CsmBodyProps) {
 	if (isPending) {
 		return (
 			<div
@@ -162,7 +187,6 @@ function CsmBody({ csm, error, isError, isPending, onBackToRequest, onRetry, onV
 			<CsmCompletedState
 				comment={csm.comment}
 				isOwner={csm.isOwner}
-				onBackToRequest={onBackToRequest}
 				onViewPdf={onViewPdf}
 				rating={csm.rating}
 				submittedAt={csm.submittedAt}
@@ -177,12 +201,7 @@ function CsmBody({ csm, error, isError, isPending, onBackToRequest, onRetry, onV
 	 * bouncing them somewhere with no explanation.
 	 */
 	if (!csm.isOwner) {
-		return (
-			<CsmAwaitingState
-				onBackToRequest={onBackToRequest}
-				onViewPdf={onViewPdf}
-			/>
-		);
+		return <CsmAwaitingState onViewPdf={onViewPdf} />;
 	}
 
 	return (
@@ -191,7 +210,7 @@ function CsmBody({ csm, error, isError, isPending, onBackToRequest, onRetry, onV
 			// Straight back to the request, where the chip now reads Completed and
 			// the banner that sent them here is gone. The toast is the thank-you; the
 			// completed state is what they get if they ever come back to this URL.
-			onSuccess={onBackToRequest}
+			onSuccess={onSubmitted}
 			requestId={requestId}
 		/>
 	);
