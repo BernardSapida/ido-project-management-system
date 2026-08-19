@@ -1,4 +1,12 @@
-import { AppButton, AppCard, AppDialog, AppInputGroup, AppSelect, AppTextArea } from "@bernardsapida/web-ui";
+import {
+	AppButton,
+	AppCard,
+	AppDialog,
+	AppInputGroup,
+	AppReadOnlyField,
+	AppSelect,
+	AppTextArea,
+} from "@bernardsapida/web-ui";
 import { Typography } from "@heroui/react";
 import { useBlocker, useRouter } from "@tanstack/react-router";
 import { FileText, Pencil, Save, Send, Star, TriangleAlert, X } from "lucide-react";
@@ -12,7 +20,6 @@ import { useUserRequestMutations } from "@/features/request-form/hooks/use-user-
 import {
 	JUSTIFICATION_OPTIONS,
 	justificationLabel,
-	POSITION_OPTIONS,
 	PRIORITY_OPTIONS,
 	positionLabel,
 	priorityLabel,
@@ -84,6 +91,14 @@ interface RequestFormProps {
 	processor?: string | null;
 	requestId?: string;
 }
+
+/**
+ * What both profile-owned fields say under them.
+ *
+ * One constant because it is one fact told twice, and the day the profile page
+ * moves the two lines have to move together.
+ */
+const PROFILE_FIELD_HINT = "Taken from your profile. Change it on the Profile page.";
 
 /**
  * The empty form, before anything has been typed or loaded into it.
@@ -459,22 +474,32 @@ export function RequestForm({
 								name="priority"
 								placeholder="Select priority"
 							/>
-							<AppInputGroup
-								control={control}
-								description="Taken from your account. It is printed on the form as the requestor."
-								isRequired
+							{/* Read-only in the editable form too, because neither is this
+							    form's to decide: both come off the profile, and the server
+							    writes `requestedBy` from the session on every save - so a
+							    typed name was only ever a value that would be silently
+							    replaced. They are still SHOWN, and shown here rather than in
+							    the rail, because they are printed on the form as the
+							    requestor and the representative row they sign; somebody who
+							    cannot see them finds out on the paper copy.
+
+							    `AppReadOnlyField` and not a disabled input: a disabled field
+							    reads as one the user failed to be allowed to fill in, and
+							    there is nothing to be allowed here. It is a real TextField,
+							    so it still lines up with the inputs beside it. */}
+							<AppReadOnlyField
+								description={PROFILE_FIELD_HINT}
 								label="Requested By"
-								name="requestedBy"
-								placeholder="Full name of the requestor"
+								value={values.requestedBy || "—"}
 							/>
-							<AppSelect
-								control={control}
-								description="Decides which representative row you sign on."
-								isRequired
-								items={POSITION_OPTIONS}
+							<AppReadOnlyField
+								description={
+									values.position
+										? PROFILE_FIELD_HINT
+										: "Not set. Add your position on the Profile page — a request cannot be filed without it."
+								}
 								label="Position"
-								name="position"
-								placeholder="Select position"
+								value={positionLabel(values.position)}
 							/>
 							<AppTextArea
 								className="sm:col-span-2"

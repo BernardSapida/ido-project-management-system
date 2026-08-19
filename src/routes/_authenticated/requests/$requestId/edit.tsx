@@ -5,11 +5,13 @@ import { Lock, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { seo } from "@/config/seo.config";
 import { assertAuthenticatedRoleFn } from "@/features/auth/functions/auth.functions";
+import { useAuth } from "@/features/auth/hooks/useAuth";
 import { RequestCommentThread } from "@/features/request-comments/components/RequestCommentThread";
 import { RejectionNotice } from "@/features/request-detail/components/RejectionNotice";
 import { RequestDetailSkeleton } from "@/features/request-detail/components/RequestDetailSkeleton";
 import { RequestForm } from "@/features/request-form/components/RequestForm";
 import { useRequestById } from "@/features/request-form/hooks/use-user-request-queries";
+import { requestorIdentity } from "@/features/request-form/lib/requestor-identity";
 import { toRequestFormValues } from "@/features/request-form/validations/schema/request.schema";
 import { latestNegativeLog } from "@/lib/status-maps/audit-action";
 import { isEditableStatus, isNegativeStatus, masterStatusMap } from "@/lib/status-maps/request-status";
@@ -46,6 +48,7 @@ export const Route = createFileRoute("/_authenticated/requests/$requestId/edit")
 function RequestEditPage() {
 	const { requestId } = Route.useParams();
 	const navigate = useNavigate();
+	const { user } = useAuth();
 
 	/*
 	 * Refetch-on-focus is OFF here, and it is the form binding that requires it:
@@ -179,8 +182,15 @@ function RequestEditPage() {
 				/>
 			) : null}
 
+			{/* The saved row, with the two profile-owned fields taken from the
+			    session on top of it. They are read-only on the form and their hint
+			    says they come from the profile, so showing the copy frozen into the
+			    draft would contradict both - and `saveDraft` composes `requestedBy`
+			    from the session anyway, so the session's value is the one that will
+			    be stored. A profile with neither set changes nothing here; see
+			    `requestorIdentity`. */}
 			<RequestForm
-				defaultValues={toRequestFormValues(request)}
+				defaultValues={{ ...toRequestFormValues(request), ...requestorIdentity(user) }}
 				idoEvaluationStatus={request.idoEvaluationStatus}
 				masterStatus={request.masterStatus}
 				mode="edit"

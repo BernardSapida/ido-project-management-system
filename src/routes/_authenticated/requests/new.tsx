@@ -4,7 +4,7 @@ import { seo } from "@/config/seo.config";
 import { assertAuthenticatedRoleFn } from "@/features/auth/functions/auth.functions";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { RequestForm } from "@/features/request-form/components/RequestForm";
-import type { Position } from "@/features/request-form/lib/request-options";
+import { requestorIdentity } from "@/features/request-form/lib/requestor-identity";
 import { USER_ROLES } from "@/utils/config";
 
 export const Route = createFileRoute("/_authenticated/requests/new")({
@@ -31,14 +31,13 @@ function RequestCreatePage() {
 	const { user } = useAuth();
 
 	/*
-	 * Both prefills are display values, and the server rewrites both from the
-	 * session on the way in. They are shown because they are PRINTED - a requestor
-	 * who cannot see which name and which representative row their request will
-	 * carry finds out on the paper copy.
-	 *
-	 * `firstname`/`lastname` rather than `name`, to match what the server composes.
+	 * Not prefills any more - both fields are read-only on the form, so this IS
+	 * their value. They are shown because they are PRINTED: a requestor who cannot
+	 * see which name and which representative row their request will carry finds
+	 * out on the paper copy. See `requestorIdentity` for why the name is composed
+	 * from `firstname`/`lastname`.
 	 */
-	const requestedBy = `${user?.firstname ?? ""} ${user?.lastname ?? ""}`.trim();
+	const identity = requestorIdentity(user);
 
 	return (
 		<div className="flex flex-col gap-8">
@@ -48,10 +47,7 @@ function RequestCreatePage() {
 			/>
 
 			<RequestForm
-				defaultValues={{
-					position: (user?.position as Position | null) ?? undefined,
-					requestedBy: requestedBy || (user?.name ?? ""),
-				}}
+				defaultValues={identity}
 				mode="create"
 			/>
 		</div>
