@@ -33,6 +33,7 @@ import type { RequestPdfData, SignaturesBase64 } from "@/features/request-pdf/ty
 import { assertPermission, hasPermission } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { assertCanReadRequest } from "@/lib/request-access";
+import { readUploadedObject } from "@/lib/s3.server";
 import {
 	BUDGET_ACTIONABLE_DIRECTOR_STATUS,
 	directorReviewStatusMap,
@@ -49,6 +50,7 @@ import {
 	REJECTED_STATUSES,
 	STATUS_GROUPS,
 } from "@/lib/status-maps/request-status";
+import { storageKeyOf } from "@/lib/upload-urls";
 import { Prisma } from "../../../../prisma/generated/client.ts";
 import type { RequestWhereInput } from "../../../../prisma/generated/models.ts";
 import { protectedProcedure, roleProcedure } from "../init";
@@ -937,12 +939,17 @@ const SIGNATURE_FETCH_TIMEOUT_MS = 5000;
  * One signature image, fetched by the SERVER and returned as a `data:` URI.
  *
  * `@react-pdf/renderer` loads images itself while it lays the page out, and a
- * remote URL there either races the render into a blank cell or - once the
- * bucket stops being public - fails outright. A presigned URL would not survive
- * either, because the document outlives the five minutes such a URL is good for.
- * So the bytes travel inside the payload, and the browser never sees an S3 URL
- * at all, which is also what lets the bucket be closed later without touching
- * this file.
+ * remote URL there either races the render into a blank cell or - the bucket
+ * being private - fails outright. A presigned URL would not survive either,
+ * because the document outlives the five minutes such a URL is good for. So the
+ * bytes travel inside the payload, and the browser never sees an S3 URL at all.
+ *
+ * **Our own objects are read with the server's credentials**, not fetched. The
+ * bucket answers 403 to an anonymous GET, so the `fetch` below - which is all
+ * this used to do - blanked every uploaded signature on every printed form, and
+ * did it silently, for exactly the reason the next paragraph gives. `fetch` is
+ * still the path for everything else: a seeded `data:` signature, and any link
+ * that is not ours.
  *
  * **Every failure resolves to `null`.** A missing object, a timeout, a 403, a
  * body that is not an image: each of those blanks ONE cell on a form that still
@@ -958,6 +965,22 @@ async function signatureAsDataUri(url: string | null): Promise<string | null> {
 	if (!url) return null;
 
 	try {
+		const key = storageKeyOf(url);
+
+		if (key !== null) {
+			const object = await readUploadedObject(key);
+
+			if (!object) return null;
+
+			const contentType = object.contentType ?? "";
+
+			if (!contentType.startsWith("image/")) return null;
+
+			const buffer = await new Response(object.body).arrayBuffer();
+
+			return `data:${contentType};base64,${Buffer.from(buffer).toString("base64")}`;
+		}
+
 		const response = await fetch(url, { signal: AbortSignal.timeout(SIGNATURE_FETCH_TIMEOUT_MS) });
 
 		if (!response.ok) return null;

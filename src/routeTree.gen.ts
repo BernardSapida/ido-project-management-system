@@ -120,6 +120,7 @@ import { Route as ApiAuthDeleteAccountRouteImport } from './routes/api/auth/dele
 import { Route as ApiAuthUpdateProfileRouteImport } from './routes/api/auth/update-profile'
 import { Route as ApiDevSeedRouteImport } from './routes/api/dev/seed'
 import { Route as ApiDevToggleMaintenanceRouteImport } from './routes/api/dev/toggle-maintenance'
+import { Route as ApiFilesSplatRouteImport } from './routes/api/files/$'
 import { Route as ApiPusherAuthRouteImport } from './routes/api/pusher/auth'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api.trpc.$'
 import { Route as AuthenticatedAdminCsmIndexRouteImport } from './routes/_authenticated/admin/csm/index'
@@ -776,6 +777,11 @@ const ApiDevToggleMaintenanceRoute = ApiDevToggleMaintenanceRouteImport.update({
   path: '/api/dev/toggle-maintenance',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiFilesSplatRoute = ApiFilesSplatRouteImport.update({
+  id: '/api/files/$',
+  path: '/api/files/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPusherAuthRoute = ApiPusherAuthRouteImport.update({
   id: '/api/pusher/auth',
   path: '/api/pusher/auth',
@@ -973,6 +979,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/update-profile': typeof ApiAuthUpdateProfileRoute
   '/api/dev/seed': typeof ApiDevSeedRoute
   '/api/dev/toggle-maintenance': typeof ApiDevToggleMaintenanceRoute
+  '/api/files/$': typeof ApiFilesSplatRoute
   '/api/pusher/auth': typeof ApiPusherAuthRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/components/': typeof referencesComponentsIndexRoute
@@ -1098,6 +1105,7 @@ export interface FileRoutesByTo {
   '/api/auth/update-profile': typeof ApiAuthUpdateProfileRoute
   '/api/dev/seed': typeof ApiDevSeedRoute
   '/api/dev/toggle-maintenance': typeof ApiDevToggleMaintenanceRoute
+  '/api/files/$': typeof ApiFilesSplatRoute
   '/api/pusher/auth': typeof ApiPusherAuthRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/components': typeof referencesComponentsIndexRoute
@@ -1227,6 +1235,7 @@ export interface FileRoutesById {
   '/api/auth/update-profile': typeof ApiAuthUpdateProfileRoute
   '/api/dev/seed': typeof ApiDevSeedRoute
   '/api/dev/toggle-maintenance': typeof ApiDevToggleMaintenanceRoute
+  '/api/files/$': typeof ApiFilesSplatRoute
   '/api/pusher/auth': typeof ApiPusherAuthRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/(references)/components/': typeof referencesComponentsIndexRoute
@@ -1356,6 +1365,7 @@ export interface FileRouteTypes {
     | '/api/auth/update-profile'
     | '/api/dev/seed'
     | '/api/dev/toggle-maintenance'
+    | '/api/files/$'
     | '/api/pusher/auth'
     | '/api/trpc/$'
     | '/components/'
@@ -1481,6 +1491,7 @@ export interface FileRouteTypes {
     | '/api/auth/update-profile'
     | '/api/dev/seed'
     | '/api/dev/toggle-maintenance'
+    | '/api/files/$'
     | '/api/pusher/auth'
     | '/api/trpc/$'
     | '/components'
@@ -1609,6 +1620,7 @@ export interface FileRouteTypes {
     | '/api/auth/update-profile'
     | '/api/dev/seed'
     | '/api/dev/toggle-maintenance'
+    | '/api/files/$'
     | '/api/pusher/auth'
     | '/api/trpc/$'
     | '/(references)/components/'
@@ -1650,6 +1662,7 @@ export interface RootRouteChildren {
   ApiAuthUpdateProfileRoute: typeof ApiAuthUpdateProfileRoute
   ApiDevSeedRoute: typeof ApiDevSeedRoute
   ApiDevToggleMaintenanceRoute: typeof ApiDevToggleMaintenanceRoute
+  ApiFilesSplatRoute: typeof ApiFilesSplatRoute
   ApiPusherAuthRoute: typeof ApiPusherAuthRoute
   ApiTrpcSplatRoute: typeof ApiTrpcSplatRoute
 }
@@ -2433,6 +2446,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDevToggleMaintenanceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/files/$': {
+      id: '/api/files/$'
+      path: '/api/files/$'
+      fullPath: '/api/files/$'
+      preLoaderRoute: typeof ApiFilesSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/pusher/auth': {
       id: '/api/pusher/auth'
       path: '/api/pusher/auth'
@@ -2820,6 +2840,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthUpdateProfileRoute: ApiAuthUpdateProfileRoute,
   ApiDevSeedRoute: ApiDevSeedRoute,
   ApiDevToggleMaintenanceRoute: ApiDevToggleMaintenanceRoute,
+  ApiFilesSplatRoute: ApiFilesSplatRoute,
   ApiPusherAuthRoute: ApiPusherAuthRoute,
   ApiTrpcSplatRoute: ApiTrpcSplatRoute,
 }

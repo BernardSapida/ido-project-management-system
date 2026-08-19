@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "@/env";
 
@@ -75,7 +75,19 @@ function s3(config: S3Config): S3Client {
 	return client;
 }
 
-/** Where an object is readable from, given the public-read bucket policy. */
+/**
+ * The canonical address of an object, and what goes on the row.
+ *
+ * NOT a URL a browser can open. The bucket is private - it answers 403 to an
+ * anonymous GET - so this is an identifier that happens to look like a URL, and
+ * `readUploadedObject` below is what actually serves the bytes, through
+ * `/api/files/*`. Screens turn one into the other with `fileSrc` in
+ * `lib/upload-urls.ts`.
+ *
+ * Kept in this shape rather than storing a bare key because every row in the
+ * database already holds one, `keyFromPublicUrl` reads it back, and
+ * `scripts/s3-sweep.ts` compares rows to bucket listings through both.
+ */
 function publicUrl(config: S3Config, key: string): string {
 	return `https://${config.bucket}.s3.${config.region}.amazonaws.com/${key}`;
 }
@@ -185,6 +197,54 @@ export function keyFromPublicUrl(url: string): string | null {
 	}
 
 	return null;
+}
+
+/** One object's bytes and what it is. `null` when the bucket has no such key. */
+export interface UploadedObject {
+	body: ReadableStream;
+	contentLength?: number;
+	contentType?: string;
+}
+
+/**
+ * Read one object with the SERVER's credentials.
+ *
+ * This is the half that replaces a public-read bucket policy. Objects are
+ * private, so nothing anonymous can fetch a signature by guessing a key; the
+ * app reads them here and serves them from its own origin, behind a session -
+ * see `routes/api/files/$.ts`.
+ *
+ * A web stream rather than a buffer, because attachments run to 10 MB and this
+ * runs in a serverless function: piping straight into the `Response` keeps a
+ * download from being copied into memory first.
+ *
+ * A missing key comes back as `null` rather than throwing. It is the ordinary
+ * case - a row pointing at an object the sweep has already collected - and it
+ * is a 404, not a fault.
+ */
+export async function readUploadedObject(key: string): Promise<UploadedObject | null> {
+	const config = assertS3Config();
+
+	try {
+		const result = await s3(config).send(new GetObjectCommand({ Bucket: config.bucket, Key: key }));
+
+		if (!result.Body) return null;
+
+		return {
+			body: result.Body.transformToWebStream(),
+			contentLength: result.ContentLength,
+			contentType: result.ContentType,
+		};
+	} catch (error) {
+		// `NoSuchKey` is the documented name; `NotFound` comes back from a HEAD-like
+		// path and from some S3-compatible providers. Anything else is a real fault
+		// - credentials, region, a bucket that has gone - and has to surface.
+		const name = error instanceof Error ? error.name : "";
+
+		if (name === "NoSuchKey" || name === "NotFound") return null;
+
+		throw error;
+	}
 }
 
 /**

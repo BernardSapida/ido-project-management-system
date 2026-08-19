@@ -3,6 +3,7 @@ import { Typography } from "@heroui/react";
 import { Paperclip } from "lucide-react";
 import type { FormAttachment } from "@/features/request-form/validations/schema/request.schema";
 import { UPLOAD_ATTACHMENT_ACCEPT_ATTRIBUTE, UPLOAD_MAX_BYTES, UPLOAD_MAX_FILES } from "@/lib/upload-constraints";
+import { fileSrc } from "@/lib/upload-urls";
 import { useDeferredUpload } from "@/lib/use-deferred-upload";
 
 interface AttachmentUploaderProps {
@@ -39,12 +40,34 @@ function formatBytes(bytes: number): string {
 export function AttachmentUploader({ isDisabled, isReadOnly, onChange, value }: AttachmentUploaderProps) {
 	const upload = useDeferredUpload("request-attachments");
 
+	/*
+	 * The drop zone is shown PROXIED urls and the form stores S3 ones.
+	 *
+	 * The bucket is private, so a saved attachment's stored address renders as a
+	 * broken thumbnail in the file row; `/api/files/*` is what a browser can
+	 * actually open. But that path must never be what gets SAVED - the row is
+	 * read by `collectRequestImageUrls`, and a key the sweep cannot match is an
+	 * attachment it deletes as unreferenced. So the display url goes out through
+	 * `fileSrc` and the stored one comes back by id on the way in.
+	 */
+	const storedUrlById = new Map(value.map((attachment) => [attachment.id, attachment.url]));
+	const rowsForDisplay = value.map((attachment) => ({ ...attachment, url: fileSrc(attachment.url) }));
+
 	const handleChange = (rows: UploadedFile[]) => {
 		// `url` is optional on the component's row and required on ours. It only
 		// emits rows whose upload SUCCEEDED and our handler always resolves with the
 		// parked URL, so this drops nothing in practice - it is the type telling the
 		// truth that a row with no URL is not something to store.
-		onChange(rows.flatMap((row) => (row.url ? [{ ...row, url: row.url }] : [])));
+		//
+		// A row the map has never seen is a `blob:` pick made in this session, and
+		// its own url is already the right one to keep.
+		onChange(
+			rows.flatMap((row) => {
+				const url = storedUrlById.get(row.id) ?? row.url;
+
+				return url ? [{ ...row, url }] : [];
+			}),
+		);
 	};
 
 	if (isReadOnly) {
@@ -82,13 +105,14 @@ export function AttachmentUploader({ isDisabled, isReadOnly, onChange, value }: 
 							primary: attachment.name,
 						}))}
 						label="Attachments"
-						// A new tab rather than a router navigation: these are S3 objects on
-						// another origin, and half of them are PDFs the browser will render
-						// itself. Replacing the page with one would lose the request behind it.
+						// A new tab rather than a router navigation: half of these are PDFs
+						// the browser will render itself, and replacing the page with one
+						// would lose the request behind it. Through `fileSrc`, because the
+						// bucket is private - the stored address answers 403.
 						onSelectItem={(item) => {
 							const attachment = value.find((row) => row.id === item.key);
 
-							if (attachment) window.open(attachment.url, "_blank", "noopener,noreferrer");
+							if (attachment) window.open(fileSrc(attachment.url), "_blank", "noopener,noreferrer");
 						}}
 					/>
 				)}
@@ -108,7 +132,7 @@ export function AttachmentUploader({ isDisabled, isReadOnly, onChange, value }: 
 			multiple
 			onChange={handleChange}
 			upload={upload}
-			value={value}
+			value={rowsForDisplay}
 		/>
 	);
 }

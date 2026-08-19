@@ -25,13 +25,13 @@ export const UPLOAD_MAX_BYTES = 10_000_000;
  * URL was minted for. A caller cannot ask for `image/png` and then send
  * something claiming to be `text/html`.
  *
- * What it does NOT do is inspect bytes. Anyone who can reach `presign` is an
- * ADMIN, and the bucket is a different origin from the app, so a mislabelled
- * file is a broken image rather than a script with access to a session.
- *
- * Add `application/pdf` and friends here if the project uploads documents — but
- * read the note above first, because "a different origin" stops being true if
- * you ever put the bucket behind the app's own domain.
+ * What it does NOT do is inspect bytes. A mislabelled file is therefore a broken
+ * image rather than a script with access to a session — but that used to rest on
+ * the bucket being a different origin from the app, and it no longer is.
+ * `routes/api/files/$.ts` serves these objects from the app's own domain, and
+ * carries the three headers that replace the argument: `nosniff`, a `sandbox`
+ * CSP, and `Content-Disposition: attachment` for anything that is not an image.
+ * Read that route before adding a type here.
  */
 export const UPLOAD_ACCEPTED_TYPES = ["image/avif", "image/gif", "image/jpeg", "image/png", "image/webp"] as const;
 
@@ -47,9 +47,10 @@ export const UPLOAD_ACCEPTED_TYPES = ["image/avif", "image/gif", "image/jpeg", "
  *
  * The note above about bytes not being inspected applies here too, and harder:
  * these formats are opened by desktop applications rather than by an `<img>`.
- * The bucket is a different origin and objects are served with the stored
- * `Content-Type`, so a mislabelled file is a download that fails to open — but
- * putting the bucket behind the app's own domain would change that answer.
+ * A mislabelled file is a download that fails to open, which is why
+ * `routes/api/files/$.ts` sends every one of them as an `attachment` rather than
+ * letting a tab render it — the app serves them from its own origin now, so
+ * "somebody else's domain will contain the damage" is no longer available.
  */
 export const UPLOAD_ACCEPTED_DOCUMENT_TYPES = [
 	"application/pdf",

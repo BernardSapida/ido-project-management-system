@@ -1,4 +1,5 @@
 import { Typography } from "@heroui/react";
+import { fileSrc } from "@/lib/upload-urls";
 
 interface StampedSignatureProps {
 	"data-cy"?: string;
@@ -48,10 +49,13 @@ export function StampedSignature({ "data-cy": dataCy, label, url }: StampedSigna
 			</Typography>
 
 			<div className="flex min-h-24 items-center justify-center rounded-xl border border-default-200 bg-white p-4">
+				{/* Through `fileSrc`: the bucket is private, so the stamped S3 address
+				    on the row is not something an `<img>` can open. A seeded `data:`
+				    signature passes through unchanged. */}
 				<img
 					alt={label}
 					className="max-h-20 object-contain"
-					src={url}
+					src={fileSrc(url)}
 				/>
 			</div>
 		</div>
