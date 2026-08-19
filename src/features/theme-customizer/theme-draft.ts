@@ -366,10 +366,9 @@ export function configOutput(draft: ThemeDraft): ConfigOutput {
 	 */
 	const flagsFor = (own: Record<string, string>) => ({ ...own, ...sharedFlags });
 	const lineFor = (flags: Record<string, string>) =>
-		[
-			"pnpm --filter @app/web generate:palettes",
-			...Object.entries(flags).map(([flag, value]) => `${flag} ${value}`),
-		].join(" ");
+		["npx tsx scripts/generate-palettes.ts", ...Object.entries(flags).map(([flag, value]) => `${flag} ${value}`)].join(
+			" ",
+		);
 
 	/*
 	 * A COMMAND in both cases, and it used to be a command for a free hue and a
