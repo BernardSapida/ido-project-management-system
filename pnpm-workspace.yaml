@@ -5,4 +5,4 @@ allowBuilds:
   prisma: true
   sharp: true
 minimumReleaseAgeExclude:
-  - '@bernardsapida/web-ui@0.2.1 || 0.4.3 || 0.4.6 || 0.4.7'
+  - '@bernardsapida/web-ui@0.2.1 || 0.4.3 || 0.4.6 || 0.4.7 || 0.4.9'
