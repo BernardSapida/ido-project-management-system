@@ -30,10 +30,6 @@ export const Route = createFileRoute("/_authenticated/requests/$requestId/csm")(
 	}),
 	staticData: {
 		breadcrumb: "Feedback",
-		/* `full` - no cap. It was `prose`, the narrowest measure in the app, on the
-		   reasoning that two questions in one column want a short measure; on a
-		   wide monitor that read as a form pushed into a corner of its own page. */
-		mainWidth: "full",
 	},
 	component: CsmPage,
 });

@@ -37,7 +37,6 @@ export const Route = createFileRoute("/_authenticated/requests/$requestId/budget
 	}),
 	staticData: {
 		breadcrumb: "Budget Review",
-		mainWidth: "wide",
 	},
 	component: BudgetReviewPage,
 });

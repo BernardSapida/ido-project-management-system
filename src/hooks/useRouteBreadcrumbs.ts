@@ -1,4 +1,4 @@
-import type { BreadcrumbItem, MainWidth } from "@bernardsapida/web-ui";
+import type { BreadcrumbItem } from "@bernardsapida/web-ui";
 import { useMatches } from "@tanstack/react-router";
 import type { LucideIcon } from "lucide-react";
 
@@ -8,25 +8,7 @@ declare module "@tanstack/react-router" {
 		breadcrumb?: string;
 		breadcrumbIcon?: LucideIcon;
 		hideSidebar?: boolean;
-		mainWidth?: MainWidth;
 	}
-}
-
-/**
- * The content measure the DEEPEST matched route asks for, defaulting to
- * `"default"`.
- *
- * Deepest wins because the leaf is the page: `/requests` may want `wide` while
- * `/requests/$id` wants `prose`, and the parent layout must not decide for it.
- * Same mechanism as the breadcrumb above - the route declares it in
- * `staticData`, and the frame reads it.
- */
-export function useRouteMainWidth(): MainWidth {
-	const matches = useMatches();
-
-	const declared = matches.filter((match) => match.staticData?.mainWidth);
-
-	return declared.at(-1)?.staticData.mainWidth ?? "default";
 }
 
 export function useRouteBreadcrumbs(): BreadcrumbItem[] {

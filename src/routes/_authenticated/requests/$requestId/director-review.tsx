@@ -39,7 +39,6 @@ export const Route = createFileRoute("/_authenticated/requests/$requestId/direct
 	}),
 	staticData: {
 		breadcrumb: "Director Review",
-		mainWidth: "wide",
 	},
 	component: DirectorReviewPage,
 });

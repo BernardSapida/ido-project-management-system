@@ -17,7 +17,6 @@ export const Route = createFileRoute("/_authenticated/admin/csm/$csmId")({
 	}),
 	staticData: {
 		breadcrumb: "Record",
-		mainWidth: "wide",
 	},
 	component: AdminCsmRecordPage,
 });

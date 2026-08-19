@@ -27,12 +27,6 @@ export const Route = createFileRoute("/_authenticated/requests/$requestId/pdf")(
 	}),
 	staticData: {
 		breadcrumb: "View PDF",
-		/*
-		 * `full`, and the width IS the feature. An A4 page squeezed into the
-		 * `wide` measure renders at a size nobody can read the details cell at,
-		 * and the reader's next move is the browser zoom.
-		 */
-		mainWidth: "full",
 	},
 	component: RequestPdfPage,
 });

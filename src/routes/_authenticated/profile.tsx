@@ -28,7 +28,6 @@ export const Route = createFileRoute("/_authenticated/profile")({
 	}),
 	staticData: {
 		breadcrumb: "Profile",
-		mainWidth: "default",
 	},
 	component: ProfilePage,
 });

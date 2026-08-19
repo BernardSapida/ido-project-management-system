@@ -41,7 +41,6 @@ export const Route = createFileRoute("/_authenticated/requests/$requestId/final-
 	}),
 	staticData: {
 		breadcrumb: "Final Approval",
-		mainWidth: "wide",
 	},
 	component: FinalDirectorApprovalPage,
 });

@@ -58,7 +58,6 @@ export const Route = createFileRoute("/_authenticated/staff/dashboard/")({
 	}),
 	staticData: {
 		breadcrumb: "Dashboard",
-		mainWidth: "wide",
 	},
 	component: StaffDashboardPage,
 });

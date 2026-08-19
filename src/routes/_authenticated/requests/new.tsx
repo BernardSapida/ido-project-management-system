@@ -23,7 +23,6 @@ export const Route = createFileRoute("/_authenticated/requests/new")({
 	}),
 	staticData: {
 		breadcrumb: "New Request",
-		mainWidth: "wide",
 	},
 	component: RequestCreatePage,
 });

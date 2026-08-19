@@ -36,7 +36,6 @@ export const Route = createFileRoute("/_authenticated/admin/")({
 	}),
 	staticData: {
 		breadcrumb: "Accounts",
-		mainWidth: "wide",
 	},
 	validateSearch: searchSchema,
 	component: AdminAccountsPage,

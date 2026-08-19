@@ -41,7 +41,6 @@ export const Route = createFileRoute("/_authenticated/requests/$requestId/review
 	}),
 	staticData: {
 		breadcrumb: "IDO Review",
-		mainWidth: "wide",
 	},
 	component: IdoReviewPage,
 });

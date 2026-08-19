@@ -36,7 +36,6 @@ export const Route = createFileRoute("/_authenticated/requests/$requestId/")({
 	}),
 	staticData: {
 		breadcrumb: "Request Detail",
-		mainWidth: "wide",
 	},
 	component: RequestDetailPage,
 });

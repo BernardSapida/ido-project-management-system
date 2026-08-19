@@ -19,7 +19,7 @@ import type { RequestPdfData, SignaturesBase64 } from "../types/request-pdf.type
  * The engine is deliberately NOT wrapped in an `AppCard`. The viewer paints its
  * own grey document frame - a card around it would be a second border around a
  * thing that already looks like a page in a folder, and it would take width off
- * a preview the page set `mainWidth: "full"` to give room to.
+ * a preview the frame's full-width measure exists to give room to.
  */
 
 const RequestPdfPreview = lazy(() =>

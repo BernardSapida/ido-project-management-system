@@ -36,7 +36,6 @@ export const Route = createFileRoute("/_authenticated/admin/csm/")({
 	}),
 	staticData: {
 		breadcrumb: "Satisfaction",
-		mainWidth: "wide",
 	},
 	validateSearch: searchSchema,
 	component: AdminCsmPage,

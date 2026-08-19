@@ -35,9 +35,6 @@ export const Route = createFileRoute("/_authenticated/requests/pdf/demo")({
 	}),
 	staticData: {
 		breadcrumb: "PDF walkthrough",
-		/* `full`, for the reason the real PDF page gives: an A4 page in the `wide`
-		   measure renders at a size nobody can read the details cell at. */
-		mainWidth: "full",
 	},
 	component: RequestPdfDemoPage,
 });
