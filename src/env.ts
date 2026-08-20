@@ -37,7 +37,29 @@ export const env = createEnv({
 	clientPrefix: "VITE_",
 
 	client: {
-		VITE_BASE_URL: z.url().default("http://localhost:4000"),
+		/**
+		 * The app's own origin - a real URL, with NO trailing slash.
+		 *
+		 * Both consumers compare origins by EXACT STRING MATCH: ALLOWED_ORIGINS in
+		 * `lib/cors.ts` and Better Auth's `trustedOrigins`. A browser sends
+		 * `https://app.example.com`, so `https://app.example.com/` matches neither -
+		 * and `z.url()` alone accepts both, so the typo produced no boot error at
+		 * all. Everything worked except sign-in and CORS, which is the worst way to
+		 * find out. Failing here names the variable instead.
+		 *
+		 * The check runs when this module is first EXECUTED, not when it is bundled,
+		 * and VITE_ values are inlined at build time - so a bad value survives the
+		 * build and fails the first request with "Invalid environment variables:
+		 * VITE_BASE_URL - must not end with a trailing slash". Measured, not assumed.
+		 * Fixing it therefore needs a REBUILD, not a restart.
+		 */
+		VITE_BASE_URL: z
+			.url()
+			// z.url() accepts any syntactically valid scheme, so `htp://` passes and
+			// then never matches a real browser origin.
+			.refine((value) => /^https?:\/\//.test(value), "must start with http:// or https://")
+			.refine((value) => !value.endsWith("/"), "must not end with a trailing slash")
+			.default("http://localhost:4000"),
 		VITE_PUSHER_KEY: z.string().optional(),
 		VITE_PUSHER_CLUSTER: z.string().default("ap1"),
 	},
