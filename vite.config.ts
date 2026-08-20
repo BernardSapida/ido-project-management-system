@@ -1,4 +1,5 @@
 import netlify from "@netlify/vite-plugin-tanstack-start";
+import { nitro } from "nitro/vite";
 import { applyThemePlugin } from "./vite-plugin-apply-theme.ts";
 import tailwindcss from "@tailwindcss/vite";
 import { devtools } from "@tanstack/devtools-vite";
@@ -42,7 +43,37 @@ const config = defineConfig({
 		 * The working mitigation is to RESTART THE DEV SERVER before a long Cypress
 		 * run, not to disable the feature.
 		 */
-		netlify(),
+		/*
+		 * The host adapter, chosen at BUILD time - never both.
+		 *
+		 * Each of these owns the server build: netlify() emits a Netlify function
+		 * bundle, nitro() emits Vercel Functions via Nitro's vercel preset. Running
+		 * the pair would have two plugins writing the same server output.
+		 *
+		 * Vercel sets VERCEL=1 in its build image, so the branch needs no config on
+		 * either side: Netlify keeps building exactly as before, and a Vercel import
+		 * of this repo picks up Nitro with no dashboard build-command override.
+		 *
+		 * Vercel ALSO needs NPM_RC set in the project's environment variables -
+		 * @bernardsapida/web-ui comes from GitHub Packages, and Vercel's NPM_TOKEN
+		 * only ever authenticates registry.npmjs.org, so a PAT put there installs
+		 * nothing and the build dies on a 401. See .npmrc.ci for the same problem's
+		 * Netlify-shaped answer.
+		 *
+		 * traceDeps ships react into the function's own node_modules so it stays a
+		 * REAL external, resolved once by node.
+		 *
+		 * There are TWO rolldown builds here: vite's ssr build emits _ssr/*, and
+		 * nitro's own build bundles node_modules into _libs/*. Bundling react into
+		 * the first (resolve.noExternal) only moves the problem - @tanstack/react-router
+		 * carries a second copy into _libs, react-dom sets the hook dispatcher on that
+		 * one, AppUIProvider calls useMemo on the other, and every render 500s with
+		 * "Cannot read properties of null (reading 'useMemo')". Leaving react external
+		 * to both builds is the only arrangement where they share an instance.
+		 */
+		process.env.VERCEL
+			? nitro({ traceDeps: ["react", "react-dom"] })
+			: netlify(),
 		tailwindcss(),
 		tanstackStart(),
 		viteReact(),
