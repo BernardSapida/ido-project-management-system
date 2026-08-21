@@ -68,5 +68,5 @@ export const auth = betterAuth({
 		},
 	},
 	trustedOrigins: [env.VITE_BASE_URL, env.MOBILE_DEV_URL ?? "http://localhost:8081"],
-	plugins: [tanstackStartCookies(), bearer()],
+	plugins: [bearer(), tanstackStartCookies()],
 });
