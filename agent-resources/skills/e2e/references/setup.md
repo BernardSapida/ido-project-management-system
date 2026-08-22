@@ -92,7 +92,7 @@ Create `cypress.env.json` at the project root:
 
 ```json
 {
-  "TEST_USER_EMAIL": "your-test-user@example.com",
+  "TEST_USER_EMAIL": "your-test-user@gmail.com",
   "TEST_USER_PASSWORD": "your-test-password"
 }
 ```
