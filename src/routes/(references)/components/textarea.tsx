@@ -18,14 +18,23 @@ const MAX_BIO = 160;
  * mixing a text field and a textarea has one border, one focus ring and one
  * invalid state rather than two that nearly match.
  *
+ * The word + character reading and the auto-grow are part of the field, not
+ * props a caller can forget: `maxLength` is required, and every specimen below
+ * shows the reading pinned inside the field, bottom-right, from the first render.
+ *
  * Things to check by hand:
  *
- * 1. **Drag the resize handle.** It grows vertically only. Horizontal resize
- *    would let a user pull the field out of the form's column.
- * 2. **Type past 160 in the counter specimen.** The count turns danger AND the
- *    message says how far over - a red number alone is silent to a colour-blind
- *    reader, which is the same rule the rich text editor's footer follows.
- * 3. **Compare the read-only and disabled specimens.** You can select and copy
+ * 1. **Type into the auto-grow specimen.** It starts at `rows` and grows a line
+ *    at a time as you type. Past `maxRows` it stops growing and scrolls - a long
+ *    answer never pushes the submit button below the fold. There is no resize
+ *    handle to drag; the field sizes itself.
+ * 2. **Type past 160 in the counter specimen.** The reading turns danger at the
+ *    limit, and the message says how far over - a red number alone is silent to
+ *    a colour-blind reader. Paste a paragraph: it is accepted whole, not
+ *    truncated, so the reading can show the overage.
+ * 3. **Submit the over-limit specimen.** It is invalid past the cap on its own,
+ *    on top of whatever the form schema says.
+ * 4. **Compare the read-only and disabled specimens.** You can select and copy
  *    out of one and not the other. That is the whole difference and it is why
  *    they are not interchangeable.
  */
@@ -41,7 +50,7 @@ function TextAreaLab() {
 	return (
 		<div className="space-y-6">
 			<AppPageHeader
-				subtitle="Multi-line text, in the same shell as the single-line field. Where it grows, where it scrolls, where the counter goes."
+				subtitle="Multi-line text, in the same shell as the single-line field. Where it grows, where it scrolls, and the counter that is always on."
 				title={TITLE}
 			/>
 			<BindingSection />
@@ -63,7 +72,7 @@ type Values = z.input<typeof schema>;
 function BindingSection() {
 	return (
 		<LabSection
-			description="A minimum length is the common rule here, and it is the one worth stating in the description rather than only on failure - nobody can guess it from an empty box."
+			description="A minimum length is the common rule here, and it is the one worth stating in the description rather than only on failure - nobody can guess it from an empty box. The maximum is stated for you, by the reading in the corner of the field."
 			title="Bound to a form, or standing alone"
 		>
 			<div className="grid gap-6 sm:grid-cols-2">
@@ -96,6 +105,7 @@ function BoundSpecimen() {
 					description="Minimum 10 characters."
 					isRequired
 					label="Bio"
+					maxLength={MAX_BIO}
 					name="bio"
 					placeholder="Tell us a bit about yourself…"
 				/>
@@ -132,6 +142,7 @@ function StandaloneSpecimen() {
 				errorMessage={error}
 				isRequired
 				label="Bio"
+				maxLength={MAX_BIO}
 				onBlur={() => setError(validate(bio))}
 				onChange={(next) => {
 					setBio(next);
@@ -147,29 +158,34 @@ function StandaloneSpecimen() {
 /* ── 2. Height ────────────────────────────────────────────────────────────── */
 
 function RowsSection() {
-	const [short, setShort] = useState("");
+	const [note, setNote] = useState("");
 	const [tall, setTall] = useState(LOREM);
 
 	return (
 		<LabSection
-			description="`rows` is the one sizing concern a caller reliably needs and the one that is not expressible through className. Pick it from the answer you expect: two rows for a note, six for a description. Past the height it scrolls internally rather than pushing the submit button off the screen."
-			title="rows, and what happens past them"
+			description="`rows` is the resting height and `maxRows` the ceiling - both are sizing concerns a caller needs and neither is expressible through className. The field grows a line at a time as the user types; at `maxRows` it stops and scrolls internally rather than pushing the submit button off the screen. There is no resize handle."
+			title="rows, maxRows, and auto-grow"
 		>
 			<div className="grid gap-4 sm:grid-cols-2">
 				<AppTextArea
-					data-cy="rows-2"
-					label="Note (rows=2)"
-					onChange={setShort}
-					placeholder="A sentence."
+					data-cy="rows-grow"
+					description="Starts at 2 rows, grows to 8 as you type."
+					label="Note (rows=2, maxRows=8)"
+					maxLength={600}
+					maxRows={8}
+					onChange={setNote}
+					placeholder="Start typing and watch it grow…"
 					rows={2}
-					value={short}
+					value={note}
 				/>
 				<AppTextArea
-					data-cy="rows-6"
-					description="Already past its height - it scrolls, it does not grow."
-					label="Description (rows=6)"
+					data-cy="rows-scroll"
+					description="Seeded past its ceiling - it grew to 6 rows and now scrolls."
+					label="Description (rows=3, maxRows=6)"
+					maxLength={1200}
+					maxRows={6}
 					onChange={setTall}
-					rows={6}
+					rows={3}
 					value={tall}
 				/>
 			</div>
@@ -178,35 +194,34 @@ function RowsSection() {
 }
 
 const LOREM =
-	"The shell is the same InputGroup the single-line field uses, so the border, the focus ring and the invalid state all match a text input sitting beside it in the same form. Past the row count it scrolls internally rather than growing without bound, which is what keeps a long answer from pushing the submit button below the fold. Drag the handle to make it taller; it will not go wider.";
+	"The shell is the same InputGroup the single-line field uses, so the border, the focus ring and the invalid state all match a text input sitting beside it in the same form. The field grows a line at a time as you type; past its row ceiling it scrolls internally rather than growing without bound, which is what keeps a long answer from pushing the submit button below the fold. There is no handle to drag - it sizes itself to the content.";
 
 /* ── 3. The counter ───────────────────────────────────────────────────────── */
 
 function CounterSection() {
-	const [value, setValue] = useState("");
-	const over = value.length - MAX_BIO;
+	const [value, setValue] = useState(SEEDED_NEAR_LIMIT);
 
 	return (
 		<LabSection
-			description="A cap belongs under the field, next to the thing it constrains, and it has to be readable before it is breached - a counter that only appears at the limit is a rule nobody was told about."
-			title="Character counter"
+			description="Every textarea carries a `words · count / max` reading pinned in its bottom-right corner. It is muted until the character count reaches the cap, then turns danger - number, word and colour, so the state survives a colour-blind reader. The field is invalid past the cap on its own, and a paste that overflows is kept whole so the overage is visible rather than silently trimmed."
+			title="Word and character count, and the over-limit state"
 		>
 			<AppTextArea
 				data-cy="counter"
-				description={`${value.length} / ${MAX_BIO} characters`}
-				errorMessage={over > 0 ? `${over} character${over === 1 ? "" : "s"} over the limit` : undefined}
+				description="Tagline for your profile."
 				label="Tagline"
+				maxLength={MAX_BIO}
 				onChange={setValue}
 				placeholder="One line about you"
 				rows={3}
 				value={value}
 			/>
-			{/* The count is repeated as an error, not only as a colour. Turning the
-			    description red would say "wrong" to a sighted reader and nothing at
-			    all to anyone else. */}
 		</LabSection>
 	);
 }
+
+const SEEDED_NEAR_LIMIT =
+	"Product designer and sometime photographer. I write about design systems, accessibility, and the small details that make software feel calm.";
 
 /* ── 4. States ────────────────────────────────────────────────────────────── */
 
@@ -222,6 +237,7 @@ function StateSection() {
 					errorMessage="Tell us at least 10 characters"
 					isRequired
 					label="Invalid"
+					maxLength={MAX_BIO}
 					onChange={() => undefined}
 					rows={3}
 					value="Too short"
@@ -231,6 +247,7 @@ function StateSection() {
 					description="Selectable and copyable - the value is yours to read, not to change."
 					isReadOnly
 					label="Read-only"
+					maxLength={MAX_BIO}
 					onChange={() => undefined}
 					rows={3}
 					value="Generated summary, regenerated on every save."
@@ -240,6 +257,7 @@ function StateSection() {
 					description="Not available at all. Its text cannot be reached by keyboard."
 					isDisabled
 					label="Disabled"
+					maxLength={MAX_BIO}
 					onChange={() => undefined}
 					rows={3}
 					value="Locked while publishing."

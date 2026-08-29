@@ -24,10 +24,7 @@ const TITLE = "App aside";
  * 2. **Scroll the tall specimen.** Above `xl` the pane is sticky and scrolls
  *    inside itself; it can never be taller than the viewport, so its foot is
  *    always reachable.
- * 3. **Switch the surface.** Floating is a glass card in a padded row; flush
- *    meets the edge with a hairline - and the hairline MOVES: on top when the
- *    pane is stacked, on the left when it is beside the content.
- * 4. **Turn the pane off.** The row is two columns, not two columns and a hole.
+ * 3. **Turn the pane off.** The row is two columns, not two columns and a hole.
  */
 export const Route = createFileRoute("/(references)/components/app-aside")({
 	head: () => ({
@@ -38,10 +35,7 @@ export const Route = createFileRoute("/(references)/components/app-aside")({
 });
 
 function AppAsideLab() {
-	const [surface, setSurface] = useState<"flush" | "floating">("floating");
 	const [hasAside, setHasAside] = useState(true);
-
-	const isFloating = surface === "floating";
 
 	return (
 		<div className="space-y-6">
@@ -51,28 +45,9 @@ function AppAsideLab() {
 			/>
 
 			<LabSection
-				description="Both specimens below read these."
+				description="Both specimens below read this."
 				title="The controls"
 			>
-				<Control label="Surface">
-					<AppButton
-						data-cy="aside-floating"
-						onPress={() => setSurface("floating")}
-						size="sm"
-						variant={isFloating ? "primary" : "secondary"}
-					>
-						Floating
-					</AppButton>
-					<AppButton
-						data-cy="aside-flush"
-						onPress={() => setSurface("flush")}
-						size="sm"
-						variant={isFloating ? "secondary" : "primary"}
-					>
-						Flush
-					</AppButton>
-				</Control>
-
 				<Control label="Pane">
 					<AppButton
 						data-cy="aside-on"
@@ -112,7 +87,6 @@ function AppAsideLab() {
 						<AppAside
 							data-cy="aside"
 							title="Filters"
-							variant={surface}
 						>
 							<div className="space-y-2">
 								<div className="h-9 rounded-xl bg-muted-surface" />
@@ -145,7 +119,6 @@ function AppAsideLab() {
 						<AppAside
 							data-cy="aside-tall"
 							title="Activity"
-							variant={surface}
 						>
 							<ol className="space-y-2 text-sm text-muted">
 								{Array.from({ length: 12 }, (_, index) => (
@@ -196,6 +169,10 @@ const RULES: { body: string; title: string }[] = [
 	{
 		body: "The pane carries its own width, so a layout that renders nothing here gets a two-column row without having to collapse a track. An empty third of the screen reads worse than a page that never had one.",
 		title: "Optional, and cheap to omit",
+	},
+	{
+		body: "Always a floating glass card - there is no flush variant. AppSidebar and AppHeader are edges of the frame and take its surface; a supporting pane is a distinct object beside the content, and meeting an edge with a hairline would make it read as another one.",
+		title: "Always floating",
 	},
 ];
 

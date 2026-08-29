@@ -61,7 +61,6 @@ import {
 	Radar,
 	Rows3,
 	Search,
-	ServerCrash,
 	SkipForward,
 	Slash,
 	Square,
@@ -427,12 +426,6 @@ export const LAB_GROUPS: LabGroup[] = [
 				icon: CircleDashed,
 				label: "Progress circle",
 				to: "/components/progress-circle",
-			},
-			{
-				blurb: "One prop - the raw error - and seven failures that each get their own copy and their own way out.",
-				icon: ServerCrash,
-				label: "Query error",
-				to: "/components/query-error",
 			},
 			{
 				blurb: "A rating as stars and as a distribution summary, filled to a real fraction rather than a half-glyph.",

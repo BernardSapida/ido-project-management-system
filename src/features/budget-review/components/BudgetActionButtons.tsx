@@ -322,10 +322,12 @@ function RejectDialog({ isOpen, onClose, onConfirm }: RejectDialogProps) {
 			tone="danger"
 		>
 			<AppTextArea
+				// TODO(web-ui@1.0.0): maxLength is now required - set a real budget for this field.
 				control={control}
 				data-cy="budget-reject-note"
 				isRequired
 				label="Reason"
+				maxLength={2000}
 				name="note"
 				placeholder="Explain the budget decision - the requestor will read this"
 				rows={4}

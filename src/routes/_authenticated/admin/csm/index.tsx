@@ -1,6 +1,7 @@
-import { AppPageHeader, AppQueryError } from "@bernardsapida/web-ui";
+import { AppPageHeader } from "@bernardsapida/web-ui";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
+import { AppQueryError } from "@/components/project";
 import { seo } from "@/config/seo.config";
 import { AdminCsmSummary } from "@/features/admin-csm/components/AdminCsmSummary";
 import { AdminCsmTable } from "@/features/admin-csm/components/AdminCsmTable";

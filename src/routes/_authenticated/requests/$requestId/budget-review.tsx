@@ -1,5 +1,6 @@
-import { AppCard, AppChip, AppPageHeader, AppQueryError } from "@bernardsapida/web-ui";
+import { AppCard, AppChip, AppPageHeader } from "@bernardsapida/web-ui";
 import { createFileRoute } from "@tanstack/react-router";
+import { AppQueryError } from "@/components/project";
 import { seo } from "@/config/seo.config";
 import { assertAuthenticatedRoleFn } from "@/features/auth/functions/auth.functions";
 import { useAuth } from "@/features/auth/hooks/useAuth";

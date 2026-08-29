@@ -133,10 +133,12 @@ export function IdoApproverPanel({ canReview, defaultValues, isActionable, reque
 					/>
 
 					<AppTextArea
+						// TODO(web-ui@1.0.0): maxLength is now required - set a real budget for this field.
 						control={control}
 						data-cy="ido-note"
 						description="Printed as the reason on the IDO block of the form. The requestor can read it."
 						label="Note"
+						maxLength={2000}
 						name="note"
 						placeholder="Add a note if there is anything to flag"
 						rows={4}

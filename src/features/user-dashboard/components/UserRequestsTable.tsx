@@ -1,9 +1,9 @@
 import {
+	AppEmptyState,
 	AppFilterBar,
 	AppPagination,
 	AppSearchField,
 	AppTable,
-	AppTableEmptyState,
 	AppTableHighlight,
 	type ColumnDef,
 	type TableSortDescriptor,
@@ -152,7 +152,7 @@ export function UserRequestsTable({
 				columns={columns}
 				data-cy="requests-table"
 				emptyContent={
-					<AppTableEmptyState
+					<AppEmptyState
 						action={
 							hasFilters || hasQuery
 								? { label: "Clear filters", onPress: onClearFilters }

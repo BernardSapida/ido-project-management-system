@@ -1,5 +1,6 @@
-import { AppProgressCircle, AppQueryError } from "@bernardsapida/web-ui";
+import { AppProgressCircle } from "@bernardsapida/web-ui";
 import { lazy, Suspense, useEffect, useState } from "react";
+import { AppQueryError } from "@/components/project";
 import type { RequestPdfData, SignaturesBase64 } from "../types/request-pdf.types";
 
 /**

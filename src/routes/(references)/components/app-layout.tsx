@@ -135,7 +135,6 @@ function AppLayoutLab() {
 				   viewport, which inside a 32rem box is not a cap at all. */
 				className="@4xl:top-4 @4xl:max-h-[calc(32rem-2rem)]"
 				title="Activity"
-				variant="flush"
 			>
 				<ol className="space-y-2 text-sm text-muted">
 					<li>Report generated, 2 hours ago.</li>

@@ -1,7 +1,8 @@
-import { AppPageHeader, AppQueryError } from "@bernardsapida/web-ui";
+import { AppPageHeader } from "@bernardsapida/web-ui";
 import { Card, Separator, Typography } from "@heroui/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { AppQueryError } from "@/components/project";
 import { getDefaultRoute } from "@/config/navigation.config";
 import { seo } from "@/config/seo.config";
 import { ChangePasswordCard } from "@/features/user/components/ChangePasswordCard";

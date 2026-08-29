@@ -1,8 +1,9 @@
-import { AppAlert, AppPageHeader, AppQueryError } from "@bernardsapida/web-ui";
+import { AppAlert, AppPageHeader } from "@bernardsapida/web-ui";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { TRPCClientError } from "@trpc/client";
 import { Lock, RotateCcw } from "lucide-react";
 import { useState } from "react";
+import { AppQueryError } from "@/components/project";
 import { seo } from "@/config/seo.config";
 import { assertAuthenticatedRoleFn } from "@/features/auth/functions/auth.functions";
 import { useAuth } from "@/features/auth/hooks/useAuth";

@@ -1,7 +1,8 @@
-import { AppButton, AppPageHeader, AppQueryError } from "@bernardsapida/web-ui";
+import { AppButton, AppPageHeader } from "@bernardsapida/web-ui";
 import { Skeleton } from "@heroui/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Undo2 } from "lucide-react";
+import { AppQueryError } from "@/components/project";
 import { seo } from "@/config/seo.config";
 import { AdminCsmRecord } from "@/features/admin-csm/components/AdminCsmRecord";
 import { useAdminCsmRecord } from "@/features/admin-csm/hooks/use-admin-csm-queries";

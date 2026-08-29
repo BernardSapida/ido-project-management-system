@@ -731,7 +731,7 @@ function HomePage() {
 				homeHref="/"
 				owner={OFFICE}
 				tagline={`An integrated online engineering management system for the ${OFFICE} of the ${UNIVERSITY}.`}
-				tone="muted"
+				tone="surface"
 			/>
 		</div>
 	);

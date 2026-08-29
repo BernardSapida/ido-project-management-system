@@ -1,7 +1,8 @@
 import type { CommentItem, CommentPerson } from "@bernardsapida/web-ui";
-import { AppCommentSection, AppQueryError } from "@bernardsapida/web-ui";
+import { AppCommentSection } from "@bernardsapida/web-ui";
 import { Typography } from "@heroui/react";
 import { Lock } from "lucide-react";
+import { AppQueryError } from "@/components/project";
 import { getRoleLabel } from "@/config/navigation.config";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useRequestCommentMutations } from "@/features/request-comments/hooks/use-comment-mutations";

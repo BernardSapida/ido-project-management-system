@@ -1,6 +1,7 @@
-import { AppButton, AppChip, AppModal, AppQueryError, AppSwitch } from "@bernardsapida/web-ui";
+import { AppButton, AppChip, AppModal, AppSwitch } from "@bernardsapida/web-ui";
 import { Skeleton, Typography } from "@heroui/react";
 import { RotateCcw, ShieldCheck, UserCog } from "lucide-react";
+import { AppQueryError } from "@/components/project";
 import { useAdminPermissionsMutations } from "@/features/admin-accounts/hooks/use-admin-permissions-mutations";
 import { useAdminPermissionsQueries } from "@/features/admin-accounts/hooks/use-admin-permissions-queries";
 import { roleLabel } from "@/features/admin-accounts/lib/account-options";

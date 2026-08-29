@@ -1,6 +1,7 @@
-import { AppPageHeader, AppQueryError } from "@bernardsapida/web-ui";
+import { AppPageHeader } from "@bernardsapida/web-ui";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { z } from "zod";
+import { AppQueryError } from "@/components/project";
 import { seo } from "@/config/seo.config";
 import { assertAuthenticatedRoleFn } from "@/features/auth/functions/auth.functions";
 import { useAuth } from "@/features/auth/hooks/useAuth";

@@ -1,8 +1,9 @@
-import { AppButton, AppPageHeader, AppQueryError, type TableSortDescriptor } from "@bernardsapida/web-ui";
+import { AppButton, AppPageHeader, type TableSortDescriptor } from "@bernardsapida/web-ui";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
+import { AppQueryError } from "@/components/project";
 import { seo } from "@/config/seo.config";
 import { assertAuthenticatedRoleFn } from "@/features/auth/functions/auth.functions";
 import { UserRequestsTable } from "@/features/user-dashboard/components/UserRequestsTable";

@@ -83,7 +83,6 @@ import { Route as referencesComponentsPressableFeedbackRouteImport } from './rou
 import { Route as referencesComponentsProfileBannerRouteImport } from './routes/(references)/components/profile-banner'
 import { Route as referencesComponentsProgressBarRouteImport } from './routes/(references)/components/progress-bar'
 import { Route as referencesComponentsProgressCircleRouteImport } from './routes/(references)/components/progress-circle'
-import { Route as referencesComponentsQueryErrorRouteImport } from './routes/(references)/components/query-error'
 import { Route as referencesComponentsRadarChartRouteImport } from './routes/(references)/components/radar-chart'
 import { Route as referencesComponentsRadialChartRouteImport } from './routes/(references)/components/radial-chart'
 import { Route as referencesComponentsRadioGroupRouteImport } from './routes/(references)/components/radio-group'
@@ -563,12 +562,6 @@ const referencesComponentsProgressCircleRoute =
     path: '/progress-circle',
     getParentRoute: () => referencesComponentsRoute,
   } as any)
-const referencesComponentsQueryErrorRoute =
-  referencesComponentsQueryErrorRouteImport.update({
-    id: '/query-error',
-    path: '/query-error',
-    getParentRoute: () => referencesComponentsRoute,
-  } as any)
 const referencesComponentsRadarChartRoute =
   referencesComponentsRadarChartRouteImport.update({
     id: '/radar-chart',
@@ -944,7 +937,6 @@ export interface FileRoutesByFullPath {
   '/components/profile-banner': typeof referencesComponentsProfileBannerRoute
   '/components/progress-bar': typeof referencesComponentsProgressBarRoute
   '/components/progress-circle': typeof referencesComponentsProgressCircleRoute
-  '/components/query-error': typeof referencesComponentsQueryErrorRoute
   '/components/radar-chart': typeof referencesComponentsRadarChartRoute
   '/components/radial-chart': typeof referencesComponentsRadialChartRoute
   '/components/radio-group': typeof referencesComponentsRadioGroupRoute
@@ -1070,7 +1062,6 @@ export interface FileRoutesByTo {
   '/components/profile-banner': typeof referencesComponentsProfileBannerRoute
   '/components/progress-bar': typeof referencesComponentsProgressBarRoute
   '/components/progress-circle': typeof referencesComponentsProgressCircleRoute
-  '/components/query-error': typeof referencesComponentsQueryErrorRoute
   '/components/radar-chart': typeof referencesComponentsRadarChartRoute
   '/components/radial-chart': typeof referencesComponentsRadialChartRoute
   '/components/radio-group': typeof referencesComponentsRadioGroupRoute
@@ -1200,7 +1191,6 @@ export interface FileRoutesById {
   '/(references)/components/profile-banner': typeof referencesComponentsProfileBannerRoute
   '/(references)/components/progress-bar': typeof referencesComponentsProgressBarRoute
   '/(references)/components/progress-circle': typeof referencesComponentsProgressCircleRoute
-  '/(references)/components/query-error': typeof referencesComponentsQueryErrorRoute
   '/(references)/components/radar-chart': typeof referencesComponentsRadarChartRoute
   '/(references)/components/radial-chart': typeof referencesComponentsRadialChartRoute
   '/(references)/components/radio-group': typeof referencesComponentsRadioGroupRoute
@@ -1330,7 +1320,6 @@ export interface FileRouteTypes {
     | '/components/profile-banner'
     | '/components/progress-bar'
     | '/components/progress-circle'
-    | '/components/query-error'
     | '/components/radar-chart'
     | '/components/radial-chart'
     | '/components/radio-group'
@@ -1456,7 +1445,6 @@ export interface FileRouteTypes {
     | '/components/profile-banner'
     | '/components/progress-bar'
     | '/components/progress-circle'
-    | '/components/query-error'
     | '/components/radar-chart'
     | '/components/radial-chart'
     | '/components/radio-group'
@@ -1585,7 +1573,6 @@ export interface FileRouteTypes {
     | '/(references)/components/profile-banner'
     | '/(references)/components/progress-bar'
     | '/(references)/components/progress-circle'
-    | '/(references)/components/query-error'
     | '/(references)/components/radar-chart'
     | '/(references)/components/radial-chart'
     | '/(references)/components/radio-group'
@@ -2187,13 +2174,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof referencesComponentsProgressCircleRouteImport
       parentRoute: typeof referencesComponentsRoute
     }
-    '/(references)/components/query-error': {
-      id: '/(references)/components/query-error'
-      path: '/query-error'
-      fullPath: '/components/query-error'
-      preLoaderRoute: typeof referencesComponentsQueryErrorRouteImport
-      parentRoute: typeof referencesComponentsRoute
-    }
     '/(references)/components/radar-chart': {
       id: '/(references)/components/radar-chart'
       path: '/radar-chart'
@@ -2685,7 +2665,6 @@ interface referencesComponentsRouteChildren {
   referencesComponentsProfileBannerRoute: typeof referencesComponentsProfileBannerRoute
   referencesComponentsProgressBarRoute: typeof referencesComponentsProgressBarRoute
   referencesComponentsProgressCircleRoute: typeof referencesComponentsProgressCircleRoute
-  referencesComponentsQueryErrorRoute: typeof referencesComponentsQueryErrorRoute
   referencesComponentsRadarChartRoute: typeof referencesComponentsRadarChartRoute
   referencesComponentsRadialChartRoute: typeof referencesComponentsRadialChartRoute
   referencesComponentsRadioGroupRoute: typeof referencesComponentsRadioGroupRoute
@@ -2783,7 +2762,6 @@ const referencesComponentsRouteChildren: referencesComponentsRouteChildren = {
   referencesComponentsProgressBarRoute: referencesComponentsProgressBarRoute,
   referencesComponentsProgressCircleRoute:
     referencesComponentsProgressCircleRoute,
-  referencesComponentsQueryErrorRoute: referencesComponentsQueryErrorRoute,
   referencesComponentsRadarChartRoute: referencesComponentsRadarChartRoute,
   referencesComponentsRadialChartRoute: referencesComponentsRadialChartRoute,
   referencesComponentsRadioGroupRoute: referencesComponentsRadioGroupRoute,

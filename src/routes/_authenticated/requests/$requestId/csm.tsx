@@ -1,8 +1,9 @@
-import { AppButton, AppPageHeader, AppQueryError } from "@bernardsapida/web-ui";
+import { AppButton, AppPageHeader } from "@bernardsapida/web-ui";
 import { Skeleton } from "@heroui/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Undo2 } from "lucide-react";
 import { useEffect } from "react";
+import { AppQueryError } from "@/components/project";
 import { seo } from "@/config/seo.config";
 import { assertAuthenticatedFn } from "@/features/auth/functions/auth.functions";
 import { CsmAwaitingState } from "@/features/csm/components/CsmAwaitingState";

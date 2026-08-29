@@ -73,10 +73,12 @@ export function CsmForm({ canSubmit, onSuccess, requestId }: CsmFormProps) {
 				<RatingField control={control} />
 
 				<AppTextArea
+					// TODO(web-ui@1.0.0): maxLength is now required - set a real budget for this field.
 					control={control}
 					data-cy="csm-comment"
 					description={`Optional. Up to ${CSM_COMMENT_MAX_LENGTH} characters.`}
 					label="Anything you would like to add?"
+					maxLength={2000}
 					name="comment"
 					placeholder="What went well, and what could have gone better?"
 					rows={4}

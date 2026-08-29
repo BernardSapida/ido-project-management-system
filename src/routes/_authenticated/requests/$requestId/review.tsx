@@ -1,6 +1,7 @@
-import { AppAlert, AppCard, AppChip, AppPageHeader, AppQueryError } from "@bernardsapida/web-ui";
+import { AppAlert, AppCard, AppChip, AppPageHeader } from "@bernardsapida/web-ui";
 import { createFileRoute } from "@tanstack/react-router";
 import { Lock } from "lucide-react";
+import { AppQueryError } from "@/components/project";
 import { seo } from "@/config/seo.config";
 import { assertAuthenticatedRoleFn } from "@/features/auth/functions/auth.functions";
 import { IdoActionButtons } from "@/features/ido-review/components/IdoActionButtons";

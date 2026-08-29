@@ -288,10 +288,12 @@ function NoteDialog({ action, isOpen, onClose, onConfirm }: NoteDialogProps) {
 			tone={tone}
 		>
 			<AppTextArea
+				// TODO(web-ui@1.0.0): maxLength is now required - set a real budget for this field.
 				control={control}
 				data-cy={`ido-${action}-note`}
 				isRequired={isNoteRequired}
 				label="Note"
+				maxLength={2000}
 				name="note"
 				placeholder={notePlaceholder}
 				rows={4}

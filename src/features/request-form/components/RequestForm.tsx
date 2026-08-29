@@ -502,12 +502,14 @@ export function RequestForm({
 								value={positionLabel(values.position)}
 							/>
 							<AppTextArea
+								// TODO(web-ui@1.0.0): maxLength is now required - set a real budget for this field.
 								className="sm:col-span-2"
 								control={control}
 								data-cy="request-details"
 								description="Describe what is being requested and the problem it solves."
 								isRequired
 								label="Details"
+								maxLength={2000}
 								name="details"
 								placeholder="Describe the request in detail"
 								rows={5}
@@ -522,11 +524,13 @@ export function RequestForm({
 								placeholder="Select justification"
 							/>
 							<AppTextArea
+								// TODO(web-ui@1.0.0): maxLength is now required - set a real budget for this field.
 								className="sm:col-span-2"
 								control={control}
 								description="Describe the physical or technical scope of the work involved."
 								isRequired
 								label="Work Scope"
+								maxLength={2000}
 								name="workScope"
 								placeholder="Describe the scope of work"
 								rows={4}

@@ -1,8 +1,9 @@
-import { AppButton, AppPageHeader, AppQueryError } from "@bernardsapida/web-ui";
+import { AppButton, AppPageHeader } from "@bernardsapida/web-ui";
 import { createFileRoute } from "@tanstack/react-router";
 import { UserPlus } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";
+import { AppQueryError } from "@/components/project";
 import { seo } from "@/config/seo.config";
 import { AdminAccountsTable } from "@/features/admin-accounts/components/AdminAccountsTable";
 import { CreateStaffAccountModal } from "@/features/admin-accounts/components/CreateStaffAccountModal";

@@ -105,7 +105,7 @@ const SOCIAL: SiteSocialLink[] = [
 ];
 
 function SiteFooterLab() {
-	const [tone, setTone] = useState<SiteFooterTone>("muted");
+	const [tone, setTone] = useState<SiteFooterTone>("surface");
 
 	/* Stop the navigation - the same rule every nav specimen in these labs
 	   follows. Social links are not routed through it: they are external, and a
@@ -122,11 +122,11 @@ function SiteFooterLab() {
 			/>
 
 			<LabSection
-				description="Three fills, and only ONE of them changes anything but the fill. Surface is the card - a neutral band closing the page. Muted is the pale brand tint, and it is what most sites actually want: it marks the end of the document without claiming to be a statement. Brand fills the band with the brand-surface pair inverted, which is worth it when the header does the same and heavy-handed when it does not. Switch to brand and toggle the theme: the band keeps its footing in both, because the pair is solved per theme - a band pinned to bg-app-brand instead goes pale in dark while its contents stay light."
+				description="Two fills, and only the fill changes between them. Surface is the card - a neutral band closing the page, and the one most sites want: it marks the end of the document without claiming to be a statement. Brand fills the band with the brand-surface pair inverted, which is worth it when the header does the same and heavy-handed when it does not. Switch to brand and toggle the theme: the band keeps its footing in both, because the pair is solved per theme - a band pinned to bg-app-brand instead goes pale in dark while its contents stay light."
 				title="Tone"
 			>
 				<div className="flex flex-wrap gap-2">
-					{(["surface", "muted", "brand"] as const).map((value) => (
+					{(["surface", "brand"] as const).map((value) => (
 						<AppButton
 							data-cy={`site-footer-tone-${value}`}
 							key={value}
@@ -134,7 +134,7 @@ function SiteFooterLab() {
 							size="sm"
 							variant={tone === value ? "primary" : "secondary"}
 						>
-							{value === "surface" ? "Surface" : value === "muted" ? "Muted" : "Brand"}
+							{value === "surface" ? "Surface" : "Brand"}
 						</AppButton>
 					))}
 				</div>

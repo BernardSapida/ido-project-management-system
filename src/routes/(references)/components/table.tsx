@@ -4,11 +4,11 @@ import {
 	AppChip,
 	AppColumnPicker,
 	AppDataTable,
+	AppEmptyState,
 	AppGlassCard,
 	AppPageHeader,
 	AppPagination,
 	AppTable,
-	AppTableEmptyState,
 	AppToast,
 	AppTooltip,
 	useTableColumns,
@@ -624,7 +624,7 @@ function EmptySection() {
 							columns={columns}
 							data-cy={`table-empty-${empty.reason}`}
 							emptyContent={
-								<AppTableEmptyState
+								<AppEmptyState
 									action={{ label: empty.action, onPress: () => undefined }}
 									data-cy={`empty-state-${empty.reason}`}
 									query={empty.query}

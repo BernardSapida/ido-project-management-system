@@ -364,11 +364,13 @@ function FormReferencePage() {
 
 								{/* AppTextArea - multiline text */}
 								<AppTextArea
+									// TODO(web-ui@1.0.0): maxLength is now required - set a real budget for this field.
 									control={control}
 									data-cy="bio"
 									description="Minimum 10 characters."
 									isRequired
 									label="Bio"
+									maxLength={2000}
 									name="bio"
 									placeholder="Tell us a bit about yourself..."
 								/>
