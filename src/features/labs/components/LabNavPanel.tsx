@@ -2,11 +2,11 @@
 // touching that 62-export barrel makes the browser fetch all 130 files behind
 // it - and this nav is mounted on every /components/* page, so it did that on
 // all of them.
-import { AppButton, AppSearchField, AppTooltip } from "@bernardsapida/web-ui";
-import { Link } from "@tanstack/react-router";
+import { AppButton, AppSearchField, AppTooltip, markMatches } from "@bernardsapida/web-ui";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { LayoutGrid } from "lucide-react";
 import type { ComponentProps } from "react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { LabEntry, LabGroup } from "@/features/labs/labs.registry";
 import { LAB_GROUPS } from "@/features/labs/labs.registry";
 import { getLabStatusMeta } from "@/features/labs/labs.status";
@@ -75,11 +75,37 @@ export function LabNavPanel({
 }: LabNavPanelProps) {
 	const [query, setQuery] = useState("");
 	const searchInputRef = useRef<HTMLInputElement>(null);
+	const navRef = useRef<HTMLElement>(null);
+	const pathname = useRouterState({ select: (state) => state.location.pathname });
 
 	// The rail has no field, so it can have no query - and a filter still applied
 	// from before it collapsed would hide rows with nothing on screen saying why.
 	const isSearching = !isCollapsed && query.trim() !== "";
 	const groups = isSearching ? filterLabs(query) : LAB_GROUPS;
+
+	// Pressing a row is the filter's whole job done - so clear it. A stale "tab"
+	// still narrowing the list on the next page is the reader's problem to notice,
+	// and the drawer-close hook the caller may have passed still fires. Left on
+	// the panel rather than the row so a row stays a plain link.
+	const handleNavigate = () => {
+		onNavigate?.();
+		setQuery("");
+	};
+
+	// With the filter cleared the full column is back, and the row just pressed
+	// can be anywhere in a run of sixty - usually past the fold. Bring the active
+	// row into view so the nav still answers "where am I". Keyed on the pathname,
+	// so a lab opened from a deep link or the browser's back button lands the same
+	// way. `nearest` so a row already on screen does not move.
+	useEffect(() => {
+		if (isCollapsed) return;
+		const raf = requestAnimationFrame(() => {
+			navRef.current
+				?.querySelector<HTMLElement>('[data-status="active"], [aria-current="page"]')
+				?.scrollIntoView({ block: "nearest" });
+		});
+		return () => cancelAnimationFrame(raf);
+	}, [pathname, isCollapsed]);
 
 	return (
 		<>
@@ -103,6 +129,7 @@ export function LabNavPanel({
 				aria-label={navLabel}
 				className="scrollbar-none -mx-1 min-h-0 flex-1 overflow-y-auto px-1"
 				data-cy={dataCy}
+				ref={navRef}
 			>
 				{/*
 				 * The way back to the index, and a real destination rather than a
@@ -116,7 +143,7 @@ export function LabNavPanel({
 					isCollapsed={isCollapsed}
 					isExact
 					lab={ALL_LABS_ENTRY}
-					onNavigate={onNavigate}
+					onNavigate={handleNavigate}
 				/>
 
 				{groups.length > 0 ? (
@@ -126,7 +153,8 @@ export function LabNavPanel({
 								group={group}
 								isCollapsed={isCollapsed}
 								key={group.heading}
-								onNavigate={onNavigate}
+								onNavigate={handleNavigate}
+								searchQuery={isSearching ? query : undefined}
 							/>
 						))}
 					</div>
@@ -176,10 +204,12 @@ function LabNavGroup({
 	group,
 	isCollapsed,
 	onNavigate,
+	searchQuery,
 }: {
 	group: LabGroup;
 	isCollapsed: boolean;
 	onNavigate?: () => void;
+	searchQuery?: string;
 }) {
 	if (group.labs.length === 0) return null;
 
@@ -195,6 +225,7 @@ function LabNavGroup({
 						key={lab.to}
 						lab={lab}
 						onNavigate={onNavigate}
+						searchQuery={searchQuery}
 					/>
 				))}
 			</div>
@@ -219,6 +250,7 @@ function LabNavRow({
 	isExact = false,
 	lab,
 	onNavigate,
+	searchQuery,
 }: {
 	/** False for the index row: "All labs" is the way back, not a lab with a state. */
 	hasStatus?: boolean;
@@ -227,6 +259,13 @@ function LabNavRow({
 	isExact?: boolean;
 	lab: LabEntry;
 	onNavigate?: () => void;
+	/**
+	 * The live filter term. When set, the run of the label matching it is marked -
+	 * the same `<mark>` the app sidebar and the data table use, so a hit looks the
+	 * same wherever it is typed. Never passed on the rail, where the label is
+	 * `sr-only`.
+	 */
+	searchQuery?: string;
 }) {
 	const status = getLabStatusMeta(lab.to);
 	const linkProps = {
@@ -251,21 +290,23 @@ function LabNavRow({
 				aria-hidden="true"
 				className={isCollapsed ? "size-5 shrink-0" : "size-4 shrink-0"}
 			/>
-			{isCollapsed ? <span className="sr-only">{lab.label}</span> : <span className="truncate">{lab.label}</span>}
+			{isCollapsed ? (
+				<span className="sr-only">{lab.label}</span>
+			) : (
+				<span className="truncate">{markMatches(lab.label, searchQuery ?? "")}</span>
+			)}
 			{/*
-			 * A dot, not the word - the row is 16rem wide and already carries an icon
-			 * and a name. Green is finished, orange is still on progress, and EVERY
-			 * lab carries one: a row with no dot would read as a third state nobody
-			 * declared. The index card carries the full chip, and the rail drops the
-			 * dot entirely - see the tooltip below.
+			 * A dot only on the labs that are NOT done yet - complete is the resting
+			 * state and carries no mark, an unfinished lab is the one thing worth
+			 * spotting in a column of sixty. It is `bg-warning`, the same "on
+			 * progress" colour the index card's chip wears. The row is 16rem wide and
+			 * already holds an icon and a name, so it is a dot and not the word; the
+			 * rail drops it entirely and says the state in the tooltip instead.
 			 */}
-			{hasStatus && !isCollapsed ? (
+			{hasStatus && !isCollapsed && status.status !== "complete" ? (
 				<span
 					aria-label={status.label}
-					className={cn(
-						"ml-auto size-1.5 shrink-0 rounded-full",
-						status.status === "complete" ? "bg-success" : "bg-warning",
-					)}
+					className="ml-auto size-1.5 shrink-0 rounded-full bg-warning"
 					role="img"
 				/>
 			) : null}
