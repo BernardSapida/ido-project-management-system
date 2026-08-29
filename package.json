@@ -13,6 +13,7 @@
     "lint": "biome lint",
     "check": "biome check",
     "post-cta-init": "npx -y create-db@latest --user-agent tanstack/tsrouter",
+    "setup:npm-auth": "node scripts/setup-npm-auth.mjs",
     "db:generate": "dotenv -e .env.local -- prisma generate",
     "db:push": "dotenv -e .env.local -- prisma db push",
     "db:migrate": "dotenv -e .env.local -- prisma migrate dev",
@@ -24,7 +25,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1111.0",
     "@aws-sdk/s3-request-presigner": "^3.1111.0",
-    "@bernardsapida/web-ui": "^1.1.0",
+    "@bernardsapida/web-ui": "^1.1.1",
     "@heroui/react": "^3.2.1",
     "@heroui/styles": "^3.2.1",
     "@hookform/resolvers": "^5.2.2",
