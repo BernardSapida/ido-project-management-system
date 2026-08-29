@@ -19,25 +19,30 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { oklchToHex, oklchToRgb, parseOklch, type Rgb } from "../src/config/theme/oklch";
 import {
-	DESIGNER_ORDER,
-	type DesignerRole,
-	LEGACY_DESIGNER_ORDER,
-	resolveDesignerPalette,
-} from "../src/config/theme/designer-palette";
-import type { SurfaceStrategy } from "../src/config/theme/palette.build";
-import { buildPalette, TINT_MAX } from "../src/config/theme/palette.build";
-import { inlineDeclarations, paletteSheet, stableDeclarations, themeDeclarations } from "../src/config/theme/palette.emit";
-import { measurePairings } from "../src/config/theme/pairings";
-import {
+	buildPalette,
 	CARD_NAMES,
 	COLOR_SCHEME_NAMES,
+	DESIGNER_ORDER,
+	type DesignerRole,
 	FONT_OPTIONS,
+	inlineDeclarations,
+	LEGACY_DESIGNER_ORDER,
+	measurePairings,
+	oklchToHex,
+	oklchToRgb,
+	paletteSheet,
+	parseOklch,
 	RADIUS_NAMES,
+	resolveDesignerPalette,
+	type Rgb,
+	stableDeclarations,
+	type SurfaceStrategy,
 	SURFACE_NAMES,
+	themeDeclarations,
+	TINT_MAX,
 	UI_RADIUS_NAMES,
-} from "../src/config/theme/options";
+} from "@bernardsapida/web-ui/theme-engine";
 import { PALETTE_PRESETS, type PalettePreset } from "../src/config/theme/presets";
 
 const here = dirname(fileURLToPath(import.meta.url));

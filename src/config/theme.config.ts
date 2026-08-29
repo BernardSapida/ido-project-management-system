@@ -13,15 +13,11 @@
  * silently becoming the committed default is how an unnoticed change ships.
  */
 
-import type { CARD_OPTIONS, COLOR_SCHEME_OPTIONS, FONT_OPTIONS } from "./theme/options";
-import { RADIUS_OPTIONS } from "./theme/options";
-import type { SurfaceStrategy } from "./theme/palette.build";
+import type { CardStyle, ColorScheme, FontName, RadiusName, SurfaceStrategy } from "@bernardsapida/web-ui/theme-engine";
+import { RADIUS_OPTIONS } from "@bernardsapida/web-ui/theme-engine";
 import type { PaletteName } from "./theme/presets";
 
-export type CardStyle = keyof typeof CARD_OPTIONS;
-export type ColorScheme = keyof typeof COLOR_SCHEME_OPTIONS;
-export type FontName = keyof typeof FONT_OPTIONS;
-export type RadiusName = keyof typeof RADIUS_OPTIONS;
+export type { CardStyle, ColorScheme, FontName, RadiusName };
 
 export interface ThemeConfig {
 	/**
@@ -66,7 +62,15 @@ export interface ThemeConfig {
 }
 
 // ---- The line. This is what the customizer's copy action hands you. --------
-export const THEME: ThemeConfig = { palette: "ipms", font: "inter", uiRadius: "md", formRadius: "sm", surface: "raised", card: "solid", colorScheme: "light-only" };
+export const THEME: ThemeConfig = {
+	palette: "ipms",
+	font: "inter",
+	uiRadius: "md",
+	formRadius: "sm",
+	surface: "raised",
+	card: "solid",
+	colorScheme: "light-only",
+};
 // ---------------------------------------------------------------------------
 
 /**

@@ -15,8 +15,8 @@ importers:
         specifier: ^3.1111.0
         version: 3.1111.0
       '@bernardsapida/web-ui':
-        specifier: ^1.0.0
-        version: 1.0.0(63592bfd0b095e6ace5e52e484b06f43)
+        specifier: ^1.1.0
+        version: 1.1.0(086079f4ce45e3923d8e7fb31e9483ec)
       '@heroui/react':
         specifier: ^3.2.1
         version: 3.2.4(@react-aria/i18n@3.13.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@react-aria/ssr@3.10.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@react-aria/utils@3.34.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@react-spectrum/provider@3.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-aria-components@1.20.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-aria@3.51.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(tailwindcss@4.3.3)
@@ -378,8 +378,8 @@ packages:
     resolution: {integrity: sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg==}
     engines: {node: '>=6.9.0'}
 
-  '@bernardsapida/web-ui@1.0.0':
-    resolution: {integrity: sha512-fKhpykh4jBlzNHCpIA5XGwrXjH/dhsamWX31/Kq+yXY9w9dpnKqJI2JzHYZaYO6J0mNqdrrcTpcUgaT55/21dw==, tarball: https://npm.pkg.github.com/download/@bernardsapida/web-ui/1.0.0/73bc5a6a11f963554c13dc6807b38cb5f51e7a37}
+  '@bernardsapida/web-ui@1.1.0':
+    resolution: {integrity: sha512-0/O7zKKtKGH7SDK8mnGzUxnCpLVuEic/wPLOYTyiTTBR6gfSNsskHSgMnoIh6+Q9b7/VIV28HRwpQJAWy/YYdA==, tarball: https://npm.pkg.github.com/download/@bernardsapida/web-ui/1.1.0/990de3c8e583584fae6a80fb52925c4fa490b768}
     hasBin: true
     peerDependencies:
       '@heroui/react': ^3.2.4
@@ -7433,7 +7433,7 @@ snapshots:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
 
-  '@bernardsapida/web-ui@1.0.0(63592bfd0b095e6ace5e52e484b06f43)':
+  '@bernardsapida/web-ui@1.1.0(086079f4ce45e3923d8e7fb31e9483ec)':
     dependencies:
       '@heroui/react': 3.2.4(@react-aria/i18n@3.13.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@react-aria/ssr@3.10.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@react-aria/utils@3.34.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@react-spectrum/provider@3.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-aria-components@1.20.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-aria@3.51.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(tailwindcss@4.3.3)
       '@heroui/styles': 3.2.4(tailwind-merge@3.6.0)(tailwindcss@4.3.3)
@@ -7463,6 +7463,11 @@ snapshots:
       tailwind-merge: 3.6.0
       tailwindcss: 4.3.3
       zod: 4.4.3
+      zustand: 5.0.14(@types/react@19.2.18)(react@19.2.8)(use-sync-external-store@1.6.0(react@19.2.8))
+    transitivePeerDependencies:
+      - '@types/react'
+      - immer
+      - use-sync-external-store
 
   '@better-auth/core@1.6.27(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@opentelemetry/api@1.9.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.8)(kysely@0.29.5)(nanostores@1.4.2)':
     dependencies:

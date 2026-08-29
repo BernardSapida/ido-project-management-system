@@ -822,7 +822,7 @@ export const GENERATED_PALETTES: Readonly<Record<PaletteName, GeneratedPalette>>
 	},
 	"uber": {
 		"accentHue": 262,
-		"baseTint": 0,
+		"baseTint": 0.01,
 		"dark": {
 			"measured": [
 				{
@@ -860,36 +860,36 @@ export const GENERATED_PALETTES: Readonly<Record<PaletteName, GeneratedPalette>>
 				},
 				{
 					"background": "--brand-primary",
-					"backgroundHex": "#88b2fd",
+					"backgroundHex": "#87b1fd",
 					"bar": 7,
 					"foreground": "--brand-primary-foreground",
 					"foregroundHex": "#111111",
 					"id": "brand-solid",
 					"kind": "text",
 					"passes": true,
-					"ratio": 8.84
+					"ratio": 8.75
 				},
 				{
 					"background": "--background",
-					"backgroundHex": "#050505",
+					"backgroundHex": "#040609",
 					"bar": 7,
 					"foreground": "--gradient-brand-ink-from",
 					"foregroundHex": "#91b8fd",
 					"id": "wordmark-start",
 					"kind": "text",
 					"passes": true,
-					"ratio": 10.16
+					"ratio": 10.12
 				},
 				{
 					"background": "--background",
-					"backgroundHex": "#050505",
+					"backgroundHex": "#040609",
 					"bar": 7,
 					"foreground": "--gradient-brand-ink-to",
 					"foregroundHex": "#9b8bfc",
 					"id": "wordmark-end",
 					"kind": "text",
 					"passes": true,
-					"ratio": 7.27
+					"ratio": 7.23
 				},
 				{
 					"background": "--chip-accent-soft",
@@ -918,11 +918,11 @@ export const GENERATED_PALETTES: Readonly<Record<PaletteName, GeneratedPalette>>
 					"backgroundHex": "#1c2433",
 					"bar": 7,
 					"foreground": "--foreground",
-					"foregroundHex": "#eeeeee",
+					"foregroundHex": "#eceef3",
 					"id": "brand-muted",
 					"kind": "text",
 					"passes": true,
-					"ratio": 13.41
+					"ratio": 13.4
 				},
 				{
 					"background": "--brand-surface",
@@ -937,58 +937,58 @@ export const GENERATED_PALETTES: Readonly<Record<PaletteName, GeneratedPalette>>
 				},
 				{
 					"background": "--background",
-					"backgroundHex": "#050505",
+					"backgroundHex": "#040609",
 					"bar": 3,
 					"foreground": "--gradient-brand-via",
 					"foregroundHex": "#5e96fc",
 					"id": "brand-fill-on-page",
 					"kind": "non-text",
 					"passes": true,
-					"ratio": 7.03
+					"ratio": 6.99
 				},
 				{
 					"background": "--surface",
-					"backgroundHex": "#171717",
+					"backgroundHex": "#14181d",
 					"bar": 7,
 					"foreground": "--surface-foreground",
-					"foregroundHex": "#eeeeee",
+					"foregroundHex": "#eceef3",
 					"id": "copy-on-card",
 					"kind": "text",
 					"passes": true,
-					"ratio": 15.45
+					"ratio": 15.35
 				},
 				{
 					"background": "--background",
-					"backgroundHex": "#050505",
+					"backgroundHex": "#040609",
 					"bar": 3,
 					"foreground": "--brand-secondary",
 					"foregroundHex": "#223251",
 					"id": "secondary-fill-on-page",
 					"kind": "non-text",
 					"passes": false,
-					"ratio": 1.59
+					"ratio": 1.58
 				},
 				{
 					"background": "--background",
-					"backgroundHex": "#050505",
+					"backgroundHex": "#040609",
 					"bar": 3,
 					"foreground": "--brand-primary",
-					"foregroundHex": "#88b2fd",
+					"foregroundHex": "#87b1fd",
 					"id": "control-on-page",
 					"kind": "non-text",
 					"passes": true,
-					"ratio": 9.54
+					"ratio": 9.4
 				},
 				{
 					"background": "--surface",
-					"backgroundHex": "#171717",
+					"backgroundHex": "#14181d",
 					"bar": 3,
 					"foreground": "--brand-primary",
-					"foregroundHex": "#88b2fd",
+					"foregroundHex": "#87b1fd",
 					"id": "control-on-card",
 					"kind": "non-text",
 					"passes": true,
-					"ratio": 8.39
+					"ratio": 8.26
 				},
 				{
 					"background": "--rail-accent-to",
@@ -1004,12 +1004,12 @@ export const GENERATED_PALETTES: Readonly<Record<PaletteName, GeneratedPalette>>
 			],
 			"tokens": {
 				"--background": {
-					"hex": "#050505",
-					"oklch": "oklch(0.1186 0 0)"
+					"hex": "#040609",
+					"oklch": "oklch(0.1186 0.01 262)"
 				},
 				"--border": {
-					"hex": "#333333",
-					"oklch": "oklch(0.32 0 0)"
+					"hex": "#2f333b",
+					"oklch": "oklch(0.32 0.015 262)"
 				},
 				"--brand-accent": {
 					"hex": "#235698",
@@ -1028,8 +1028,8 @@ export const GENERATED_PALETTES: Readonly<Record<PaletteName, GeneratedPalette>>
 					"oklch": "oklch(0.355 0.07 254)"
 				},
 				"--brand-primary": {
-					"hex": "#88b2fd",
-					"oklch": "oklch(0.762 0.1179 261.53)"
+					"hex": "#87b1fd",
+					"oklch": "oklch(0.76 0.119 261.53)"
 				},
 				"--brand-primary-foreground": {
 					"hex": "#111111",
@@ -1052,32 +1052,32 @@ export const GENERATED_PALETTES: Readonly<Record<PaletteName, GeneratedPalette>>
 					"oklch": "oklch(0.798 0.0982 266)"
 				},
 				"--default": {
-					"hex": "#333333",
-					"oklch": "oklch(0.32 0 0)"
+					"hex": "#2f333b",
+					"oklch": "oklch(0.32 0.015 262)"
 				},
 				"--field-background": {
-					"hex": "#0f0f0f",
-					"oklch": "oklch(0.17 0 0)"
+					"hex": "#0d0f14",
+					"oklch": "oklch(0.17 0.011 262)"
 				},
 				"--field-border": {
-					"hex": "#424242",
-					"oklch": "oklch(0.38 0 0)"
+					"hex": "#3e434b",
+					"oklch": "oklch(0.38 0.015 262)"
 				},
 				"--foreground": {
-					"hex": "#eeeeee",
-					"oklch": "oklch(0.95 0 0)"
+					"hex": "#eceef3",
+					"oklch": "oklch(0.95 0.006 262)"
 				},
 				"--glass-opaque": {
-					"hex": "#1d1d1d",
-					"oklch": "oklch(0.23 0 0)"
+					"hex": "#191d24",
+					"oklch": "oklch(0.23 0.014 262)"
 				},
 				"--glass-opaque-strong": {
-					"hex": "#222222",
-					"oklch": "oklch(0.25 0 0)"
+					"hex": "#1e2229",
+					"oklch": "oklch(0.25 0.015 262)"
 				},
 				"--glass-tint": {
-					"hex": "#242424",
-					"oklch": "oklch(0.26 0 0)"
+					"hex": "#20242b",
+					"oklch": "oklch(0.26 0.015 262)"
 				},
 				"--gradient-brand-foreground": {
 					"hex": "#010101",
@@ -1108,36 +1108,36 @@ export const GENERATED_PALETTES: Readonly<Record<PaletteName, GeneratedPalette>>
 					"oklch": "oklch(0.6822 0.1624 261.53)"
 				},
 				"--muted": {
-					"hex": "#a4a4a4",
-					"oklch": "oklch(0.72 0 0)"
+					"hex": "#9fa5ae",
+					"oklch": "oklch(0.72 0.015 262)"
 				},
 				"--overlay": {
-					"hex": "#1d1d1d",
-					"oklch": "oklch(0.23 0 0)"
+					"hex": "#191d24",
+					"oklch": "oklch(0.23 0.014 262)"
 				},
 				"--overlay-foreground": {
-					"hex": "#eeeeee",
-					"oklch": "oklch(0.95 0 0)"
+					"hex": "#eceef3",
+					"oklch": "oklch(0.95 0.006 262)"
 				},
 				"--separator": {
-					"hex": "#292929",
-					"oklch": "oklch(0.28 0 0)"
+					"hex": "#252930",
+					"oklch": "oklch(0.28 0.015 262)"
 				},
 				"--surface": {
-					"hex": "#171717",
-					"oklch": "oklch(0.2068 0 0)"
+					"hex": "#14181d",
+					"oklch": "oklch(0.2068 0.0125 262)"
 				},
 				"--surface-foreground": {
-					"hex": "#eeeeee",
-					"oklch": "oklch(0.95 0 0)"
+					"hex": "#eceef3",
+					"oklch": "oklch(0.95 0.006 262)"
 				},
 				"--surface-secondary": {
-					"hex": "#242424",
-					"oklch": "oklch(0.26 0 0)"
+					"hex": "#20242b",
+					"oklch": "oklch(0.26 0.014 262)"
 				},
 				"--surface-tertiary": {
-					"hex": "#383838",
-					"oklch": "oklch(0.34 0 0)"
+					"hex": "#343840",
+					"oklch": "oklch(0.34 0.015 262)"
 				},
 				"--brand-100": {
 					"hex": "#d5e3fc",
@@ -1335,14 +1335,14 @@ export const GENERATED_PALETTES: Readonly<Record<PaletteName, GeneratedPalette>>
 				},
 				{
 					"background": "--surface",
-					"backgroundHex": "#ffffff",
+					"backgroundHex": "#f7f8fa",
 					"bar": 7,
 					"foreground": "--surface-foreground",
 					"foregroundHex": "#111111",
 					"id": "copy-on-card",
 					"kind": "text",
 					"passes": true,
-					"ratio": 18.88
+					"ratio": 17.77
 				},
 				{
 					"background": "--background",
@@ -1368,14 +1368,14 @@ export const GENERATED_PALETTES: Readonly<Record<PaletteName, GeneratedPalette>>
 				},
 				{
 					"background": "--surface",
-					"backgroundHex": "#ffffff",
+					"backgroundHex": "#f7f8fa",
 					"bar": 3,
 					"foreground": "--brand-primary",
 					"foregroundHex": "#0549c0",
 					"id": "control-on-card",
 					"kind": "non-text",
 					"passes": true,
-					"ratio": 7.71
+					"ratio": 7.26
 				},
 				{
 					"background": "--rail-accent-to",
@@ -1395,8 +1395,8 @@ export const GENERATED_PALETTES: Readonly<Record<PaletteName, GeneratedPalette>>
 					"oklch": "oklch(1 0 0)"
 				},
 				"--border": {
-					"hex": "#dedede",
-					"oklch": "oklch(0.9 0 0)"
+					"hex": "#dbdee3",
+					"oklch": "oklch(0.9 0.0075 262)"
 				},
 				"--brand-accent": {
 					"hex": "#afd0fe",
@@ -1439,8 +1439,8 @@ export const GENERATED_PALETTES: Readonly<Record<PaletteName, GeneratedPalette>>
 					"oklch": "oklch(0.434 0.17 266)"
 				},
 				"--default": {
-					"hex": "#ebebeb",
-					"oklch": "oklch(0.94 0 0)"
+					"hex": "#eaebee",
+					"oklch": "oklch(0.94 0.004 262)"
 				},
 				"--field-background": {
 					"hex": "#ffffff",
@@ -1451,16 +1451,16 @@ export const GENERATED_PALETTES: Readonly<Record<PaletteName, GeneratedPalette>>
 					"oklch": "oklch(0.1776 0 0)"
 				},
 				"--glass-opaque": {
-					"hex": "#ffffff",
-					"oklch": "oklch(1 0 0)"
+					"hex": "#f7f8fa",
+					"oklch": "oklch(0.9789 0.0029 264.54)"
 				},
 				"--glass-opaque-strong": {
-					"hex": "#ffffff",
-					"oklch": "oklch(1 0 0)"
+					"hex": "#f7f8fa",
+					"oklch": "oklch(0.9789 0.0029 264.54)"
 				},
 				"--glass-tint": {
-					"hex": "#ffffff",
-					"oklch": "oklch(1 0 0)"
+					"hex": "#f7f8fa",
+					"oklch": "oklch(0.9789 0.0029 264.54)"
 				},
 				"--gradient-brand-foreground": {
 					"hex": "#ffffff",
@@ -1491,8 +1491,8 @@ export const GENERATED_PALETTES: Readonly<Record<PaletteName, GeneratedPalette>>
 					"oklch": "oklch(0.4522 0.1962 261.53)"
 				},
 				"--muted": {
-					"hex": "#636363",
-					"oklch": "oklch(0.5 0 0)"
+					"hex": "#5f636c",
+					"oklch": "oklch(0.5 0.015 262)"
 				},
 				"--overlay": {
 					"hex": "#ffffff",
@@ -1503,24 +1503,24 @@ export const GENERATED_PALETTES: Readonly<Record<PaletteName, GeneratedPalette>>
 					"oklch": "oklch(0.1776 0 0)"
 				},
 				"--separator": {
-					"hex": "#e4e4e4",
-					"oklch": "oklch(0.92 0 0)"
+					"hex": "#e2e5ea",
+					"oklch": "oklch(0.92 0.0075 262)"
 				},
 				"--surface": {
-					"hex": "#ffffff",
-					"oklch": "oklch(1 0 0)"
+					"hex": "#f7f8fa",
+					"oklch": "oklch(0.9789 0.0029 264.54)"
 				},
 				"--surface-foreground": {
 					"hex": "#111111",
 					"oklch": "oklch(0.1776 0 0)"
 				},
 				"--surface-secondary": {
-					"hex": "#f0f0f0",
-					"oklch": "oklch(0.955 0 0)"
+					"hex": "#eff0f3",
+					"oklch": "oklch(0.955 0.004 262)"
 				},
 				"--surface-tertiary": {
-					"hex": "#ebebeb",
-					"oklch": "oklch(0.94 0 0)"
+					"hex": "#eaebee",
+					"oklch": "oklch(0.94 0.004 262)"
 				},
 				"--brand-100": {
 					"hex": "#d5e3fc",

@@ -23,6 +23,7 @@ import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as ApiPostsRouteImport } from './routes/api/posts'
+import { Route as DevThemeRouteImport } from './routes/dev/theme'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin/index'
 import { Route as AuthenticatedRequestsIndexRouteImport } from './routes/_authenticated/requests/index'
 import { Route as AuthenticatedRequestsNewRouteImport } from './routes/_authenticated/requests/new'
@@ -117,6 +118,11 @@ const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
 const ApiPostsRoute = ApiPostsRouteImport.update({
   id: '/api/posts',
   path: '/api/posts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevThemeRoute = DevThemeRouteImport.update({
+  id: '/dev/theme',
+  path: '/dev/theme',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
@@ -279,6 +285,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/api/posts': typeof ApiPostsRoute
+  '/dev/theme': typeof DevThemeRoute
   '/requests/new': typeof AuthenticatedRequestsNewRoute
   '/api/app/config': typeof ApiAppConfigRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -319,6 +326,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/api/posts': typeof ApiPostsRoute
+  '/dev/theme': typeof DevThemeRoute
   '/requests/new': typeof AuthenticatedRequestsNewRoute
   '/api/app/config': typeof ApiAppConfigRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -362,6 +370,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/api/posts': typeof ApiPostsRoute
+  '/dev/theme': typeof DevThemeRoute
   '/_authenticated/requests/new': typeof AuthenticatedRequestsNewRoute
   '/api/app/config': typeof ApiAppConfigRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -405,6 +414,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/profile'
     | '/api/posts'
+    | '/dev/theme'
     | '/requests/new'
     | '/api/app/config'
     | '/api/auth/$'
@@ -445,6 +455,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/profile'
     | '/api/posts'
+    | '/dev/theme'
     | '/requests/new'
     | '/api/app/config'
     | '/api/auth/$'
@@ -487,6 +498,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/profile'
     | '/api/posts'
+    | '/dev/theme'
     | '/_authenticated/requests/new'
     | '/api/app/config'
     | '/api/auth/$'
@@ -527,6 +539,7 @@ export interface RootRouteChildren {
   UnauthorizedRoute: typeof UnauthorizedRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   ApiPostsRoute: typeof ApiPostsRoute
+  DevThemeRoute: typeof DevThemeRoute
   ApiAppConfigRoute: typeof ApiAppConfigRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiAuthChangePasswordRoute: typeof ApiAuthChangePasswordRoute
@@ -637,6 +650,13 @@ declare module '@tanstack/react-router' {
       path: '/api/posts'
       fullPath: '/api/posts'
       preLoaderRoute: typeof ApiPostsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev/theme': {
+      id: '/dev/theme'
+      path: '/dev/theme'
+      fullPath: '/dev/theme'
+      preLoaderRoute: typeof DevThemeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/admin/': {
@@ -902,6 +922,7 @@ const rootRouteChildren: RootRouteChildren = {
   UnauthorizedRoute: UnauthorizedRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   ApiPostsRoute: ApiPostsRoute,
+  DevThemeRoute: DevThemeRoute,
   ApiAppConfigRoute: ApiAppConfigRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiAuthChangePasswordRoute: ApiAuthChangePasswordRoute,

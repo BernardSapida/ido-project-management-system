@@ -13,9 +13,13 @@
  * shipped. Remove "--color-scheme" from FLAGS and both cases below fail.
  */
 
+import { createThemeDraftKit } from "@bernardsapida/web-ui/theme-customizer";
 import { describe, expect, it } from "vitest";
-import { applyPreset, committedDraft, configOutput } from "@/features/theme-customizer/theme-draft";
+import { PALETTE_PRESETS } from "@/config/theme/presets";
+import { THEME } from "@/config/theme.config";
 import { FLAGS } from "./vite-plugin-apply-theme";
+
+const { applyPreset, committedDraft, configOutput } = createThemeDraftKit({ current: THEME, presets: PALETTE_PRESETS });
 
 const allowed = new Set<string>(FLAGS);
 

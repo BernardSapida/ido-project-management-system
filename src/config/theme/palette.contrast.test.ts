@@ -32,14 +32,26 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+	AA_TEXT,
+	AAA_TEXT,
+	collisionFor,
+	contrastOfRgb,
+	isInGamut,
+	measurePairings,
+	NON_TEXT,
+	oklchToHex,
+	oklchToRgb,
+	PAIRINGS,
+	parseOklch,
+	type Rgb,
+	reportRatio,
+	SEMANTIC_HUES,
+	SURFACE_NAMES,
+	type SurfaceStrategy,
+} from "@bernardsapida/web-ui/theme-engine";
 import { describe, expect, it } from "vitest";
-import { contrastOfRgb, isInGamut, oklchToHex, oklchToRgb, parseOklch, type Rgb, reportRatio } from "./oklch";
-import { SURFACE_NAMES } from "./options";
-import { measurePairings, PAIRINGS } from "./pairings";
-import type { SurfaceStrategy } from "./palette.build";
-import { AA_TEXT, AAA_TEXT, NON_TEXT } from "./palette.build";
 import { PALETTE_PRESETS, type PalettePreset } from "./presets";
-import { collisionFor, SEMANTIC_HUES } from "./purposes";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const srcRoot = resolve(here, "../..");
