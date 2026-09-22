@@ -1,13 +1,13 @@
 /**
  * This project's palette presets: the seven that ship with
- * `@bernardsapida/web-ui`, plus the ones added here.
+ * `@/components/web-ui`, plus the ones added here.
  *
  * The built-ins travel with the package. A palette added below is this
  * project's own. Adding one is a line in `PROJECT_PRESETS` plus
  * `npx tsx scripts/generate-palettes.ts`.
  */
 
-import { BUILTIN_PRESETS, buildPresetIndex, type PalettePreset } from "@bernardsapida/web-ui/theme-engine";
+import { BUILTIN_PRESETS, buildPresetIndex, type PalettePreset } from "@/components/web-ui/theme-engine";
 
 export type { PalettePreset };
 

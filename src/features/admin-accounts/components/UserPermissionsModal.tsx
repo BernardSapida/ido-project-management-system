@@ -1,4 +1,4 @@
-import { AppButton, AppChip, AppModal, AppSwitch } from "@bernardsapida/web-ui";
+import { AppButton, AppChip, AppModal, AppSwitch } from "@/components/web-ui";
 import { Skeleton, Typography } from "@heroui/react";
 import { RotateCcw, ShieldCheck, UserCog } from "lucide-react";
 import { AppQueryError } from "@/components/project";

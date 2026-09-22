@@ -1,4 +1,4 @@
-import { AppCard, AppChip, AppRatingSummary, AppReadOnlyField, formatAbsolute, toDate } from "@bernardsapida/web-ui";
+import { AppCard, AppChip, AppRatingSummary, AppReadOnlyField, formatAbsolute, toDate } from "@/components/web-ui";
 import { Typography } from "@heroui/react";
 import { statusChip } from "../lib/csm-options";
 import type { AdminCsmRow } from "../types";

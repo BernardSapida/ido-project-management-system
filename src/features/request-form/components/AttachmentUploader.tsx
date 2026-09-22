@@ -1,4 +1,4 @@
-import { AppFileUpload, AppList, type UploadedFile } from "@bernardsapida/web-ui";
+import { AppFileUpload, AppList, type UploadedFile } from "@/components/web-ui";
 import { Typography } from "@heroui/react";
 import { Paperclip } from "lucide-react";
 import type { FormAttachment } from "@/features/request-form/validations/schema/request.schema";

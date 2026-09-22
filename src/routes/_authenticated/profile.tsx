@@ -1,4 +1,4 @@
-import { AppPageHeader } from "@bernardsapida/web-ui";
+import { AppPageHeader } from "@/components/web-ui";
 import { Card, Separator, Typography } from "@heroui/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";

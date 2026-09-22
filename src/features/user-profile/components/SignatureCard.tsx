@@ -1,4 +1,4 @@
-import { AppButton } from "@bernardsapida/web-ui";
+import { AppButton } from "@/components/web-ui";
 import { Card, Typography } from "@heroui/react";
 import { useState } from "react";
 import { SignatureUploader } from "@/features/user-profile/components/SignatureUploader";

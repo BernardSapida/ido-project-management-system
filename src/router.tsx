@@ -1,4 +1,4 @@
-import { AppNotFound } from "@bernardsapida/web-ui";
+import { AppNotFound } from "@/components/web-ui";
 import { createRouter as createTanStackRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import type { ReactNode } from "react";

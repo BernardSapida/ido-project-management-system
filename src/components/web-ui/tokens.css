@@ -1,0 +1,218 @@
+/* ---------------------------------------------------------------------------
+ * Semantic tokens - the package's half of the theme.
+ * These map Tailwind's colour/radius/font names onto the raw custom properties
+ * the PROJECT defines. They travel with the components because a component using
+ * `bg-surface` needs the mapping; it does not need to know what --surface is.
+ * 
+ * The raw values live in the project: styles/brand.css and the generated
+ * styles/palettes.css. Shipping values here would reset a project's branding on
+ * every upgrade.
+ * ------------------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------------------
+ * Tailwind theme tokens
+ * Utility-facing names (bg-primary, text-muted-foreground, bg-brand-pale/50, …).
+ * Every one of these resolves to a semantic variable - declared in :root below,
+ * or generated per palette into styles/palettes.css - and never to a literal
+ * colour. That indirection is what lets one attribute on <html> re-point the
+ * whole app without a single component file changing.
+ * ------------------------------------------------------------------------- */
+
+@theme {
+  /* One typeface, everywhere. Every font token resolves to the same --font
+     stack, including the ones Tailwind ships by default - so `font-sans`,
+     `font-serif` and `font-display` cannot reintroduce a second face, whether
+     it comes from ported markup or from inside a HeroUI component.
+     `font-mono` is deliberately left alone: it is used for IDs, generated
+     credentials and machine payloads, where a disambiguating face is
+     functional.
+
+     WHICH stack --font resolves to is chosen by `data-font` on <html>, written
+     from src/config/theme.config.ts - see the `Font stacks` block below. The
+     options are the one face this template self-hosts and stacks the OS already
+     has, and nothing else: a face with no file behind it previews as a silent
+     fallback, which is a preview that lies. */
+  --font: var(--font-family, "Inter", ui-sans-serif, system-ui, sans-serif);
+  --font-sans: var(--font);
+  --font-serif: var(--font);
+  --font-display: var(--font);
+
+  /* Radius scale. --radius is the UI radius - cards, menus, dialogs, tiles - and
+     defaults to 1rem, which is what makes a 40px tile at rounded-2xl (24px) read
+     as very nearly circular.
+
+     Form controls do NOT read this scale. They read HeroUI's --radius-field,
+     which resolves from --field-radius, so an input can be squarer than the card
+     it sits in without either dragging the other. Both are set from
+     src/config/theme.config.ts.
+
+     MULTIPLIERS, not offsets, and that is the difference between a radius
+     control that works and one that only appears to. These were `calc(--radius
+     + 12px)` and friends, which means the steps never reach zero however small
+     the base gets: at "None" a card was still 12px, a tile 8px and an input
+     4px, so every surface on the page stayed visibly rounded while the control
+     said None. Scaling instead of adding makes 0 mean 0 all the way down, which
+     is what HeroUI's own scale does (`calc(var(--radius) * 3)` and so on) and
+     why theirs squares off completely.
+
+     The ratios below are OUR ratios rather than HeroUI's, chosen so the shipped
+     look does not move: at the 1rem default they reproduce the previous values
+     exactly - 12, 14, 16, 20, 24, 28px. The change is only visible away from
+     the default, which is the whole point of making it a choice. */
+  --radius-sm: calc(var(--radius) * 0.75);
+  --radius-md: calc(var(--radius) * 0.875);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.25);
+  --radius-2xl: calc(var(--radius) * 1.5);
+  --radius-3xl: calc(var(--radius) * 1.75);
+
+  /* Brand palette */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--surface-foreground);
+  --color-primary: var(--brand-primary);
+  --color-primary-foreground: var(--brand-primary-foreground);
+  --color-secondary: var(--brand-secondary);
+  --color-secondary-foreground: var(--brand-secondary-foreground);
+  /* `--color-muted` backs Tailwind's `text-muted`, which is what HeroUI uses for
+     descriptions, placeholders and captions - so it must be the readable muted
+     TEXT colour, not a surface tint. Pointing it at the pale fill made every
+     HeroUI description invisible on a light background. The fill keeps its own
+     name below. */
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted);
+  --color-muted-surface: var(--brand-muted);
+  --color-accent-soft: var(--brand-accent);
+  --color-destructive: var(--danger);
+  --color-border: var(--border);
+  --color-brand-pale: var(--brand-pale);
+  /* `--color-brand-deep` and `--color-brand-bright` were here, and their removal
+     is the point rather than a tidy-up: THE BRAND IS ONE COLOUR.
+
+     They were two more steps of the brand ramp, and between them they had four
+     call sites - three decorative blobs in AppBackdrop and a swatch row showing
+     the tokens themselves. Nothing derived from them: the gradient stops are
+     built from the fill triple in the generator, never from these. So the ramp
+     existed to be a ramp, and the only thing it bought was three brand hues on a
+     background nobody is meant to look at, each needing to stay in agreement with
+     the other two on every palette and in both themes.
+
+     What is left is `--brand-primary` for the brand as a colour, `--brand-pale`
+     and the `brand-surface` pair for the brand as a ground, and the gradients for
+     the brand as a sweep. A component reaching for "a different brand colour"
+     should reach for one of those, not for a new step.
+
+     `bg-brand-deep` and `bg-brand-bright` no longer exist, and a class that no
+     longer exists fails SILENTLY in Tailwind - no error, the element simply loses
+     its background. Grep for both before upgrading a project across this. */
+  /* The `brand-surface` pair, addressable as two SEPARATE colours as well as
+     through the fused `brand-surface` / `brand-surface-inverse` utilities.
+
+     The utilities set `background` and `color` together, which is right when one
+     element is the whole surface - they are what stops a caller pairing a fill
+     with a foreground that was never solved against it. But a surface with
+     INTERACTIVE children needs the same two values on the children too: a nav
+     item sitting on the inverse pair has to be able to take the pale colour as a
+     fill for its active state, which a utility that always sets both cannot
+     express. Naming them here gives `bg-brand-surface`, `text-brand-surface`,
+     `bg-brand-surface-foreground` and `text-brand-surface-foreground`, plus the
+     `/nn` opacity modifier Tailwind derives from a named colour.
+
+     Using them means taking on the obligation the utilities discharge for you:
+     these two are solved against EACH OTHER (10.22:1) and against nothing else.
+     Either of them over any other ground is unmeasured. */
+  --color-brand-surface: var(--brand-surface);
+  --color-brand-surface-foreground: var(--brand-surface-foreground);
+  /* THE BRAND ITSELF, addressable as a fill and its paired ink.
+     
+     `--gradient-brand-via` is the middle stop of the brand ramp, and on a
+     designer-supplied palette all three stops are the one hex - so this token IS
+     the colour that was handed over, exactly, in whichever theme the palette is
+     anchored to. The other theme carries its solved sibling.
+     
+     Named here because a component that wants to BE the brand needs the value,
+     not the gradient: the `gradient-brand` utility paints a `linear-gradient()`
+     and sets its own `color`, which is right for a control and wrong for a
+     surface whose children need to address the two halves separately - the same
+     reason `brand-surface` grew a named pair above.
+     
+     Reach for these when a component should read as the brand. Do NOT reach for
+     `--brand-surface-foreground`: that is the ink of the pale tint pair, solved
+     at its own hue, and it is a different colour from the brand - measured on
+     revolve, #02302a against a declared #0c3523. */
+  --color-brand-fill: var(--gradient-brand-via);
+  --color-brand-fill-foreground: var(--gradient-brand-foreground);
+  /* Same fallback as the rules in ui.css, for the same reason: the generator
+     that emits this token ships with the PROJECT, not with this package. */
+  --color-brand-fill-hover: var(--gradient-brand-hover, var(--gradient-brand-to));
+  --color-rating-star: var(--rating-star);
+
+  /* Older aliases, re-pointed at the brand palette so any component still using
+     them shifts with the rest of the app instead of staying on its old hue.
+
+     `app-secondary` and `app-accent` now resolve to the same colour as
+     `app-brand`, which reads like a mistake and is not one. They are kept, rather
+     than deleted with the two tokens they used to point at, because deleting them
+     is a SECOND breaking change that buys nothing: the goal was for components to
+     use `--brand-primary`, and re-pointing achieves it while leaving
+     `bg-app-accent` and `bg-app-secondary` working in projects already built on
+     this package. They are aliases; three names for one colour is what an alias
+     is. Delete `app-secondary` and `app-accent` in a later major once nothing
+     reads them.
+
+     `app-brand` is NOT on that list any more. It has the ramp below hanging off
+     it, so the name is load-bearing rather than legacy: deleting it would take
+     eleven live steps with it. */
+  --color-app-base: var(--background);
+  --color-app-brand: var(--brand-primary);
+  --color-app-secondary: var(--brand-primary);
+  --color-app-accent: var(--brand-primary);
+
+  /* ---------------------------------------------------------------------
+   * The brand ramp - Tailwind's scale, on this palette's hue.
+   *
+   * `bg-app-brand-100`, `text-app-brand-700`, `border-app-brand-200`, and the
+   * `/nn` opacity modifier on every one of them. 500 is the brand itself,
+   * exactly - on a designer-supplied palette it is the hex that was handed
+   * over, so `bg-app-brand-500` and `bg-app-brand` paint the same pixel.
+   *
+   * TWO things about these are different from every other colour in this file,
+   * and both are deliberate:
+   *
+   * 1. THEY DO NOT INVERT BETWEEN THEMES. Everything else brand-coloured here
+   *    flips - deep under pale ink in light, pale under dark ink in dark -
+   *    because that is the only way to hold AAA in both. A numeric scale cannot
+   *    follow it: `50` means the lightest step, exactly as in stock Tailwind,
+   *    and a ramp that flipped would turn `text-app-brand-900` on
+   *    `bg-app-brand-50` into dark-on-dark the moment somebody toggled the
+   *    theme. They are emitted once, on the light block, and dark inherits them.
+   *    A dark-mode design reaches for `dark:bg-app-brand-950` itself.
+   *
+   * 2. THEY CARRY NO CONTRAST GUARANTEE. Every other token here is solved
+   *    against a named ground and measured in palette.contrast.test.ts. These
+   *    eleven are raw paint. What IS guaranteed is that the scale is ordered,
+   *    every step is in sRGB, and 500 is the brand - see the ramp block in that
+   *    same suite, and the pairing table in the Design tokens lab for the
+   *    combinations that were actually measured.
+   *
+   * So this is the escape hatch, not the default. A component that should read
+   * as the brand still uses `brand-fill`, `brand-surface` or `bg-primary`;
+   * those are solved for a ROLE. Reach for a step when a designer drew against
+   * a specific tint and nothing solved expresses it - and then you own the
+   * pairing, the same way `brand-surface` says above.
+   * ------------------------------------------------------------------- */
+  --color-app-brand-50: var(--brand-50);
+  --color-app-brand-100: var(--brand-100);
+  --color-app-brand-200: var(--brand-200);
+  --color-app-brand-300: var(--brand-300);
+  --color-app-brand-400: var(--brand-400);
+  --color-app-brand-500: var(--brand-500);
+  --color-app-brand-600: var(--brand-600);
+  --color-app-brand-700: var(--brand-700);
+  --color-app-brand-800: var(--brand-800);
+  --color-app-brand-900: var(--brand-900);
+  --color-app-brand-950: var(--brand-950);
+  --color-text-primary: var(--foreground);
+  --color-text-secondary: var(--muted);
+}

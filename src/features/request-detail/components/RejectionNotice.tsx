@@ -1,4 +1,4 @@
-import { AppAlert } from "@bernardsapida/web-ui";
+import { AppAlert } from "@/components/web-ui";
 import { Typography } from "@heroui/react";
 import { CalendarClock, type LucideIcon, Undo2, XCircle } from "lucide-react";
 import { type NegativeKind, negativeKindOf } from "@/lib/status-maps/audit-action";

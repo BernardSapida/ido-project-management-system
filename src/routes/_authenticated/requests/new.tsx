@@ -1,4 +1,4 @@
-import { AppPageHeader } from "@bernardsapida/web-ui";
+import { AppPageHeader } from "@/components/web-ui";
 import { createFileRoute } from "@tanstack/react-router";
 import { seo } from "@/config/seo.config";
 import { assertAuthenticatedRoleFn } from "@/features/auth/functions/auth.functions";

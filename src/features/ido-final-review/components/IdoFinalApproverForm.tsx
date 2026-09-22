@@ -1,4 +1,4 @@
-import { AppCard, AppInputGroup, AppReadOnlyField } from "@bernardsapida/web-ui";
+import { AppCard, AppInputGroup, AppReadOnlyField } from "@/components/web-ui";
 import { Typography } from "@heroui/react";
 import type { Control } from "react-hook-form";
 import type { IdoFinalApproveFormValues } from "@/features/ido-final-review/validations/schema/ido-final-approver.schema";

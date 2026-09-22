@@ -1,4 +1,4 @@
-import { AppAlert, AppPageHeader } from "@bernardsapida/web-ui";
+import { AppAlert, AppPageHeader } from "@/components/web-ui";
 import { Typography } from "@heroui/react";
 import { createFileRoute } from "@tanstack/react-router";
 import { ImageOff } from "lucide-react";

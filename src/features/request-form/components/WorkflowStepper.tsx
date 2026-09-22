@@ -1,4 +1,4 @@
-import { AppStepper } from "@bernardsapida/web-ui";
+import { AppStepper } from "@/components/web-ui";
 import { ClipboardCheck, FileText, Gavel, Search, Send, ShieldCheck } from "lucide-react";
 
 interface WorkflowStepperProps {

@@ -1,4 +1,4 @@
-import { AppButton, AppPageHeader } from "@bernardsapida/web-ui";
+import { AppButton, AppPageHeader } from "@/components/web-ui";
 import { Skeleton } from "@heroui/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Undo2 } from "lucide-react";

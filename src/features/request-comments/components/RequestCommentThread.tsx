@@ -1,5 +1,5 @@
-import type { CommentItem, CommentPerson } from "@bernardsapida/web-ui";
-import { AppCommentSection } from "@bernardsapida/web-ui";
+import type { CommentItem, CommentPerson } from "@/components/web-ui";
+import { AppCommentSection } from "@/components/web-ui";
 import { Typography } from "@heroui/react";
 import { Lock } from "lucide-react";
 import { AppQueryError } from "@/components/project";

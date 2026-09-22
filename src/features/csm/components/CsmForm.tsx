@@ -1,4 +1,4 @@
-import { AppButton, AppCard, AppStarRating, AppTextArea } from "@bernardsapida/web-ui";
+import { AppButton, AppCard, AppStarRating, AppTextArea } from "@/components/web-ui";
 import { Typography } from "@heroui/react";
 import { Send } from "lucide-react";
 import { type Control, useController } from "react-hook-form";

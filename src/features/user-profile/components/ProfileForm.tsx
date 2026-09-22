@@ -1,4 +1,4 @@
-import { AppButton, AppInputGroup, AppReadOnlyField, AppSelect } from "@bernardsapida/web-ui";
+import { AppButton, AppInputGroup, AppReadOnlyField, AppSelect } from "@/components/web-ui";
 import { Typography } from "@heroui/react";
 import { useMemo } from "react";
 import { POSITION_OPTIONS } from "@/features/request-form/lib/request-options";

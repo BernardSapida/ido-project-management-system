@@ -1,4 +1,4 @@
-import { AppCard, AppChip, AppPageHeader } from "@bernardsapida/web-ui";
+import { AppCard, AppChip, AppPageHeader } from "@/components/web-ui";
 import { createFileRoute } from "@tanstack/react-router";
 import { AppQueryError } from "@/components/project";
 import { seo } from "@/config/seo.config";

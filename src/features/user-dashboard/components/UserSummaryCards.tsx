@@ -1,4 +1,4 @@
-import { AppKpi, AppKpiSkeleton, cn, usePressFeedback } from "@bernardsapida/web-ui";
+import { AppKpi, AppKpiSkeleton, cn, usePressFeedback } from "@/components/web-ui";
 import { CheckCircle2, Clock, FileText, type LucideIcon, XCircle } from "lucide-react";
 import type { RequestSummary, StatusGroupKey } from "../types";
 

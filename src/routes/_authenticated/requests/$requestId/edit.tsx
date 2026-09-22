@@ -1,4 +1,4 @@
-import { AppAlert, AppPageHeader } from "@bernardsapida/web-ui";
+import { AppAlert, AppPageHeader } from "@/components/web-ui";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { TRPCClientError } from "@trpc/client";
 import { Lock, RotateCcw } from "lucide-react";

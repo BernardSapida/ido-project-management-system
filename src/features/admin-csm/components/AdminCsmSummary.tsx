@@ -1,4 +1,4 @@
-import { AppCard, AppKpi, AppKpiSkeleton, AppRatingSummary } from "@bernardsapida/web-ui";
+import { AppCard, AppKpi, AppKpiSkeleton, AppRatingSummary } from "@/components/web-ui";
 import { Skeleton, Typography } from "@heroui/react";
 import { Hourglass, MessageSquareQuote } from "lucide-react";
 import type { AdminCsmSummaryData } from "../types";

@@ -1,4 +1,4 @@
-import type { ChipTone } from "@bernardsapida/web-ui";
+import type { ChipTone } from "@/components/web-ui";
 import { ChevronDown, ChevronsUp, ChevronUp, type LucideIcon, Minus } from "lucide-react";
 
 /**

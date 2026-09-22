@@ -1,4 +1,4 @@
-import type { TimelineEntry } from "@bernardsapida/web-ui";
+import type { TimelineEntry } from "@/components/web-ui";
 
 /**
  * The fourteen things that can be written to an `AuditLog`, and what each one

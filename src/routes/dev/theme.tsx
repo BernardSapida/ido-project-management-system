@@ -1,5 +1,5 @@
-import { AppNotFound } from "@bernardsapida/web-ui";
-import { AppThemeCustomizer } from "@bernardsapida/web-ui/theme-customizer";
+import { AppNotFound } from "@/components/web-ui";
+import { AppThemeCustomizer } from "@/components/web-ui/theme-customizer";
 import { createFileRoute } from "@tanstack/react-router";
 import { GENERATED_PALETTES } from "@/config/theme/palettes.generated";
 import { PALETTE_PRESETS } from "@/config/theme/presets";

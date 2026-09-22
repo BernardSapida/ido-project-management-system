@@ -1,4 +1,4 @@
-import { AppAlert } from "@bernardsapida/web-ui";
+import { AppAlert } from "@/components/web-ui";
 import { useNavigate } from "@tanstack/react-router";
 import { ClipboardCheck } from "lucide-react";
 

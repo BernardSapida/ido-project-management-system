@@ -1,4 +1,4 @@
-import { AppAuthPageShell } from "@bernardsapida/web-ui";
+import { AppAuthPageShell } from "@/components/web-ui";
 import { createFileRoute } from "@tanstack/react-router";
 import { seo } from "@/config/seo.config";
 import { ForgotPasswordForm } from "@/features/auth/components/ForgotPasswordForm";

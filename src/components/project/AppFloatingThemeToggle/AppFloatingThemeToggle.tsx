@@ -5,7 +5,7 @@
 // A second disable in this folder means a component is being coupled, not bound.
 // eslint-disable-next-line no-restricted-imports
 
-import { AppThemeToggle } from "@bernardsapida/web-ui";
+import { AppThemeToggle } from "@/components/web-ui";
 import { LOCKED_SCHEME, useUIStore } from "@/store/ui.store";
 
 /**

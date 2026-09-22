@@ -1,4 +1,4 @@
-import { AppButton, AppDialog, AppTextArea } from "@bernardsapida/web-ui";
+import { AppButton, AppDialog, AppTextArea } from "@/components/web-ui";
 import { Card, Typography } from "@heroui/react";
 import { CalendarClock, type LucideIcon, Undo2, XCircle } from "lucide-react";
 import { useState } from "react";

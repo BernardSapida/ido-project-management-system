@@ -6,14 +6,14 @@
    Import order below IS the cascade order: palettes -> the package tokens ->
    this project brand values -> the package component CSS. */
 @import "./styles/palettes.css";
-@import "@bernardsapida/web-ui/tokens.css";
+@import "./components/web-ui/tokens.css";
 @import "./styles/brand.css";
-@import "@bernardsapida/web-ui/ui.css";
+@import "./components/web-ui/ui.css";
 
 /* Tailwind does not scan a dependency on its own. Every Component Lab class lives
    in that package, and without this line they produce no CSS at all - no error, no
    warning, just unstyled components. */
-@source "../node_modules/@bernardsapida/web-ui/dist";
+@source "./components/web-ui";
 
 /* Markdown is PROSE, not markup. Changesets writes a CHANGELOG into every package
  * on release and those entries quote class names, so a class merely MENTIONED in a

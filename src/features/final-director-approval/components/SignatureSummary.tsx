@@ -1,4 +1,4 @@
-import { AppCard, AppList, formatAbsolute, type ListItem, toDate } from "@bernardsapida/web-ui";
+import { AppCard, AppList, formatAbsolute, type ListItem, toDate } from "@/components/web-ui";
 import { Typography } from "@heroui/react";
 import { CheckCircle2, ClipboardCheck, Gavel, type LucideIcon, MinusCircle, Wallet } from "lucide-react";
 import { StampedSignature } from "@/features/request-detail/components/StampedSignature";

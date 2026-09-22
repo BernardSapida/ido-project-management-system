@@ -1,4 +1,4 @@
-import { AppAuthPageShell } from "@bernardsapida/web-ui";
+import { AppAuthPageShell } from "@/components/web-ui";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { seo } from "@/config/seo.config";

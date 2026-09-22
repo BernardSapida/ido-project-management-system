@@ -1,7 +1,7 @@
-import { AppErrorState, classifyError } from "@bernardsapida/web-ui";
+import { AppErrorState, classifyError } from "@/components/web-ui";
 
 /**
- * Compatibility wrapper for the `AppQueryError` that `@bernardsapida/web-ui`
+ * Compatibility wrapper for the `AppQueryError` that `@/components/web-ui`
  * removed in 1.0.0. It was a three-line component - `classifyError(error)` piped
  * into `<AppErrorState variant="section" />` - and this reproduces it exactly so
  * the ~18 call sites that used it did not each have to inline the same three

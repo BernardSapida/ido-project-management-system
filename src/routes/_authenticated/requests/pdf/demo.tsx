@@ -1,4 +1,4 @@
-import { AppButton, AppPageHeader, AppSelect, AppStepper } from "@bernardsapida/web-ui";
+import { AppButton, AppPageHeader, AppSelect, AppStepper } from "@/components/web-ui";
 import { Typography } from "@heroui/react";
 import { createFileRoute } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight } from "lucide-react";

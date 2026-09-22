@@ -1,4 +1,4 @@
-import { AppTimeline, type TimelineEntry } from "@bernardsapida/web-ui";
+import { AppTimeline, type TimelineEntry } from "@/components/web-ui";
 import { Typography } from "@heroui/react";
 import { auditActionLabel, auditActionTimelineType } from "@/lib/status-maps/audit-action";
 import { masterStatusMap } from "@/lib/status-maps/request-status";

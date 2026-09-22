@@ -6,7 +6,7 @@ import {
 	AppReadOnlyField,
 	AppSelect,
 	AppTextArea,
-} from "@bernardsapida/web-ui";
+} from "@/components/web-ui";
 import { Typography } from "@heroui/react";
 import { useBlocker, useRouter } from "@tanstack/react-router";
 import { FileText, Pencil, Save, Send, Star, TriangleAlert, X } from "lucide-react";

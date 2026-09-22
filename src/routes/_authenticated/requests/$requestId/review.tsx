@@ -1,4 +1,4 @@
-import { AppAlert, AppCard, AppChip, AppPageHeader } from "@bernardsapida/web-ui";
+import { AppAlert, AppCard, AppChip, AppPageHeader } from "@/components/web-ui";
 import { createFileRoute } from "@tanstack/react-router";
 import { Lock } from "lucide-react";
 import { AppQueryError } from "@/components/project";

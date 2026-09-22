@@ -1,4 +1,4 @@
-import { AppProfileBanner } from "@bernardsapida/web-ui";
+import { AppProfileBanner } from "@/components/web-ui";
 import { Skeleton } from "@heroui/react";
 import { getRoleLabel } from "@/config/navigation.config";
 import { positionLabel } from "@/features/request-form/lib/request-options";

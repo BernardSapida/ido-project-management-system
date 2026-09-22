@@ -1,4 +1,4 @@
-import { AppAlert, AppButton, AppFileUpload, type UploadedFile } from "@bernardsapida/web-ui";
+import { AppAlert, AppButton, AppFileUpload, type UploadedFile } from "@/components/web-ui";
 import { Typography } from "@heroui/react";
 import { PenLine, Trash2 } from "lucide-react";
 import { useState } from "react";

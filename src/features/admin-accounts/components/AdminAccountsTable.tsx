@@ -8,7 +8,7 @@ import {
 	type DataTableServer,
 	type DropdownSection,
 	type FilterDef,
-} from "@bernardsapida/web-ui";
+} from "@/components/web-ui";
 import { Button, Typography } from "@heroui/react";
 import { MoreHorizontal, ShieldCheck, ToggleLeft, UserCog } from "lucide-react";
 import {

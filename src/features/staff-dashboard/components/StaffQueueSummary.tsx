@@ -1,4 +1,4 @@
-import { AppKpi, AppKpiSkeleton, cn, usePressFeedback } from "@bernardsapida/web-ui";
+import { AppKpi, AppKpiSkeleton, cn, usePressFeedback } from "@/components/web-ui";
 import { Archive, Gavel, type LucideIcon, Search } from "lucide-react";
 import type { UserRole } from "@/utils/config";
 import type { StaffQueueCounts, StageKey } from "../types";

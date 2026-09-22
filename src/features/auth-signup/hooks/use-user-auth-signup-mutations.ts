@@ -1,4 +1,4 @@
-import { AppToast, reason } from "@bernardsapida/web-ui";
+import { AppToast, reason } from "@/components/web-ui";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { CircleAlert, UserPlus } from "lucide-react";

@@ -1,4 +1,4 @@
-import { AppPageHeader } from "@bernardsapida/web-ui";
+import { AppPageHeader } from "@/components/web-ui";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { AppQueryError } from "@/components/project";

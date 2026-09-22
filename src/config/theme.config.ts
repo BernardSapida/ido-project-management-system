@@ -13,8 +13,8 @@
  * silently becoming the committed default is how an unnoticed change ships.
  */
 
-import type { CardStyle, ColorScheme, FontName, RadiusName, SurfaceStrategy } from "@bernardsapida/web-ui/theme-engine";
-import { RADIUS_OPTIONS } from "@bernardsapida/web-ui/theme-engine";
+import type { CardStyle, ColorScheme, FontName, RadiusName, SurfaceStrategy } from "@/components/web-ui/theme-engine";
+import { RADIUS_OPTIONS } from "@/components/web-ui/theme-engine";
 import type { PaletteName } from "./theme/presets";
 
 export type { CardStyle, ColorScheme, FontName, RadiusName };

@@ -1,4 +1,4 @@
-import { AppButton, AppPageHeader, type TableSortDescriptor } from "@bernardsapida/web-ui";
+import { AppButton, AppPageHeader, type TableSortDescriptor } from "@/components/web-ui";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";

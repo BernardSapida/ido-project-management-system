@@ -1,4 +1,4 @@
-import { AppErrorState } from "@bernardsapida/web-ui";
+import { AppErrorState } from "@/components/web-ui";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { Component, type ReactNode } from "react";
 import { classifyError } from "./classify-error";

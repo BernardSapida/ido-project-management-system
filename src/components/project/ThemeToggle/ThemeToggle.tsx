@@ -1,4 +1,4 @@
-import { AppThemeToggle } from "@bernardsapida/web-ui";
+import { AppThemeToggle } from "@/components/web-ui";
 import type { ComponentProps } from "react";
 import { useUIStore } from "@/store/ui.store";
 

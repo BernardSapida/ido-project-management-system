@@ -1,4 +1,4 @@
-import { AppDialog, AppRadioGroup } from "@bernardsapida/web-ui";
+import { AppDialog, AppRadioGroup } from "@/components/web-ui";
 import { ShieldCheck, ShieldX } from "lucide-react";
 import { useEffect } from "react";
 import { useAdminAccountsMutations } from "@/features/admin-accounts/hooks/use-admin-accounts-mutations";

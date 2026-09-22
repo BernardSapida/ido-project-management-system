@@ -1,4 +1,4 @@
-import { AppAuthPageShell } from "@bernardsapida/web-ui";
+import { AppAuthPageShell } from "@/components/web-ui";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Layout } from "lucide-react";
 import { useEffect } from "react";

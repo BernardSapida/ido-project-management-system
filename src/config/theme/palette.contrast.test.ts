@@ -49,7 +49,7 @@ import {
 	SEMANTIC_HUES,
 	SURFACE_NAMES,
 	type SurfaceStrategy,
-} from "@bernardsapida/web-ui/theme-engine";
+} from "@/components/web-ui/theme-engine";
 import { describe, expect, it } from "vitest";
 import { PALETTE_PRESETS, type PalettePreset } from "./presets";
 

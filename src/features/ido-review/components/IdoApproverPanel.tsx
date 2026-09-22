@@ -1,4 +1,4 @@
-import { AppButton, AppInputGroup, AppReadOnlyField, AppTextArea } from "@bernardsapida/web-ui";
+import { AppButton, AppInputGroup, AppReadOnlyField, AppTextArea } from "@/components/web-ui";
 import { Card, Typography } from "@heroui/react";
 import { CheckCircle2 } from "lucide-react";
 import { useIdoReviewMutations } from "@/features/ido-review/hooks/use-ido-review-mutations";

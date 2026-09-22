@@ -1,4 +1,4 @@
-import type { ChipTone } from "@bernardsapida/web-ui";
+import type { ChipTone } from "@/components/web-ui";
 import { CircleCheck, CircleSlash, type LucideIcon, Shield, ShieldCheck, ShieldX } from "lucide-react";
 import { getRoleLabel } from "@/config/navigation.config";
 import type { UserRole } from "@/utils/config";

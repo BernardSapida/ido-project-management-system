@@ -1,4 +1,4 @@
-import { AppChip } from "@bernardsapida/web-ui";
+import { AppChip } from "@/components/web-ui";
 import { CircleHelp } from "lucide-react";
 import { masterStatusMap } from "@/lib/status-maps/request-status";
 

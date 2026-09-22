@@ -1,4 +1,4 @@
-import { AppButton } from "@bernardsapida/web-ui";
+import { AppButton } from "@/components/web-ui";
 import { PDFDownloadLink, PDFViewer } from "@react-pdf/renderer";
 import { Download } from "lucide-react";
 import type { RequestPdfData, SignaturesBase64 } from "../types/request-pdf.types";

@@ -5,7 +5,7 @@ import {
 	type ColumnDef,
 	type DataTableServer,
 	type FilterDef,
-} from "@bernardsapida/web-ui";
+} from "@/components/web-ui";
 import { Typography } from "@heroui/react";
 import { CircleCheckBig, Star } from "lucide-react";
 import { RATING_FILTER_OPTIONS, ratingTone, STATUS_FILTER_OPTIONS, statusChip } from "../lib/csm-options";

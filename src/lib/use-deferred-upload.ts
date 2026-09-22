@@ -1,4 +1,4 @@
-import type { UploadHandler } from "@bernardsapida/web-ui";
+import type { UploadHandler } from "@/components/web-ui";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 import { useTRPC } from "@/integrations/trpc/react";

@@ -1,4 +1,4 @@
-import { AppHeader, AppLayout, AppMobileDrawer, AppSidebar } from "@bernardsapida/web-ui";
+import { AppHeader, AppLayout, AppMobileDrawer, AppSidebar } from "@/components/web-ui";
 import { createFileRoute, Outlet, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
 import { getNavigation, getRoleLabel, getSecondaryNavigation, isNavItemActive } from "@/config/navigation.config";
 import { assertAuthenticatedFn } from "@/features/auth/functions/auth.functions";
@@ -42,7 +42,7 @@ export const Route = createFileRoute("/_authenticated")({
  * The signed-in app frame.
  *
  * It is WIRING, not a component. `AppLayout` is the frame and comes from
- * `@bernardsapida/web-ui`; this reads the session, the role and
+ * `@/components/web-ui`; this reads the session, the role and
  * `navigation.config`, then fills the frame's slots with them. That split is why
  * the frame can be published and this file cannot: this one renders an
  * `<Outlet />` and mounts the application nav.

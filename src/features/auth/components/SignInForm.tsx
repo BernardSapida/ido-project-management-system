@@ -1,4 +1,4 @@
-import { AppInputGroup, AppLogo } from "@bernardsapida/web-ui";
+import { AppInputGroup, AppLogo } from "@/components/web-ui";
 import { Button, Card, Checkbox, Label } from "@heroui/react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Layout, Lock, Mail } from "lucide-react";

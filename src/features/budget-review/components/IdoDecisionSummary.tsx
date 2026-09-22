@@ -1,4 +1,4 @@
-import { AppCard, AppChip, AppReadOnlyField } from "@bernardsapida/web-ui";
+import { AppCard, AppChip, AppReadOnlyField } from "@/components/web-ui";
 import { Typography } from "@heroui/react";
 import { idoEvaluationStatusMap } from "@/lib/status-maps/request-status";
 

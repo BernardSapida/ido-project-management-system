@@ -5,7 +5,7 @@ import {
 	type ColumnDef,
 	type DataTableServer,
 	type FilterDef,
-} from "@bernardsapida/web-ui";
+} from "@/components/web-ui";
 import { Flag, ListFilter } from "lucide-react";
 import {
 	PRIORITY_OPTIONS,

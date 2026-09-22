@@ -1,4 +1,4 @@
-import { AppAlert, AppButton, AppCard, AppDialog, AppTextArea, formatAbsolute, toDate } from "@bernardsapida/web-ui";
+import { AppAlert, AppButton, AppCard, AppDialog, AppTextArea, formatAbsolute, toDate } from "@/components/web-ui";
 import { Typography } from "@heroui/react";
 import { useNavigate } from "@tanstack/react-router";
 import { CheckCircle2, Gavel, Lock, PenLine, XCircle } from "lucide-react";

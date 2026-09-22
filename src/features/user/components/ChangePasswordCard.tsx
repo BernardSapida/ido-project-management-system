@@ -1,4 +1,4 @@
-import { AppButton, AppInputGroup, AppToast } from "@bernardsapida/web-ui";
+import { AppButton, AppInputGroup, AppToast } from "@/components/web-ui";
 import { Check, CheckCircle2, KeyRound, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { z } from "zod";

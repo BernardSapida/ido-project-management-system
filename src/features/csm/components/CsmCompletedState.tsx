@@ -1,4 +1,4 @@
-import { AppButton, AppCard, AppChip, AppRatingSummary, formatAbsolute, toDate } from "@bernardsapida/web-ui";
+import { AppButton, AppCard, AppChip, AppRatingSummary, formatAbsolute, toDate } from "@/components/web-ui";
 import { Typography } from "@heroui/react";
 import { CircleCheckBig, FileSignature } from "lucide-react";
 

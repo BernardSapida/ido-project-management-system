@@ -1,4 +1,4 @@
-import { AppButton } from "@bernardsapida/web-ui";
+import { AppButton } from "@/components/web-ui";
 import { Download } from "lucide-react";
 import { lazy, Suspense, useEffect, useState } from "react";
 import type { RequestPdfData, SignaturesBase64 } from "../types/request-pdf.types";

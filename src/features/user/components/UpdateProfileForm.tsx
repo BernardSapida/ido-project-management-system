@@ -1,4 +1,4 @@
-import { AppInputGroup } from "@bernardsapida/web-ui";
+import { AppInputGroup } from "@/components/web-ui";
 import { Button, Card, Input, Label, TextField } from "@heroui/react";
 import { Check, Mail, User } from "lucide-react";
 import { useAuth } from "@/features/auth/hooks/useAuth";

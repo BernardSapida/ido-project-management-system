@@ -1,4 +1,4 @@
-import { AppInputGroup, AppModal, AppToast } from "@bernardsapida/web-ui";
+import { AppInputGroup, AppModal, AppToast } from "@/components/web-ui";
 import { Button, Card } from "@heroui/react";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";

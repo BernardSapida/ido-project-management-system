@@ -1,4 +1,4 @@
-import { AppInputGroup } from "@bernardsapida/web-ui";
+import { AppInputGroup } from "@/components/web-ui";
 import { Button, Card } from "@heroui/react";
 import { CheckCircle2, Lock } from "lucide-react";
 import { useState } from "react";

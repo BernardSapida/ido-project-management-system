@@ -1,4 +1,4 @@
-import { AppNotFound, AppToaster, AppUIProvider } from "@bernardsapida/web-ui";
+import { AppNotFound, AppToaster, AppUIProvider } from "@/components/web-ui";
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import type { QueryClient } from "@tanstack/react-query";
 import { createRootRouteWithContext, HeadContent, Scripts } from "@tanstack/react-router";
@@ -36,7 +36,7 @@ const THEME_INIT_SCRIPT = `
 })();
 `;
 
-import { AppRouteProgress } from "@bernardsapida/web-ui/route-progress";
+import { AppRouteProgress } from "@/components/web-ui/route-progress";
 import { APP_NAME, seo } from "@/config/seo.config";
 import { lockedScheme, themeAttributes } from "@/config/theme.config";
 

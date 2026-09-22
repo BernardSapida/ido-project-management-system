@@ -42,7 +42,7 @@ import {
 	themeDeclarations,
 	TINT_MAX,
 	UI_RADIUS_NAMES,
-} from "@bernardsapida/web-ui/theme-engine";
+} from "@/components/web-ui/theme-engine";
 import { PALETTE_PRESETS, type PalettePreset } from "../src/config/theme/presets";
 
 const here = dirname(fileURLToPath(import.meta.url));

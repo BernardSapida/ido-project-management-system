@@ -1,4 +1,4 @@
-import type { ChipTone, FilterOption } from "@bernardsapida/web-ui";
+import type { ChipTone, FilterOption } from "@/components/web-ui";
 import { CircleCheckBig, CircleDashed, type LucideIcon } from "lucide-react";
 import { CSM_MAX_RATING } from "@/features/csm/validations/schema/submit-csm.schema";
 

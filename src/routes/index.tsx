@@ -1,5 +1,5 @@
-import type { SiteFooterGroup, SiteHeaderAction, SiteNavItem } from "@bernardsapida/web-ui";
-import { AppButton, AppCard, AppChip, AppSiteFooter, AppSiteHeader } from "@bernardsapida/web-ui";
+import type { SiteFooterGroup, SiteHeaderAction, SiteNavItem } from "@/components/web-ui";
+import { AppButton, AppCard, AppChip, AppSiteFooter, AppSiteHeader } from "@/components/web-ui";
 import { createFileRoute } from "@tanstack/react-router";
 import {
 	ArrowRight,

@@ -1,4 +1,4 @@
-import { AppAlert, AppDialog, AppSelect } from "@bernardsapida/web-ui";
+import { AppAlert, AppDialog, AppSelect } from "@/components/web-ui";
 import { TriangleAlert, UserCog } from "lucide-react";
 import { useEffect } from "react";
 import { useAdminAccountsMutations } from "@/features/admin-accounts/hooks/use-admin-accounts-mutations";

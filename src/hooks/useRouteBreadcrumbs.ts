@@ -1,4 +1,4 @@
-import type { BreadcrumbItem } from "@bernardsapida/web-ui";
+import type { BreadcrumbItem } from "@/components/web-ui";
 import { useMatches } from "@tanstack/react-router";
 import type { LucideIcon } from "lucide-react";
 

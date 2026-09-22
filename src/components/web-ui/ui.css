@@ -1,0 +1,2092 @@
+/* ---------------------------------------------------------------------------
+ * Component styles - the package's stylesheet.
+ * Copied verbatim into dist by tsup, never compiled here: it is Tailwind v4
+ * source and the CONSUMER's Tailwind has to process it.
+ * 
+ * This is the half of the old apps/web/src/styles.css that belongs to the
+ * components - the @utility definitions they use (glass, text-gradient,
+ * shadow-soft) and the rules that style HeroUI's internals for them (.toast,
+ * .chip-*, .banner, .error-state*, .dialog, .progress-*, .range-calendar__*).
+ * 
+ * It reads custom properties it does not define: --danger, --surface, --glass-tint
+ * and friends come from the project. That direction is deliberate - see
+ * markdowns/Web/Component Sync Plan.md.
+ * ------------------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------------------
+ * Utilities
+ * ------------------------------------------------------------------------- */
+
+@utility glass {
+  background: color-mix(in oklab, var(--glass-tint) var(--glass-fill), transparent);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid var(--glass-border-color);
+  box-shadow: var(--shadow-soft);
+}
+
+@utility glass-strong {
+  background: color-mix(in oklab, var(--glass-tint) var(--glass-fill-strong), transparent);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border-color);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Without backdrop-filter a translucent panel is unreadable rather than merely
+   less pretty, so both strengths fall back to an opaque tint. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass {
+    background: var(--glass-opaque);
+  }
+
+  .glass-strong {
+    background: var(--glass-opaque-strong);
+  }
+}
+
+/* SOLID CARDS. Opt-in via THEME.card, so a project that has not asked for it
+   carries no attribute and nothing below matches.
+
+   It paints --surface rather than --glass-opaque, and the difference is the
+   point rather than a detail. The opaque tokens are the no-backdrop-filter
+   FALLBACK for glass - they exist to look as much like glass as an opaque
+   colour can, which is why light's is pure white and dark's sits at 0.26 rather
+   than at the card's own 0.207. --surface is the card layer itself, the one
+   token a 60-30-10 reading calls the 30, and the one a card colour would be
+   written into. Painting anything else here would mean a chosen card colour
+   still did not appear on the card.
+
+   Both strengths collapse to the same fill on purpose. `glass` and
+   `glass-strong` differ only in how much backdrop shows through, and with no
+   backdrop showing through there is nothing left for the distinction to say.
+   The border and the shadow still separate the card, which is what the flat
+   ladder has always relied on.
+
+   Specificity: an attribute on :root plus the class is (0,2,0) against the
+   utility's (0,1,0) and the @supports fallback's (0,1,0), so this wins in both
+   branches without !important. */
+:root[data-card="solid"] .glass,
+:root[data-card="solid"] .glass-strong {
+  background: var(--surface);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* THE BRAND SURFACE. It sets `color` as well as `background`, and that pairing
+   is the accessible part rather than a convenience.
+
+   Leaving the caller to add a text class is what produced the 1.98:1 failures
+   this replaced: the foreground flips from near-white to near-black between
+   themes because the fill inverts with it, and a hand-written `text-white`
+   cannot flip. Every consumer that used to write `gradient-hero
+   text-primary-foreground` now writes `gradient-brand` and gets the correct ink
+   in both themes for free. If you find yourself adding a text colour next to
+   this class, the answer is almost always that you should not.
+
+   The `border-box` keyword sets background-origin as well as background-clip.
+   Without it the shorthand leaves origin at its padding-box default while clip
+   stays border-box, so on any element with a border the gradient is sized to
+   the padding box and then repeated to cover the border box - and the seam
+   between tiles draws a visible square inside the shape. It cost an afternoon
+   on the stepper's completed marker (size-8 + border-2). */
+@utility gradient-brand {
+  background: var(--gradient-brand) border-box;
+  color: var(--gradient-brand-foreground);
+}
+
+/* THE BRAND AS A LARGE SURFACE - a card, a panel, a section. Not a control.
+   Like `gradient-brand` it sets its own `color`, and for the same reason: the
+   pairing is the accessible part and a caller adding a text class breaks it.
+
+   The two are not interchangeable. A control has to read as an action, so
+   `gradient-brand` is saturated - and that saturation is exactly what pins its
+   ink near-black at 7.2:1 with no headroom left. A card does not have to read as
+   an action, so this one is a tint and its ink is a real brand navy at 10.2:1.
+   Use `gradient-brand` when the thing is pressable and this when it is not. */
+@utility brand-surface {
+  background: var(--brand-surface);
+  color: var(--brand-surface-foreground);
+}
+
+/* The same pair, inverted: for a mark that has to sit ON a brand surface.
+
+   A `gradient-brand` tile on a `gradient-brand` panel measures 1.00:1 - it is
+   the same colour, and only its shadow was ever showing it. Moving the panel to
+   `brand-surface` does not rescue it either: the saturated tile on the tint is
+   1.64:1, still under the 3:1 a graphic answers to. Swapping the pair round
+   gives 10.22:1, because contrast is symmetric and this is the pairing the
+   surface was already solved for. */
+@utility brand-surface-inverse {
+  background: var(--brand-surface-foreground);
+  color: var(--brand-surface);
+}
+
+/* THE BRAND AS WORDS. A different ramp, because a gradient clipped to glyphs
+   answers to the page showing through them and not to ink sitting on top of a
+   fill - the opposite obligation, and the reason the wordmark used to measure
+   1.4:1 on a dark page while the tiles beside it were fine. */
+@utility text-gradient {
+  background: var(--gradient-brand-ink);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* A scroll container with no visible bar. Used by the nav lists: at 72px wide
+   the UA scrollbar is a grey stripe with arrows drawn straight through the
+   active pill, and it reads as a rendering fault rather than as an affordance.
+   Anything using this MUST show the overflow some other way - the sidebar pairs
+   it with a fade at the bottom edge (scroll-fade-y). */
+@utility scrollbar-none {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* The affordance that replaces the bar: content dissolves into the bottom edge
+   when there is more below it. Masking the box rather than the content means an
+   under-filled list shows nothing at all, which is what makes it safe to leave
+   on permanently. */
+@utility scroll-fade-y {
+  mask-image: linear-gradient(to bottom, black calc(100% - 1.5rem), transparent);
+}
+
+@utility shadow-glow {
+  box-shadow: var(--shadow-glow);
+}
+
+@utility shadow-soft {
+  box-shadow: var(--shadow-soft);
+}
+
+@keyframes float-blob {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(30px, -40px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.95);
+  }
+}
+
+@utility blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(60px);
+  opacity: 0.55;
+  animation: float-blob 14s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* LIGHT THEME ONLY, and this is a correctness rule as much as a taste one.
+ *
+ * The taste half: a 60px-blurred brand blob over a near-black page does not
+ * read as depth, it reads as a smear in one corner - the ground is too dark for
+ * the blob to be a highlight and too dark for it to be a shadow, so it lands as
+ * a vignette somebody forgot to turn off. On white it works, because there the
+ * blob is genuinely lighter than nothing.
+ *
+ * The correctness half: the blob TINTS THE PAGE BEHIND TEXT. Every ratio the
+ * contrast report prints is measured against `--background`, and a translucent
+ * wash sitting on top of it means the colour behind the words is not the colour
+ * that was measured. The report would be honest about a page that is not the
+ * page. That is unacceptable on the one screen whose entire job is the number,
+ * and it is not much better anywhere else.
+ */
+.dark .blob {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * Accessibility
+ * The backdrop animates indefinitely and cards lift on hover. Both are opt-out.
+ * ------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .blob {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Page components
+ * ------------------------------------------------------------------------- */
+
+.container-page {
+  width: min(1080px, calc(100% - 2rem));
+  margin-inline: auto;
+}
+
+/* Predates the `glass` utility and is kept because it is a plain translucent
+   fill with no blur - the cheap version, for a card that only needs the page to
+   show through it. Anything wanting the frosted treatment wants `glass`. */
+.glass-card {
+  background: color-mix(in oklab, var(--surface) 70%, transparent);
+}
+
+.rise-in {
+  animation: rise-in 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Switching top-level destinations. Tabs are PEERS, so the content fades
+   rather than sliding - a horizontal slide claims one tab is "after" another,
+   and that is the transition a drill-down owns. The outgoing screen is gone
+   the moment the route changes, so this is the incoming half of the crossing:
+   a short hold at zero covers the swap, then it fades up. No transform, so a
+   fixed tab bar and a sticky header cannot be dragged along with it.
+   The global prefers-reduced-motion rule above flattens it to the end state. */
+.nav-fade {
+  animation: nav-fade 220ms ease-out 60ms both;
+}
+
+@keyframes nav-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+#nprogress .bar {
+  background: var(--brand-primary) !important;
+  height: 3px !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * Pressable feedback
+ * Rendered by hooks/use-press-feedback.tsx, which AppPressable wires to an
+ * element. Only the ripple lives here - the scale is two Tailwind utilities on
+ * the host and needs no stylesheet.
+ *
+ * The ripple is CSS because it is the same animation every time; the only
+ * things JavaScript decides are where the circle starts and how big it has to
+ * grow, and those arrive as inline left/top/width/height. That split is why
+ * this needs no motion library, and why the reduced-motion rule above reaches
+ * it: a WAAPI animation would ignore that rule entirely.
+ * ------------------------------------------------------------------------- */
+
+/* The clip. It exists instead of putting `overflow: clip` on the host, because
+   the host is frequently a card with something deliberately hanging outside it
+   - a badge, an absolutely positioned corner action - and clipping the host
+   would swallow those.
+ *
+ * `border-radius: inherit` is what makes the ripple respect the caller's
+ * corners with no prop and no measurement, INCLUDING asymmetric ones: a
+ * `rounded-t-xl` header or a segmented control's end cap inherits the whole
+ * four-corner value, which a single numeric radius could not express. It only
+ * works because this is a direct child of the host - an intervening wrapper
+ * inherits 0 and passes that down instead.
+ *
+ * The approximation: `inset: 0` is the PADDING box, while the radius it
+ * inherited was computed on the BORDER box. With a border the true inner curve
+ * is (radius - border-width), so this over-rounds by the border width and
+ * leaves a hairline gap at each corner. At 1px it cannot be seen. */
+.press-ripple-layer {
+  border-radius: inherit;
+  inset: 0;
+  /* `clip` rather than `hidden`: hidden makes this a scroll container, which is
+     a programmatically scrollable box that some screen readers put in the tab
+     order. Nothing here is meant to scroll. */
+  overflow: clip;
+  pointer-events: none;
+  position: absolute;
+  /* Behind the host's content but above its background. The host carries
+     `isolate`, so this cannot fall behind the page itself. */
+  z-index: -1;
+}
+
+/* `currentColor` rather than a token, so one rule is correct on every surface:
+   on a brand-filled button the text is near-white and so is the ripple; on a
+   plain card both are near-black. A fixed accent would be invisible on the one
+   and wrong on the other.
+ *
+ * 700ms looks like a breach of the under-100ms rule for press feedback, and is
+ * not: the ripple is at full opacity on the first frame, so the ACKNOWLEDGEMENT
+ * is immediate and it is only the decay that is slow. The thing that rule
+ * governs - how long until the press is visibly registered - is the 90ms scale.
+ * A ripple that finished in 90ms would be a flicker.
+ *
+ * The curve is an ease-out quad, deliberately not the expo curve the rest of
+ * this file uses for entrances. Expo covers about half its distance in the
+ * first tenth of the time, which on a circle reads as a flash that then hangs
+ * about - correct for a panel arriving, wrong for a spreading ring. This one
+ * decelerates gently the whole way, which is what makes it read as water
+ * spreading rather than as something being fired. */
+.press-ripple {
+  animation: press-ripple 700ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  background: currentColor;
+  border-radius: 9999px;
+  position: absolute;
+  /* The translate resolves against the circle's own untransformed box and the
+     scale runs about its centre, so the centre stays on the press point at
+     every frame rather than growing out of the top-left corner. */
+  transform: translate(-50%, -50%) scale(0);
+}
+
+@keyframes press-ripple {
+  0% {
+    opacity: 0.18;
+    transform: translate(-50%, -50%) scale(0);
+  }
+  /* Holds most of the opacity through the first half. Fading linearly from the
+     first frame means the circle is already faint by the time it is wide enough
+     to show where the press landed, which is the whole point of drawing it. */
+  50% {
+    opacity: 0.13;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Toast
+ * The body is rendered by components/feedback/AppToaster.tsx: a gradient rail
+ * down the start edge, a surface panel inset over it. HeroUI ships .toast as a
+ * padded row, so its padding, gap, cross-axis alignment and fill are undone
+ * here once instead of being fought with utilities on every slot.
+ *
+ * Two per-variant declarations, both set in the same place: --toast-rail (the
+ * rail, which the progress bar shows through) and the --toast-action pair (the
+ * pill). A new status is those lines here and nothing in the component branches
+ * on variant. The rail's value comes from the shared --rail-* set at the top of
+ * this file, which the banner reads too; the pill's comes from the semantic
+ * pairs, for the reason spelled out over .toast-action below.
+ * ------------------------------------------------------------------------- */
+
+/* A row of stacked toasts reads as one object lit once, because all five rails
+   are lit from the same corner - see the --rail-* block. */
+.toast {
+  /* Neutral slate, for the plain `toast(...)` with no severity. */
+  --toast-rail: var(--rail-default);
+  --toast-accent: var(--rail-default-tint);
+  /* A toast with no severity has no status to take, so its action falls back to
+     the brand - the same choice .banner and AppBadge's default make. */
+  --toast-action: var(--accent);
+  --toast-action-foreground: var(--accent-foreground);
+
+  align-items: stretch;
+  background: var(--toast-rail);
+  /* Tracks --radius rather than sitting at a fixed 20px. It was the largest
+     surface in the app that ignored the radius scale, so on a squared-off theme
+     a toast arrived as the one rounded thing on screen. */
+  border-radius: var(--radius-2xl);
+  box-shadow:
+    0 1px 2px oklch(0.4 0.04 258 / 0.1),
+    0 16px 40px -16px oklch(0.35 0.05 258 / 0.4);
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.toast--accent {
+  --toast-rail: var(--rail-accent);
+  --toast-accent: var(--rail-accent-tint);
+}
+
+.toast--success {
+  --toast-rail: var(--rail-success);
+  --toast-accent: var(--rail-success-tint);
+  --toast-action: var(--success);
+  --toast-action-foreground: var(--success-foreground);
+}
+
+.toast--warning {
+  --toast-rail: var(--rail-warning);
+  --toast-accent: var(--rail-warning-tint);
+  --toast-action: var(--warning);
+  --toast-action-foreground: var(--warning-foreground);
+}
+
+.toast--danger {
+  --toast-rail: var(--rail-danger);
+  --toast-accent: var(--rail-danger-tint);
+  --toast-action: var(--danger);
+  --toast-action-foreground: var(--danger-foreground);
+}
+
+/* THE ACTION WEARS THE TOAST'S OWN STATUS, the same way .banner-action does.
+   A brand-coloured pill on a warning toast is the one element in it that
+   disagrees with every other element in it, and on a danger toast it paints the
+   button that most needs a second look as the friendliest thing on screen.
+
+   It is the SEMANTIC PAIR (--warning / --warning-foreground), not --toast-rail
+   under a hard-coded white, and that distinction is the whole point. A rail is
+   solved to carry a GLYPH against the 3:1 that non-text answers to, so its light
+   end runs far higher than a 14px label survives: white on the rails measures
+   3.27:1 on success, 3.28:1 on warning and 4.08:1 on danger, all under the 4.5:1
+   AA floor for normal text. The semantic tokens are solved as a pair - 4.64:1 or
+   better on every status in both themes - and they FLIP, --warning-foreground
+   being near-white in light and near-black in dark, which is exactly what a
+   hand-written text colour cannot do.
+
+   The fill also has to be findable on the panel it sits on, and this pair clears
+   that too: 4.7:1+ against --surface in light, 3.7:1+ in dark, over the 3:1 of
+   SC 1.4.11. Unlayered, so it wins over HeroUI's @layer components. */
+.toast .toast-action {
+  background: var(--toast-action);
+  color: var(--toast-action-foreground);
+}
+
+/* Timeout progress. The bar under the panel IS the rail showing through the
+   panel's bottom margin; this covers it from the trailing edge inwards as the
+   timer runs, so the colour recedes right to left and a toast about to vanish
+   says so. It is decorative - react-aria owns the actual timer - so it is
+   aria-hidden and simply not drawn when the user has asked for less motion,
+   which also keeps the global reduced-motion override from snapping it to
+   "finished" the moment it appears. */
+@keyframes toast-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.toast__progress {
+  animation-fill-mode: forwards;
+  animation-name: toast-progress;
+  animation-timing-function: linear;
+  background: var(--surface);
+  block-size: 4px;
+  inset-block-end: 0;
+  inset-inline: 4rem 0;
+  position: absolute;
+  transform: scaleX(0);
+  transform-origin: right;
+}
+
+/* Matches react-aria, which pauses the dismiss timer on hover and while focus
+   is inside the toast. Keep both selectors: if a click appears to freeze the bar
+   forever, the cause is the focus react-aria left behind, not this rule -
+   AppToaster's releasePointerFocus is what deals with that. */
+.toast:hover .toast__progress,
+.toast:focus-within .toast__progress {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast__progress {
+    display: none;
+  }
+}
+
+/* HeroUI hides the close button until the toast is hovered, which leaves it
+   undiscoverable on touch and unusable on the error toasts that never time out.
+   It is pinned inline and always visible instead. The stacked toasts behind the
+   frontmost one keep hiding theirs - that rule is more specific and still wins. */
+.toast__close-button {
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--muted);
+  flex-shrink: 0;
+  height: 1.75rem;
+  opacity: 1;
+  pointer-events: auto;
+  position: static;
+  width: 1.75rem;
+}
+
+/* Tinted from the toast's own colour rather than a fixed neutral: on a green
+   toast a rose hover halo reads as a second, contradictory status. */
+.toast__close-button:hover,
+.toast__close-button[data-hovered="true"] {
+  background: color-mix(in oklab, var(--toast-accent) 14%, transparent);
+  color: var(--toast-accent);
+}
+
+.toast__close-button [data-slot="close-button-icon"] {
+  height: 1rem;
+  width: 1rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * Brand-filled controls
+ *
+ * THE BRAND FILL IS LOCKED, AND THIS IS WHERE THAT BECOMES TRUE OF CONTROLS.
+ *
+ * `--gradient-brand` is theme-stable, so a gradient tile or hero panel is one
+ * colour in light and dark. A primary Button was not: HeroUI fills it from
+ * `--accent`, which still inverts, so the most brand-looking thing on the page
+ * was the one thing that changed between modes - deep teal in light, bright
+ * cyan in dark. That is the opposite of what a brand colour is for.
+ *
+ * `--accent` itself is deliberately NOT redefined. It is chained to
+ * `--color-accent`, so it also colours every `text-accent` in the app - 112 call
+ * sites - and brand-coloured TEXT has to keep darkening on a light page because
+ * text has no border exemption. Redefining it would fix the buttons and break
+ * every link.
+ *
+ * So the FILLS are re-pointed one component at a time instead, through the
+ * custom properties HeroUI already exposes for exactly this. Each takes the
+ * locked fill and its paired near-black ink, which clears 7:1 in both themes.
+ *
+ * NO OUTLINE IS DRAWN, and that is a deliberate, measured trade rather than an
+ * oversight. A locked fill sits at 2.38-2.53:1 against a white page across all
+ * eight palettes - under SC 1.4.11's 3:1 - so on a light theme a filled brand
+ * control is legible but its EDGES are soft against the page. `--brand-edge` is
+ * still generated, and putting `border: 1px solid var(--brand-edge)` back on
+ * this rule and on `gradient-brand` restores it in one line.
+ *
+ * Why it is not there: the outline was visible on every brand surface in light,
+ * including decorative ones, and read as a hairline nobody asked for. The
+ * report tells the truth about the cost instead of a border hiding it - see the
+ * `control-on-page` row, which is the one deliberately-failing pairing here.
+ * ------------------------------------------------------------------------- */
+
+.button--primary {
+  --button-bg: var(--gradient-brand-via);
+  /* `--gradient-brand-hover`, NOT the ramp's end stop.
+     These read as the same thing and are not. `from`/`via`/`to` describe a
+     decorative SWEEP, and a designer-supplied brand flattens all three to the one
+     hex deliberately - sweeping it pushes the lightest stop under the ink bar. So
+     `--gradient-brand-to` equalled `--gradient-brand-via` on eight of the nine
+     palettes, and this button had no visible hover and no visible pressed state
+     on any of them. Only `custom`, the one solved palette, still had a ramp to
+     walk, which is why it looked fine wherever anyone checked.
+     The hover token is SOLVED instead: a step away from the fill that still
+     clears the same ink at 7.2, so a state change can never cost the label.
+
+     FALLBACK TO `--gradient-brand-to`, and it is not decoration. This token is
+     emitted by the palette GENERATOR, which lives in each project's own
+     `apps/web` and is not part of this package - so a project can install a new
+     version of these components months before its generator catches up. Without
+     the fallback, `var()` on an undefined property is invalid at computed-value
+     time and the hover state disappears entirely: 0.2.0 shipped exactly that, and
+     broke the hover it was released to fix. A published package may never assume
+     the consumer's generated stylesheet is in step with it. Degrading to the end
+     stop restores the pre-0.2.0 behaviour, which is flat on a supplied palette -
+     no worse than before, rather than broken. */
+  --button-bg-hover: var(--gradient-brand-hover, var(--gradient-brand-to));
+  --button-bg-pressed: var(--gradient-brand-hover, var(--gradient-brand-to));
+  --button-fg: var(--gradient-brand-foreground);
+}
+
+/* ---------------------------------------------------------------------------
+ * Button - hold to confirm
+ * Applied by AppButton when it is given a `hold` prop. The fill is driven by
+ * `--hold-progress` (0→1), which useHoldToConfirm writes onto the node's inline
+ * style once per animation frame.
+ *
+ * WHY A PSEUDO-ELEMENT AND NOT A CHILD. A positioned child paints above the
+ * button's in-flow label whatever order it is in, so drawing the sweep as a
+ * `<span>` would need the icon and the text wrapped and re-positioned - which
+ * means rebuilding HeroUI's own flex row, at three sizes, from the outside.
+ * `isolation: isolate` plus `z-index: -1` says the same thing in two lines: the
+ * button becomes a stacking context, so the pseudo-element lands above its
+ * background and below everything in it.
+ *
+ * `currentColor` rather than a token, because this one rule has to work on all
+ * seven variants. On the solid ones the ink is near-white, so the sweep reads
+ * as the fill lightening; on the tinted and transparent ones it is the variant's
+ * own hue, so a danger button fills with its own red. A hard-coded colour would
+ * have to be right for both and is right for neither.
+ *
+ * DELIBERATELY NOT SUPPRESSED UNDER prefers-reduced-motion, which the global
+ * rule above would otherwise flatten. That rule is for movement the user did
+ * not ask for; this bar is the only answer to "how much longer do I hold this",
+ * and taking it away leaves the user pressing a button that looks inert. It is
+ * not animated by CSS at all, precisely so the `!important` cannot reach it.
+ * ------------------------------------------------------------------------- */
+
+.button--hold {
+  /* Not in HeroUI's base, and both are needed for a press that lasts seconds
+     rather than milliseconds: iOS raises the callout menu on a long press, and
+     it lands halfway through the hold and abandons it. `select-none` and the
+     tap highlight HeroUI already covers. */
+  -webkit-touch-callout: none;
+  /* Repeated from HeroUI's `.button`, which already sets `relative isolate`.
+     They are load-bearing here and they fail SILENTLY: without the isolation
+     the fill drops behind the page and is simply never seen, and without the
+     positioning it escapes to the nearest positioned ancestor and washes the
+     whole table row. Two lines is cheaper than either bug. */
+  isolation: isolate;
+  /* Clips the sweep to the pill. Safe for the focus ring, which HeroUI draws as
+     a box-shadow - an element's own shadow is not clipped by its own overflow. */
+  overflow: hidden;
+  position: relative;
+}
+
+.button--hold::after {
+  background: currentColor;
+  content: "";
+  inset: 0;
+  opacity: 0.22;
+  position: absolute;
+  transform: scaleX(var(--hold-progress, 0));
+  transform-origin: left center;
+  z-index: -1;
+}
+
+.switch {
+  --switch-control-bg-checked: var(--gradient-brand-via);
+  --switch-control-bg-checked-hover: var(--gradient-brand-hover, var(--gradient-brand-to));
+}
+
+/* The rest of the controls, onto the SAME fill the switch and the button use.
+
+   They were all still on `--accent`, which is `--brand-primary` and inverts per
+   theme: deep in light so it can also colour text, pale in dark. The brand fill
+   does not invert - it was deliberately made theme-stable, with near-black ink
+   on it in both themes. So in dark the two happened to resolve to the same
+   colour and everything looked right, while in light a checked switch was
+   #7bb315 sitting beside a checked checkbox at #365204. Same palette, two
+   greens, and only the switch and the button had been moved.
+
+   Set as VARIABLES on the component root, never by repainting the parts.
+   `.radio__indicator` is an inset-0 wrapper whose dot is a `:empty::before`, and
+   `.slider__thumb`'s visible face is its `::after` - both were painted directly
+   once before and both broke. Overriding the token lets HeroUI's own rules
+   resolve it, so the fill, the checkmark and the spinner arc move together.
+
+   Only `--accent` here. `--accent-foreground` is handled separately below,
+   because the same token does two unrelated jobs and only one of them is ink: it
+   is the checkmark ON the fill, and it is also the KNOB of a switch and the face
+   of a slider thumb. A knob is an object whose position carries the state, not
+   text that has to be read on a background, and painting it with the fill's ink
+   turned a white thumb near-black.
+
+   `--accent-hover` has to be restated rather than inherited: HeroUI color-mixes
+   it at :root, and a var() inside a custom property is substituted where it is
+   DECLARED, so a local `--accent` would leave hover on the old colour. It walks
+   DOWN the brand's own ramp to the end stop rather than restating the mix, which
+   is what `.button--primary` already does and for a second reason too: the build
+   emits a no-color-mix fallback for older engines, and a mix restated here
+   flattened to the base colour in it - a hover that did nothing, on exactly the
+   browsers least able to spare the feedback.
+
+   NOT `--accent` itself at :root. That token colours accent TEXT as well as
+   fills, and the pale fill as ink on a white page is nowhere near legible - see
+   the note on lightInk in palette.build.ts. */
+.checkbox,
+.radio,
+.slider,
+.spinner--accent {
+  --accent: var(--gradient-brand-via);
+  /* Same swap, same reason as .button--primary above. */
+  --accent-hover: var(--gradient-brand-hover, var(--gradient-brand-to));
+}
+
+
+/* Everything ON the brand fill is white, in both themes: the switch knob, the
+   slider thumb, the checkmark, the radio dot.
+
+   `--color-white` rather than a token that happens to resolve to white in one
+   theme, because this is the SAME value HeroUI already paints an unchecked
+   switch thumb with. The knob therefore does not change colour when it is
+   toggled, only position - which is the whole idea of a knob, and was not true
+   before: the thumb inherited `--accent-foreground`, near-white in light and
+   near-black in dark, so flipping the theme flipped the knob.
+
+   ## The trade, stated rather than hidden
+
+   White on the brand fill measures 2.38:1 at worst across the nine palettes,
+   under the 3:1 of SC 1.4.11, and identically in both themes because the fill
+   does not invert. It is a DELIBERATE exception, chosen with the number in
+   front of us, and it rests on what that criterion actually asks for: the
+   control and its STATE must be identifiable, and neither depends on the mark's
+   own contrast here. An unchecked box is a bordered white square and a checked
+   one is a solid brand square; an off switch is a grey track and an on switch is
+   a brand track with the knob at the other end; an unselected radio is an empty
+   ring and a selected one is a filled brand disc. The fill change carries the
+   state in every case, and the mark on top confirms what the fill already said.
+
+   All four are listed together deliberately. This was fixed three times running
+   because one token drives all of them and each fix moved one control and left
+   the rest behind - a white knob beside a black thumb, then a white tick beside
+   a black dot. A fifth control that paints a mark on the brand fill belongs in
+   this selector, not in a rule of its own.
+
+   The alternative was the fill's paired ink at 8.03:1 - legible in isolation,
+   and a dark tick beside a white knob on the same screen. Consistency across the
+   control set won, because a user reading four controls that disagree about
+   what "on" looks like is a worse outcome than a mark that is quiet.
+
+   If this is ever revisited, the real lever is the FILL, not the mark: the pale
+   brand fill is what makes white impossible to land at 3:1, and it is pale
+   because it was deliberately made theme-stable. Deepening it in light would buy
+   the contrast back and cost the theme-stability. */
+.checkbox,
+.radio,
+.slider,
+.switch {
+  --accent-foreground: var(--color-white);
+}
+
+.dark .button--primary {
+  border-color: transparent;
+}
+
+.chip--primary.chip--accent {
+  --chip-bg: var(--gradient-brand-via);
+  --chip-fg: var(--gradient-brand-foreground);
+}
+
+/* The checkbox, radio and slider are NOT re-pointed here, and that is a
+   correction rather than an omission.
+
+   They fill with the `bg-accent` UTILITY rather than with `var(--accent)`, so
+   locking them meant overriding their painted declarations instead of a
+   variable - and that means knowing their internal structure, which I got
+   wrong twice in one pass. `.radio__indicator` is an `inset-0` WRAPPER, not the
+   dot (the dot is `.radio__indicator:empty::before`), so painting it filled the
+   whole control on selected AND unselected alike. `.slider__thumb`'s visible
+   part is its `::after`, so painting the thumb put a coloured box behind the
+   pill.
+
+   Overriding a component's own custom properties is safe because those are its
+   published surface. Overriding the declarations underneath is a guess about
+   private structure that breaks on any refactor - and broke immediately here.
+   These three keep HeroUI's own `--accent`, which stays per-theme. */
+
+/* ---------------------------------------------------------------------------
+ * Avatars are circles, at every size and on every theme.
+ *
+ * THE ONE SHAPE IN THE APP THAT DOES NOT ANSWER TO --radius, and the exception
+ * is deliberate rather than an oversight.
+ *
+ * HeroUI puts the avatar on the radius scale - `.avatar` is `rounded-3xl`,
+ * `.avatar--sm` is `rounded-2xl` - so a face changed shape with the cards
+ * around it, and at the squarest end of the theme customizer's scale it became
+ * a rounded square. A picture of a person is the one element every other
+ * surface a user has ever used draws as a circle: an OS account switcher, a
+ * chat app, a comment thread. Following the radius token there does not read as
+ * "this app is squarer today", it reads as an avatar that failed to crop.
+ *
+ * The app had already half-decided this and was contradicting itself. Every
+ * loading placeholder standing in for an avatar - the list, the roster, the
+ * comment thread - is a `rounded-full` Skeleton, so a row promised a circle
+ * while it loaded and settled into a squircle. The presence dot, the badge and
+ * the group's ring are all circular too, and each of them sat slightly wrong
+ * against a corner that was not round.
+ *
+ * The three selectors are HeroUI's own size classes, which is why this is one
+ * rule and not a `className` on `AppAvatar`: it holds for the overflow count in
+ * a stack, for a raw `Avatar` inside `components/custom/**`, and for anything
+ * HeroUI grows later that paints `.avatar` itself.
+ *
+ * A caller writing `rounded-*` in `className` still wins - utilities are a
+ * later layer. That is a bug at the call site, not an escape hatch: a
+ * `size-24` profile head is a big circle, not a big squircle.
+ * ------------------------------------------------------------------------- */
+.avatar,
+.avatar--sm,
+.avatar--lg {
+  border-radius: 9999px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Chip tones
+ * Applied by components/ui/AppChip.tsx, which deliberately does NOT pass
+ * `color` or `variant` through to HeroUI's Chip.
+ *
+ * HeroUI derives its chip colours through a chain - `.chip--success.chip--soft`
+ * reads `--success-soft`, which is `color-mix(--success 15%, transparent)`,
+ * declared in four different scopes (`:root`/`.light`, `.dark`, and two
+ * `[data-vibrant-palette]` variants) with different ratios, over a foreground
+ * mixed against `--foreground`. Two consequences, both of which we hit:
+ * the fill is TRANSLUCENT, so the same chip reads differently depending on the
+ * surface under it; and `--foreground` here is a dark RED, so the "green" was
+ * never green.
+ *
+ * These are flat, opaque pairs instead. One class, one declaration, no mixing,
+ * nothing inherited from an ancestor - a Done chip is the same green on a plain
+ * card, a glass panel and a tinted footer. Add a tone and you add two rules per
+ * theme.
+ * ------------------------------------------------------------------------- */
+.chip-soft-default {
+  background-color: oklch(0.95 0.005 265);
+  color: oklch(0.38 0.03 265);
+}
+
+/* The one soft tone that is NOT a status: `accent` is the brand wearing a chip,
+   so its pair is generated per palette and per theme rather than pinned to a
+   blue here. Left as a literal it was the last place an amber app still had a
+   blue chip on it. The other four stay literal for the same reason the rails do
+   - a status is a status. */
+.chip-soft-accent {
+  background-color: var(--chip-accent-soft);
+  color: var(--chip-accent-soft-foreground);
+}
+
+.chip-soft-success {
+  background-color: oklch(0.95 0.045 160);
+  color: oklch(0.42 0.0923 160);
+}
+
+.chip-soft-warning {
+  background-color: oklch(0.96 0.0313 75);
+  color: oklch(0.45 0.1006 62);
+}
+
+.chip-soft-danger {
+  background-color: oklch(0.95 0.0241 25);
+  color: oklch(0.47 0.185 25);
+}
+
+/* The soft chips invert in dark - a dark fill under bright status text. The
+   solid ones do not appear here: they are already a saturated fill under white,
+   which reads the same on either ground. */
+.dark .chip-soft-default {
+  background-color: oklch(0.29 0.01 265);
+  color: oklch(0.85 0.02 265);
+}
+
+.dark .chip-soft-success {
+  background-color: oklch(0.28 0.06 160);
+  color: oklch(0.82 0.13 160);
+}
+
+.dark .chip-soft-warning {
+  background-color: oklch(0.3 0.06 70);
+  color: oklch(0.85 0.1253 75);
+}
+
+.dark .chip-soft-danger {
+  background-color: oklch(0.3 0.07 25);
+  color: oklch(0.83 0.0915 25);
+}
+
+.chip-solid-default {
+  background-color: var(--rail-default-tint);
+  color: var(--rail-foreground);
+}
+
+.chip-solid-accent {
+  background-color: var(--brand-primary);
+  color: var(--brand-primary-foreground);
+}
+
+/* The semantic pair, like .chip-solid-danger below - NOT the rail tint under a
+   hard-coded near-white. That was a second copy of the token-level bug: a rail
+   answers to 3:1 as a graphic, a chip label answers to 4.5:1, and pinning the
+   ink here meant the warning chip shipped at 4.36:1 and could never follow the
+   theme. --warning-foreground is near-white in light and near-black in dark,
+   which is the whole reason those tokens are per-theme. */
+.chip-solid-success {
+  background-color: var(--success);
+  color: var(--success-foreground);
+}
+
+.chip-solid-warning {
+  background-color: var(--warning);
+  color: var(--warning-foreground);
+}
+
+.chip-solid-danger {
+  background-color: var(--danger);
+  color: var(--danger-foreground);
+}
+
+/* ---------------------------------------------------------------------------
+ * File kinds
+ * The tint behind a file-type glyph in AppFileUpload. A glyph has no filename
+ * to read, so the colour IS the type - which is why these are conventional
+ * hues (red PDF, green spreadsheet) rather than the brand, for the same reason
+ * the status rails are.
+ *
+ * They were raw Tailwind palette literals at the 50 and 600 steps - eleven of
+ * them - and that was a real bug rather than untidiness: a 50-step background
+ * is a near-white wash, so on a dark card every file chip lit up as a white
+ * block. (The old class names are deliberately not written out here: Tailwind
+ * scans comments, and naming them would emit them again as dead CSS.)
+ * The library carries no `dark:` variants anywhere else; the established answer
+ * to "a tint that must read correctly on any surface in both themes" is a flat
+ * opaque pair with a `.dark` override, which is exactly what the chip tones
+ * below do.
+ *
+ * Opaque, not translucent, for the chips' reason too: a translucent tint takes
+ * the colour of whatever it lands on, so the same PDF chip would differ between
+ * a card and a glass panel.
+ * ------------------------------------------------------------------------- */
+
+.file-kind-pdf {
+  background-color: oklch(0.95 0.0241 25);
+  color: oklch(0.45 0.13 25);
+}
+
+.file-kind-doc {
+  background-color: oklch(0.95 0.024 250);
+  color: oklch(0.45 0.1237 250);
+}
+
+.file-kind-sheet {
+  background-color: oklch(0.95 0.03 155);
+  color: oklch(0.45 0.108 155);
+}
+
+.file-kind-slides {
+  background-color: oklch(0.95 0.0285 55);
+  color: oklch(0.45 0.1083 55);
+}
+
+.file-kind-image {
+  background-color: oklch(0.95 0.0271 300);
+  color: oklch(0.45 0.13 300);
+}
+
+.file-kind-video {
+  background-color: oklch(0.95 0.0231 275);
+  color: oklch(0.45 0.13 275);
+}
+
+.file-kind-audio {
+  background-color: oklch(0.95 0.03 340);
+  color: oklch(0.45 0.13 340);
+}
+
+.file-kind-archive {
+  background-color: oklch(0.95 0.03 75);
+  color: oklch(0.45 0.0922 75);
+}
+
+.file-kind-generic {
+  background-color: oklch(0.95 0.008 258);
+  color: oklch(0.45 0.02 258);
+}
+
+.dark .file-kind-pdf {
+  background-color: oklch(0.3 0.055 25);
+  color: oklch(0.85 0.0792 25);
+}
+
+.dark .file-kind-doc {
+  background-color: oklch(0.3 0.055 250);
+  color: oklch(0.85 0.0749 250);
+}
+
+.dark .file-kind-sheet {
+  background-color: oklch(0.3 0.055 155);
+  color: oklch(0.85 0.11 155);
+}
+
+.dark .file-kind-slides {
+  background-color: oklch(0.3 0.055 55);
+  color: oklch(0.85 0.0926 55);
+}
+
+.dark .file-kind-image {
+  background-color: oklch(0.3 0.055 300);
+  color: oklch(0.85 0.0846 300);
+}
+
+.dark .file-kind-video {
+  background-color: oklch(0.3 0.055 275);
+  color: oklch(0.85 0.072 275);
+}
+
+.dark .file-kind-audio {
+  background-color: oklch(0.3 0.055 340);
+  color: oklch(0.85 0.1076 340);
+}
+
+.dark .file-kind-archive {
+  background-color: oklch(0.3 0.055 75);
+  color: oklch(0.85 0.11 75);
+}
+
+.dark .file-kind-generic {
+  background-color: oklch(0.3 0.015 258);
+  color: oklch(0.85 0.02 258);
+}
+
+/* ---------------------------------------------------------------------------
+ * Banner
+ * Rendered by components/ui/AppAlert.tsx. Deliberately NOT the toast: a toast
+ * is loud because it has four seconds to be read and then it is gone, while a
+ * banner sits in the page for as long as the condition lasts. Anything with a
+ * toast's contrast would keep shouting the whole time you are trying to use the
+ * screen underneath it. So this is the quiet end of the same palette - a wash
+ * of the status colour along the same 135deg every gradient in this file runs
+ * at, a hairline edge, and the
+ * glyph carrying the status at full strength.
+ *
+ * One token per status. --banner-tint is the status hue; the fill, the edge and
+ * the body copy are all mixed from it, so a new status is one line and nothing
+ * can drift out of step with the rest. Because the wash is mixed against
+ * --surface rather than against white, the same two rules serve both themes.
+ *
+ * Scoped to `.banner` rather than to `.alert`, because a bare HeroUI <Alert>
+ * is still a plain row in several features. Those are call sites to migrate to
+ * AppAlert, not markup to restyle underneath.
+ * ------------------------------------------------------------------------- */
+
+.banner {
+  /* Neutral slate, for a notice with no severity. */
+  --banner-rail: var(--rail-default);
+  --banner-tint: var(--rail-default-tint);
+  /* A notice with no severity has no status to take, so its action falls back
+     to the brand - the same choice AppBadge's default makes. */
+  --banner-action: var(--accent);
+  --banner-action-foreground: var(--accent-foreground);
+
+  align-items: flex-start;
+  /* 135deg, at the very top of the scale: 4%->9% of the hue.
+     Enough to name the status out of the corner of your eye, light enough that
+     the grey description over it keeps its normal contrast. Any heavier and a
+     banner left on screen starts competing with the page it is annotating. */
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--banner-tint) 4%, var(--surface)) 0%,
+    color-mix(in oklab, var(--banner-tint) 9%, var(--surface)) 100%
+  );
+  border: 1px solid color-mix(in oklab, var(--banner-tint) 20%, transparent);
+  /* Squarer than a Card on purpose. A banner is a strip annotating the content
+     next to it, and at full width a big radius makes it read as its own panel. */
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+/* The wash mixes the status hue into --surface at 4-9%, which on a near-black
+   surface is invisible - the tint has nowhere to go. Dark gets a heavier mix
+   against a LIGHTER base than the page, so the strip still reads as a raised
+   annotation rather than as a slightly-off rectangle. */
+.dark .banner {
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--banner-tint) 14%, var(--surface)) 0%,
+    color-mix(in oklab, var(--banner-tint) 22%, var(--surface)) 100%
+  );
+  border-color: color-mix(in oklab, var(--banner-tint) 38%, transparent);
+}
+
+.banner.alert--accent {
+  --banner-rail: var(--rail-accent);
+  --banner-tint: var(--rail-accent-tint);
+}
+
+.banner.alert--success {
+  --banner-rail: var(--rail-success);
+  --banner-tint: var(--rail-success-tint);
+  --banner-action: var(--success);
+  --banner-action-foreground: var(--success-foreground);
+}
+
+.banner.alert--warning {
+  --banner-rail: var(--rail-warning);
+  --banner-tint: var(--rail-warning-tint);
+  --banner-action: var(--warning);
+  --banner-action-foreground: var(--warning-foreground);
+}
+
+.banner.alert--danger {
+  --banner-rail: var(--rail-danger);
+  --banner-tint: var(--rail-danger-tint);
+  --banner-action: var(--danger);
+  --banner-action-foreground: var(--danger-foreground);
+}
+
+/* THE ACTION WEARS THE BANNER'S OWN STATUS. "Delete anyway" on a danger banner
+   is a destructive action, and painting it brand made the one button that
+   needed a second look the friendliest thing in the strip.
+
+   It is the SEMANTIC PAIR (--danger / --danger-foreground), not --banner-rail
+   under a hard-coded ink, and that distinction is the whole reason this took a
+   pass to get right. A rail is solved to carry a GLYPH against the 3:1 that
+   non-text answers to, so its light end goes far higher than a label survives:
+   white on the rails measures 2.69:1 on success, 2.35:1 on warning and 4.06:1
+   on danger, all under the 4.5:1 AA floor for normal text. The semantic tokens
+   are solved as a pair at 4.5:1+ and flip per theme - --warning-foreground is
+   near-white in light and near-black in dark - which is exactly what a
+   hand-written text colour cannot do. Same fix .chip-solid-* carries.
+
+   Only the PRIMARY action. The secondary stays a ghost button: two status-
+   coloured buttons side by side is two primaries, and the way out of a banner
+   should never compete with the thing it is asking for. */
+.banner .banner-action {
+  background: var(--banner-action);
+  color: var(--banner-action-foreground);
+}
+
+/* The gradient tile, at GradientIconTile's recipe in a smaller size and the
+   status hue instead of the brand's: the fill, a white glyph, and a short glow
+   of its own colour. This is the only element at full saturation, which it has
+   to be, because the wash behind the text is far too pale to be a status on its
+   own and is nothing at all to a colour-blind reader. */
+.banner .alert__indicator {
+  background: var(--banner-rail);
+  border-radius: var(--radius-md);
+  box-shadow: 0 6px 14px -8px color-mix(in oklab, var(--banner-tint) 70%, transparent);
+  color: var(--rail-foreground);
+  flex-shrink: 0;
+  height: 1.75rem;
+  padding: 0;
+  width: 1.75rem;
+}
+
+.banner .alert__indicator svg,
+.banner .alert__indicator [data-slot="alert-default-icon"] {
+  height: 1rem;
+  width: 1rem;
+}
+
+.banner .alert__content {
+  gap: 0.125rem;
+}
+
+/* The title is the status in words; HeroUI colours it per variant, which on a
+   near-white wash is a third signal saying the same thing less legibly. */
+.banner .alert__title {
+  color: var(--foreground);
+}
+
+/* Tinted from the banner's own colour rather than a fixed neutral: on a green
+   banner a rose hover halo reads as a second, contradictory status. */
+.banner .close-button {
+  color: color-mix(in oklab, var(--banner-tint) 45%, var(--foreground));
+}
+
+.banner .close-button:hover,
+.banner .close-button[data-hovered="true"] {
+  background: color-mix(in oklab, var(--banner-tint) 16%, transparent);
+  color: var(--banner-tint);
+}
+
+/* ---------------------------------------------------------------------------
+ * Error state
+ * Rendered by components/feedback/AppErrorState.tsx.
+ *
+ * The fourth status surface, and the only one that is what the user is looking
+ * at rather than something laid over it: the toast, the banner and the dialog
+ * all annotate content that is still there, while this one has REPLACED the
+ * content, because the content could not be produced.
+ *
+ * Same --rail-* set as the other three, so a 500 here and a failure toast are
+ * recognisably the same red. Three tones only - accent for a wrong turn
+ * (not found, signed out, maintenance), warning for something that will pass
+ * (offline, timeout, rate limit), danger for something broken (a 500, a
+ * refusal, an unhandled failure). There is no success error state.
+ *
+ * The tile is at full saturation and everything else is quiet, for the same
+ * reason the banner is built that way: the tint is far too pale to carry a
+ * status on its own and carries nothing at all to a colour-blind reader, so the
+ * glyph and the words do the work and the colour only confirms them.
+ * ------------------------------------------------------------------------- */
+.error-state {
+  /* Danger is the default because an unrecognised failure is a broken one. */
+  --error-rail: var(--rail-danger);
+  --error-tint: var(--rail-danger-tint);
+  --error-from: var(--rail-danger-from);
+  --error-to: var(--rail-danger-to);
+}
+
+.error-state[data-tone="accent"] {
+  --error-rail: var(--rail-accent);
+  --error-tint: var(--rail-accent-tint);
+  --error-from: var(--rail-accent-from);
+  --error-to: var(--rail-accent-to);
+}
+
+.error-state[data-tone="warning"] {
+  --error-rail: var(--rail-warning);
+  --error-tint: var(--rail-warning-tint);
+  --error-from: var(--rail-warning-from);
+  --error-to: var(--rail-warning-to);
+}
+
+/* The panel variant only. The page variant sits on the app backdrop and paints
+   no surface of its own - a full-height tinted sheet stops reading as a status
+   and starts reading as a theme. */
+.error-state--panel {
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--error-tint) 4%, var(--surface)) 0%,
+    color-mix(in oklab, var(--error-tint) 9%, var(--surface)) 100%
+  );
+  border: 1px solid color-mix(in oklab, var(--error-tint) 20%, transparent);
+}
+
+/* Same reason as the banner's dark override: a 4-9% mix vanishes on a dark
+   surface. */
+.dark .error-state--panel {
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--error-tint) 14%, var(--surface)) 0%,
+    color-mix(in oklab, var(--error-tint) 22%, var(--surface)) 100%
+  );
+  border-color: color-mix(in oklab, var(--error-tint) 38%, transparent);
+}
+
+/* GradientIconTile's recipe in the tone's hue rather than the brand's. Not that
+   component itself: it only knows `hero` and `warm`, and a brand-red tile on a
+   "signed out" page states an emergency that has not happened. */
+.error-state__tile {
+  background: var(--error-rail);
+  box-shadow: 0 10px 22px -12px color-mix(in oklab, var(--error-tint) 75%, transparent);
+  color: var(--rail-foreground);
+}
+
+/* The primary action takes the STATE's colour, not the brand - a danger error
+   offers a danger button, a warning error a warning one - so the way out reads
+   as part of the same message rather than pulling the eye to a brand pill.
+
+   It does NOT paint --error-rail: those are solved to carry a glyph at 3:1, so a
+   button LABEL on one measured 2.29-3.96:1 depending on tone, all below the
+   4.5:1 AA floor. Each tone paints its SEMANTIC PAIR instead - the same
+   --danger / --warning + -foreground pairs the solid chips and the toast/banner
+   action buttons use, solved as a pair at 4.5:1+ and flipped per theme. accent
+   takes the brand primary, like .chip-solid-accent. The [data-tone] scope also
+   buys the specificity to win over HeroUI's own button background. */
+.error-state[data-tone="danger"] .error-state__action {
+  background: var(--danger);
+  color: var(--danger-foreground);
+}
+
+.error-state[data-tone="warning"] .error-state__action {
+  background: var(--warning);
+  color: var(--warning-foreground);
+}
+
+.error-state[data-tone="accent"] .error-state__action {
+  background: var(--brand-primary);
+  color: var(--brand-primary-foreground);
+}
+
+/* ---------------------------------------------------------------------------
+ * Error state - the page mark
+ *
+ * The page variant is a DIFFERENT DESIGN, not the panel at a larger size. A
+ * panel is a strip annotating the region it replaced, so it is small, tinted
+ * and horizontal; a page has the whole viewport and nothing to annotate,
+ * because there is nothing left on screen to annotate. Scaling one into the
+ * other gives a very large notification floating in space, which is what this
+ * replaced.
+ *
+ * The mark is the status number with a brand glyph standing in for one of its
+ * shapes. A 404 is exactly where an app can afford a moment of personality,
+ * because nothing is broken and nobody has lost anything.
+ *
+ * Three kinds have no status number at all - offline, network, unknown - and
+ * they get the glyph alone at mark size. That is the reason the glyph is the
+ * constant here and the digits are the variable: the design has to survive
+ * having no number to show.
+ * ------------------------------------------------------------------------- */
+.error-state__mark {
+  /* The digits are the tone's own gradient, clipped to the glyphs. Flat tone
+     colour reads as a heading that got too big; the gradient is what ties the
+     number to the glyph standing in the middle of it. */
+  background-image: var(--error-rail);
+  background-clip: text;
+  color: transparent;
+  font-size: clamp(4.5rem, 20vw, 10rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+/* The fill and the highlight both live here rather than on the SVG, so the
+   glyph picks up the tone from the same declarations everything else on this
+   surface reads. */
+.error-state__mark-fill {
+  stop-color: var(--error-from);
+}
+
+.error-state__mark-fill-end {
+  stop-color: var(--error-to);
+}
+
+/* Falls the last of the way and settles, once, on arrival. It is decoration on
+   top of a mark that is fully drawn without it, so reduced motion simply skips
+   it rather than getting a substitute. */
+.error-state__mark-glyph {
+  animation: error-mark-fall 620ms cubic-bezier(0.22, 1.2, 0.36, 1) both;
+}
+
+@keyframes error-mark-fall {
+  from {
+    opacity: 0;
+    transform: translateY(-28%) scaleY(1.12) scaleX(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1) scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .error-state__mark-glyph {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Dialog
+ * Rendered by components/ui/AppDialog.tsx. The third status surface, and the
+ * loudest: a toast has four seconds and then it is gone, a banner sits beside
+ * the work for as long as the condition lasts, and a dialog stops the app until
+ * the question is answered.
+ *
+ * It reads the same --rail-* set as the other two, so a danger dialog and a
+ * danger toast are recognisably the same danger. But only the icon tile carries
+ * the hue - the panel behind it stays the plain surface colour. The banner can
+ * afford a wash because it is a strip; a dialog is a sheet in the middle of the
+ * screen, and at that size even a 9% tint reads as a mood rather than as a
+ * status.
+ *
+ * One token pair per tone, exactly as the banner does it, so nothing in the
+ * component branches on tone to pick a colour.
+ *
+ * Three of the five rails, not all of them: a dialog asks a question, and there
+ * is no such thing as a "success" question. See DialogTone in AppDialog.tsx.
+ * ------------------------------------------------------------------------- */
+
+.dialog {
+  /* Neutral slate, for a decision with no severity. */
+  --dialog-emphasis: var(--foreground);
+  --dialog-rail: var(--rail-default);
+  --dialog-tint: var(--rail-default-tint);
+}
+
+.dialog--accent {
+  --dialog-emphasis: var(--accent);
+  --dialog-rail: var(--rail-accent);
+  --dialog-tint: var(--rail-accent-tint);
+}
+
+.dialog--danger {
+  --dialog-emphasis: var(--danger);
+  --dialog-rail: var(--rail-danger);
+  --dialog-tint: var(--rail-danger-tint);
+}
+
+/* THE PHRASE THE USER HAS TO COPY, IN THE DIALOG'S OWN TONE. Bold alone made it
+   findable in the sentence but said nothing about what typing it does, and this
+   is the last line read before an irreversible button becomes pressable - the
+   one place in the panel where the second bit of emphasis is earned.
+
+   The tone token, not a hard-coded red: type-to-confirm is stacked on a danger
+   dialog nearly every time, but it is not exclusive to one, and red ink inside
+   an accent dialog would be the component contradicting its own tile. The
+   semantic --danger / --accent, not the tile's --dialog-rail, because a rail is
+   a gradient answering to 3:1 as a graphic while this is normal text at 4.5:1.
+
+   Still bold in the markup, so the emphasis survives for anyone who cannot pick
+   the hue out of the sentence - colour is the second signal here, never the
+   only one. */
+.dialog .dialog__confirm-phrase {
+  color: var(--dialog-emphasis);
+}
+
+/* GradientIconTile's recipe in the tone's hue: the gradient, a white glyph, and
+   a short glow of its own colour. HeroUI already sizes .modal__icon at 40px and
+   rounds it to 28px, which is the same very-nearly-circular tile the rest of the
+   app uses, so only the paint is set here.
+
+   This is the one element at full saturation, and it has to be: it is what
+   states the severity to a reader who cannot tell red from green, working with
+   the glyph rather than instead of it. */
+.dialog .dialog__icon {
+  background: var(--dialog-rail);
+  box-shadow: 0 8px 18px -10px color-mix(in oklab, var(--dialog-tint) 75%, transparent);
+  color: var(--rail-foreground);
+}
+
+/* ---------------------------------------------------------------------------
+ * Progress bar
+ * Rendered by components/custom/AppProgressBar. Two things, and they are
+ * unrelated except that both are keyed off `data-size` / `data-color` rather
+ * than off HeroUI's own `progress-bar--sm` / `progress-bar--accent`.
+ *
+ * 1. THE PAINT. HeroUI fills the bar with a flat `background-color`, which for
+ *    the default colour resolves to `--accent` - the one flat brand fill the
+ *    palette says not to use. A progress bar is a brand-coloured surface like
+ *    the nav pill and the stepper marker, so it paints the gradient the way
+ *    they do: `accent` takes --gradient-brand, the identity gradient, and the
+ *    other four take their --rail-*, so a danger bar and a danger toast are
+ *    recognisably the same danger. These are composed `linear-gradient()`
+ *    images, hence background-image over HeroUI's background-color rather than
+ *    a colour token.
+ *
+ *    The ramp is sized to the FILL, not to the track: it always spans whatever
+ *    has completed, so the leading edge is the same hue at 5% as at 95% and the
+ *    bar reads as one moving object rather than a window onto a static one.
+ *
+ * 2. THE HEIGHT, which is a workaround. HeroUI memoises its slot classes on
+ *    [color, size] (progress-bar.js), and tailwind-variants 3.3.0 - the exact
+ *    version @heroui/styles pins - resolves those slot functions against the
+ *    props of the LAST call anywhere on the page rather than their own. So the
+ *    memo holds, no slot function is re-derived, and on any re-render a bar
+ *    silently takes the size and colour of whichever bar rendered last. In the
+ *    upload queue that turned a 4px sm bar into a 12px lg one the moment the
+ *    percentage changed - the bar grew as it filled, and the queue rows moved
+ *    under the pointer.
+ *
+ *    Sizing off our own attribute makes the stale class irrelevant: it may say
+ *    `--lg`, but the height and the gradient come from `data-*`, which React
+ *    writes fresh on every render. Radius is left to HeroUI - all three sizes
+ *    clamp to a pill anyway, so a stale one is invisible.
+ *
+ * These rules are unlayered and HeroUI's are in @layer components, so they win
+ * without !important. ----------------------------------------------------- */
+
+.progress-bar[data-size="sm"] .progress-bar__track {
+  height: 0.25rem;
+}
+
+.progress-bar[data-size="md"] .progress-bar__track {
+  height: 0.5rem;
+}
+
+.progress-bar[data-size="lg"] .progress-bar__track {
+  height: 0.75rem;
+}
+
+.progress-bar .progress-bar__fill {
+  background-image: var(--progress-bar-gradient, var(--gradient-brand));
+}
+
+.progress-bar[data-color="default"] {
+  --progress-bar-gradient: var(--rail-default);
+}
+
+.progress-bar[data-color="accent"] {
+  --progress-bar-gradient: var(--gradient-brand);
+}
+
+.progress-bar[data-color="success"] {
+  --progress-bar-gradient: var(--rail-success);
+}
+
+.progress-bar[data-color="warning"] {
+  --progress-bar-gradient: var(--rail-warning);
+}
+
+.progress-bar[data-color="danger"] {
+  --progress-bar-gradient: var(--rail-danger);
+}
+
+/* ---------------------------------------------------------------------------
+ * Progress circle
+ * Rendered by components/custom/AppProgressCircle. Same argument as the bar
+ * above - HeroUI paints the arc flat `--accent`, the one flat brand fill the
+ * palette says not to use - but the ring cannot be fixed the same way. Its fill
+ * is an SVG `stroke`, and a `linear-gradient()` is a CSS image, which `stroke`
+ * will not take. So the component draws a `<linearGradient>` per instance and
+ * hands it to HeroUI's own --progress-circle-stroke as a paint server, the same
+ * move the error state's mark makes; these rules colour the stops.
+ *
+ * Nothing in the TSX branches on `color`. The three stops read tokens, and the
+ * tokens are re-pointed by HeroUI's own colour class below - so the ring and the
+ * bar stay on one palette by construction, and a sixth status is five lines here
+ * and nothing in the component.
+ *
+ * `accent` takes --gradient-brand, the identity gradient; the other four take
+ * their --rail-*, so a danger ring and a danger toast are the same danger.
+ *
+ * The middle stop is not decoration. CSS interpolates these gradients in oklab
+ * while SVG interpolates its stops in sRGB, so a two-stop arc would take a
+ * visibly different route between the same endpoints than the bar does - it
+ * sags grey through the middle of the wider hue travels. Pinning the oklab
+ * midpoint as a third stop puts the ramp back on the bar's path.
+ * ------------------------------------------------------------------------- */
+
+.progress-circle {
+  --progress-circle-from: var(--gradient-brand-from);
+  --progress-circle-via: var(--gradient-brand-via);
+  --progress-circle-to: var(--gradient-brand-to);
+}
+
+.progress-circle--default {
+  --progress-circle-from: var(--rail-default-from);
+  --progress-circle-via: color-mix(in oklab, var(--rail-default-from), var(--rail-default-to));
+  --progress-circle-to: var(--rail-default-to);
+}
+
+.progress-circle--accent {
+  --progress-circle-from: var(--gradient-brand-from);
+  --progress-circle-via: var(--gradient-brand-via);
+  --progress-circle-to: var(--gradient-brand-to);
+}
+
+.progress-circle--success {
+  --progress-circle-from: var(--rail-success-from);
+  --progress-circle-via: color-mix(in oklab, var(--rail-success-from), var(--rail-success-to));
+  --progress-circle-to: var(--rail-success-to);
+}
+
+.progress-circle--warning {
+  --progress-circle-from: var(--rail-warning-from);
+  --progress-circle-via: color-mix(in oklab, var(--rail-warning-from), var(--rail-warning-to));
+  --progress-circle-to: var(--rail-warning-to);
+}
+
+.progress-circle--danger {
+  --progress-circle-from: var(--rail-danger-from);
+  --progress-circle-via: color-mix(in oklab, var(--rail-danger-from), var(--rail-danger-to));
+  --progress-circle-to: var(--rail-danger-to);
+}
+
+/* The stops live here rather than on the SVG for the reason the error mark's do:
+   the arc then takes its colour from the same declarations the rest of the
+   surface reads, and the component carries no palette of its own. */
+.progress-circle__stop-from {
+  stop-color: var(--progress-circle-from);
+}
+
+.progress-circle__stop-via {
+  stop-color: var(--progress-circle-via);
+}
+
+.progress-circle__stop-to {
+  stop-color: var(--progress-circle-to);
+}
+
+/* ---------------------------------------------------------------------------
+ * Calendar
+ * Applied by components/AppDatePicker and components/AppDateRangeFilter, which
+ * show one to three of HeroUI's Calendar or RangeCalendar grids side by side.
+ * ------------------------------------------------------------------------- */
+
+/* The year list has to cover ALL the grids, not the first one.
+ *
+ * HeroUI hides the day grid behind the year picker with a DIRECT-child selector,
+ * which is right for its own single-month calendars - the grid is a child of
+ * `.calendar`. In both of these each grid sits inside the column that carries
+ * its title, one level further down, so nothing matched and the year list was
+ * drawn on top of three fully lit months.
+ *
+ * `visibility` rather than `display`: the year list is absolutely positioned and
+ * sized from the first grid's box, so that box has to keep occupying its space
+ * or the panel collapses to a header the moment it opens. The delay on the way
+ * back matches HeroUI's own crossfade, so the two grids are never both half
+ * transparent. */
+.calendar:has(.calendar-year-picker__year-grid[data-open="true"]) [data-slot="calendar-grid"],
+.range-calendar:has(.calendar-year-picker__year-grid[data-open="true"])
+  [data-slot="range-calendar-grid"] {
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 150ms var(--ease-out),
+    visibility 0ms linear 150ms;
+  visibility: hidden;
+}
+
+/* One pair of arrows drives up to three grids, so they are the most-pressed
+   control in the popover and HeroUI's 24px box is the smallest thing in it. The
+   same 32px as the range calendar's, and the same reason - plus the grids that
+   have no arrow reserve a 32px space, so at 24px the first month's title sat
+   four pixels off the centre the other two were on. */
+.calendar__nav-button {
+  block-size: 2rem;
+  inline-size: 2rem;
+}
+
+/* TODAY IS A RING, not a fill. The range calendar's rule, ported - see its
+ * section below for the argument, which is the same one and was written first.
+ *
+ * The single-date case makes it worse rather than milder. `bg-accent-soft` and
+ * `bg-accent` are a wash and a fill of the SAME hue, so an untouched picker
+ * showed today already painted and the user's actual choice landed in a colour
+ * they had been looking at since it opened - "which of these two is mine" is not
+ * a question a date picker should be able to raise.
+ *
+ * One element rather than two: HeroUI's `.calendar__cell` is itself the pressable
+ * box, where the range calendar nests a `__cell-button` inside its cell.
+ *
+ * An inset ring rather than an outline, because the cells abut and anything
+ * painted outside the box is clipped by the neighbour drawn after it. */
+.calendar__cell[data-today="true"]:not([data-outside-month="true"]) {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--accent) 55%, transparent);
+  color: var(--foreground);
+}
+
+@media (hover: hover) {
+  .calendar__cell[data-today="true"]:not([data-outside-month="true"], [data-selected="true"]):hover,
+  .calendar__cell[data-today="true"][data-hovered="true"]:not(
+      [data-outside-month="true"],
+      [data-selected="true"]
+    ) {
+    background: color-mix(in oklab, var(--accent) 8%, transparent);
+  }
+}
+
+/* Picked, and still today. The ring inverts to the surface colour to stay
+   visible inside the solid fill. */
+.calendar__cell[data-today="true"][data-selected="true"]:not([data-outside-month="true"]) {
+  background: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--surface);
+  color: var(--accent-foreground);
+}
+
+/* ---------------------------------------------------------------------------
+ * Range calendar
+ * Applied by components/ui/AppDateRangeFilter.tsx, which shows one to three of
+ * HeroUI's RangeCalendar grids side by side.
+ *
+ * These rules are unlayered and HeroUI's are in @layer components, so they win
+ * on the cascade rather than on specificity - which is why they can be written
+ * as plainly as this.
+ * ------------------------------------------------------------------------- */
+
+/* TODAY IS A RING, not a fill.
+ *
+ * HeroUI marks today with `bg-accent-soft`, which is the same wash the selected
+ * span is drawn in - so today reads as already picked on an empty calendar, and
+ * then disappears entirely the moment a range is dropped on top of it. Today is
+ * the one date a user navigates from; it has to survive being selected.
+ *
+ * An inset ring rather than an outline: the cells abut, and anything painted
+ * outside the box is clipped by the neighbour that comes after it.
+ *
+ * NOT on the outside-month copy, which is the correction the ported rule above
+ * arrived with. A month grid draws the few days either side of itself greyed
+ * out, and `data-today` is set from the DATE - so on the 1st or the 31st today
+ * appears twice on screen, once real and once as filler in the neighbouring
+ * grid, and both used to take the ring. Two "today"s is worse than none, and
+ * three grids side by side is where it shows. HeroUI guards its own range rules
+ * the same way. */
+.range-calendar__cell[data-today="true"]:not([data-outside-month="true"]) .range-calendar__cell-button {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--accent) 55%, transparent);
+  color: var(--foreground);
+}
+
+@media (hover: hover) {
+  .range-calendar__cell[data-today="true"]:not([data-outside-month="true"], [data-selected="true"]):hover
+    .range-calendar__cell-button,
+  .range-calendar__cell[data-today="true"][data-hovered="true"]:not(
+      [data-outside-month="true"],
+      [data-selected="true"]
+    )
+    .range-calendar__cell-button {
+    background: color-mix(in oklab, var(--accent) 8%, transparent);
+  }
+}
+
+/* At the ends of the range the cap is a solid fill, so the ring inverts to the
+   surface colour to stay visible inside it. */
+.range-calendar__cell[data-today="true"][data-selection-start="true"]:not([data-outside-month="true"])
+  .range-calendar__cell-button,
+.range-calendar__cell[data-today="true"][data-selection-end="true"]:not([data-outside-month="true"])
+  .range-calendar__cell-button {
+  background: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--surface);
+  color: var(--accent-foreground);
+}
+
+/* One pair of arrows drives all three grids, so they are the most-pressed
+   control in the popover and HeroUI's 24px box is the smallest. 32px is what
+   fits the month title row beside them. The phone sheet has no arrows at all -
+   it scrolls - which is where a 24px target would actually have hurt. */
+.range-calendar__nav-button {
+  block-size: 2rem;
+  inline-size: 2rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * Star rating
+ * The fill is a clip over a solid star, and the sweep animates that clip from
+ * nothing up to the star's own fraction. The resting rule already carries the
+ * true value, so server-rendered HTML, a failed hydration and a reduced-motion
+ * reader all land on the real number - the animation only decides when it is
+ * revealed, never what it says.
+ * `--star-fill` (a percentage) and `--star-delay` are set per star by
+ * components/ui/RatingStar.tsx; `--ring-length` and `--ring-offset` by
+ * components/ui/AppRatingSummary.tsx.
+ * ------------------------------------------------------------------------ */
+.star-sweep {
+  animation: star-sweep 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--star-delay, 0ms);
+}
+
+@keyframes star-sweep {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 calc(100% - var(--star-fill, 0%)) 0 0);
+  }
+}
+
+/* The arc lands with the last star: same curve, longer duration, so the two
+   halves of a summary read as one movement rather than two widgets loading. */
+.ring-sweep {
+  animation: ring-sweep 800ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes ring-sweep {
+  from {
+    stroke-dashoffset: var(--ring-length);
+  }
+  to {
+    stroke-dashoffset: var(--ring-offset);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .star-sweep,
+  .ring-sweep {
+    animation: none;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Checkbox
+ * HeroUI draws the 16px control with `rounded-md`, which on ITS scale
+ * (--radius: 0.5rem) is 6px - the rounded square in its docs. On ours --radius
+ * is 1rem, so the same utility resolves to 14px on a 16px box and the checkbox
+ * came out a circle, visually identical to a radio. That is not a cosmetic
+ * difference: round means "one of these", square means "any of these", and the
+ * form-reference page had a radio group sitting directly above a checkbox with
+ * the two rendering the same shape.
+ *
+ * Pinned here rather than by repairing --radius-sm/--radius-md, because the
+ * 1rem base is deliberate (it is what makes a 40px tile at rounded-2xl read as
+ * nearly circular) and those two steps are used by ~30 places in the app plus a
+ * dozen HeroUI parts. The small end of that scale is genuinely collapsed -
+ * sm 12px, md 14px, lg 16px are barely distinguishable - but re-cutting it is a
+ * deliberate visual change across the whole app, not a checkbox fix.
+ *
+ * The ::before is the accent fill that scales up on check; it has to match the
+ * control's radius or the fill corners poke past the border.
+ * ------------------------------------------------------------------------ */
+.checkbox__control,
+.checkbox__control::before {
+  /* CLAMPED, not pinned. 6px was a constant, which was right while --radius was
+     one too - but it meant a squared-off theme still had rounded checkboxes and
+     nothing could make them square. `min()` keeps the ceiling that stops a 16px
+     box becoming a circle, and lets it go to a true 0 when the scale does. */
+  border-radius: min(6px, var(--radius-md));
+}
+
+/* ---------------------------------------------------------------------------
+ * Input group
+ * HeroUI draws a full-height rule between the prefix slot and the input
+ * (`border-inline-end` on `.input-group__prefix`). That divider is for a prefix
+ * that is a separate control or an addressable value - a "https://" stub, a
+ * currency selector - where the seam says the two halves are different things.
+ *
+ * Every prefix in this app is a muted icon labelling the field it sits in
+ * (mail, lock, search). There the rule cuts one control into two boxes and
+ * reads as a second, tighter border inside the field, which is exactly what the
+ * focus and invalid states use the real border for. Dropping it leaves the
+ * icon's 12px of padding as the gap, which is enough separation for a glyph.
+ *
+ * The suffix keeps its divider: that slot holds pressable things (clear,
+ * filter, reveal), and there the seam is doing the job it was written for.
+ *
+ * Unlayered, so it wins over HeroUI's @layer components on the cascade.
+ * ------------------------------------------------------------------------ */
+.input-group__prefix {
+  border-inline-end: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * Native password reveal (Edge / Windows)
+ * Chromium on Windows draws its own reveal control - `::-ms-reveal` - inside
+ * every `input[type=password]`, so an `AppPasswordField` shows TWO eyes: the
+ * browser's and its own. The browser's has no accessible name, does not sit in
+ * the app's tab order, and snaps back to masked on blur, so the app's toggle is
+ * the one to keep. `::-ms-clear` (the X the same engine puts on text inputs)
+ * goes too - `AppSearchBar` and the rest ship their own clear where they want
+ * one. Unlayered, to beat HeroUI's `@layer components`.
+ * ------------------------------------------------------------------------- */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------------
+ * Rich text toolbar
+ * HeroUI's `.toolbar` is `display: grid; width: fit-content; grid-auto-flow:
+ * column` - correct for the floating strip it was designed as, and wrong for
+ * one that is the header of a bordered box. Two symptoms, one cause:
+ *
+ *   - `w-fit` shrank the strip to its controls, so its own `border-b` stopped
+ *     partway across the editor and read as a broken rule.
+ *   - `grid-flow-col` puts seventeen controls in one row that cannot wrap, so a
+ *     narrow column overflows rather than reflowing.
+ *
+ * Utilities cannot fix either. This project declares HeroUI's `components`
+ * layer AFTER Tailwind's `utilities`, so `w-full flex-wrap` at the call site
+ * loses the cascade and does nothing at all - the failure mode is a className
+ * that is present in the DOM and has no effect, which is the expensive kind.
+ *
+ * Unlayered, like `.input-group__prefix` below, because an unlayered rule beats
+ * every layered one regardless of order. Scoped to its own class rather than to
+ * `.toolbar`, so a real HeroUI toolbar elsewhere keeps the shape it was built
+ * with.
+ * ------------------------------------------------------------------------- */
+.rich-text-toolbar {
+  /* `align-items` and `gap` are here rather than as utilities for the same
+     cascade reason - `.toolbar` sets both, so `items-center gap-1` at the call
+     site would lose and the strip would silently keep HeroUI's wider 8px gap.
+     4px is right for seventeen icon-only controls; 8px reads as a scattered row
+     rather than as one strip. Padding and the border stay utilities, because
+     `.toolbar` sets neither and there is nothing to lose to. */
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--spacing) * 1);
+  width: 100%;
+}
+
+/* ---------------------------------------------------------------------------
+ * Rich text
+ * The reading surface, shared by AppRichTextEditor (while writing) and
+ * AppRichTextContent (once saved). ONE block for both, deliberately: if the
+ * editor and the published post are styled separately they drift, and the
+ * author's whole reason for a WYSIWYG is that what they arranged is what a
+ * reader gets.
+ *
+ * Scoped to `.rich-text` rather than to ProseMirror's own class, because the
+ * class is what says "this is our surface" - a bare ProseMirror instance
+ * mounted by something else should not inherit a post's typography.
+ *
+ * Sized from the type scale rather than by eye: body at the app's base measure,
+ * headings stepping down from it, and the whole column capped at 68ch. Prose is
+ * unreadable past ~75ch no matter how wide the panel is.
+ * ------------------------------------------------------------------------- */
+.rich-text .ProseMirror {
+  color: var(--foreground);
+  line-height: 1.7;
+  outline: none;
+}
+
+/* THE MEASURE BELONGS TO READING, NOT TO EDITING.
+ *
+ * `max-width: 68ch` was on every rich-text surface, and on the EDITOR it was
+ * wrong in a way that read as a broken control: the column is narrower than the
+ * box it sits in, so right-aligned text stopped well short of the editor's right
+ * edge and centred text was centred on the column rather than on the panel. The
+ * alignment buttons looked like they were not working.
+ *
+ * While editing, the writing surface is the box - what you align against is
+ * what you can see. While reading, the 45-75ch measure is the whole point,
+ * because prose past ~75ch is unreadable however wide the screen is. So the cap
+ * lives on the reading variant, which AppRichTextContent sets and the editor's
+ * preview mode inherits. */
+/* The measure is a variable so the PROJECT can move it.
+ *
+ * 68ch stays the default, because it is right for an article and a component
+ * that has to be configured before it reads well is a component with a bad
+ * default. But the cap is applied to a DESCENDANT of the element `className`
+ * lands on, so a caller had no way to reach it at all - `max-w-none` on the
+ * article cleared the article's width and left the prose sitting inset inside
+ * it, which reads as a bug rather than as a decision.
+ *
+ * A custom property inherits, so one class on any ancestor moves it:
+ *
+ *   <AppBlogPost className="max-w-none [--rich-text-measure:none]" />
+ *   <AppBlogPost className="[--rich-text-measure:80ch]" />
+ *
+ * `margin-inline: auto` is kept unconditionally: with the measure cleared it
+ * does nothing, and with it narrowed the column belongs in the middle. */
+.rich-text--reading .ProseMirror {
+  margin-inline: auto;
+  max-width: var(--rich-text-measure, 68ch);
+}
+
+.rich-text .ProseMirror > * + * {
+  margin-top: 0.75em;
+}
+
+.rich-text .ProseMirror h1,
+.rich-text .ProseMirror h2,
+.rich-text .ProseMirror h3 {
+  font-weight: 650;
+  /* Tighter than body, per the 120-130% rule for headings: a heading set at
+     body's 1.7 reads as two loose lines rather than as one title. */
+  line-height: 1.25;
+  /* Space BEFORE a heading, which is what separates it from the section above -
+     a heading owns the gap above it, not the one below. */
+  margin-top: 1.6em;
+}
+
+/* Except the first block, which has nothing above it to be separated from. The
+   margin there is measured from the container's own padding, so it reads as the
+   editor having a stray gap at the top rather than as a heading with breathing
+   room - and a post that opens on a heading is the common case, not the edge. */
+.rich-text .ProseMirror > :first-child {
+  margin-top: 0;
+}
+
+.rich-text .ProseMirror h1 {
+  font-size: 1.75rem;
+}
+
+.rich-text .ProseMirror h2 {
+  font-size: 1.375rem;
+}
+
+.rich-text .ProseMirror h3 {
+  font-size: 1.125rem;
+}
+
+.rich-text .ProseMirror ul,
+.rich-text .ProseMirror ol {
+  padding-inline-start: 1.5rem;
+}
+
+.rich-text .ProseMirror ul {
+  list-style: disc;
+}
+
+.rich-text .ProseMirror ol {
+  list-style: decimal;
+}
+
+.rich-text .ProseMirror li > * + * {
+  margin-top: 0.35em;
+}
+
+/* The status rail's neutral tint, so a quote reads as the same family of
+   annotation as a default banner rather than as its own invention. */
+.rich-text .ProseMirror blockquote {
+  border-inline-start: 3px solid color-mix(in oklab, var(--rail-default-tint) 45%, transparent);
+  color: var(--muted-foreground);
+  padding-inline-start: 1rem;
+}
+
+.rich-text .ProseMirror code {
+  background: var(--muted-surface);
+  border-radius: var(--radius-sm);
+  font-size: 0.875em;
+  padding: 0.125em 0.35em;
+}
+
+.rich-text .ProseMirror pre {
+  background: var(--muted-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  padding: 0.875rem 1rem;
+}
+
+/* The fill and padding belong to the block, not to every token inside it. */
+.rich-text .ProseMirror pre code {
+  background: none;
+  font-size: 0.8125rem;
+  padding: 0;
+}
+
+.rich-text .ProseMirror a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rich-text .ProseMirror hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.5em 0;
+}
+
+/* The placeholder, drawn by Tiptap's extension as a data attribute on the empty
+   node. `pointer-events: none` matters: without it, clicking the placeholder
+   text does not put the caret in the document it is standing in for. */
+.rich-text .ProseMirror p.is-empty::before {
+  color: var(--muted);
+  content: attr(data-placeholder);
+  float: inline-start;
+  height: 0;
+  pointer-events: none;
+}
+
+/* The new marks and the search decorations.
+ *
+ * Highlight has NO colour attribute by design, so it is painted from the theme
+ * here rather than from the document - which is what lets a post written in
+ * light mode stay readable in dark, and what stops a colour picked two years
+ * ago from surviving a rebrand. --warning is the conventional "marked" hue and
+ * already differs per theme.
+ */
+.rich-text .ProseMirror mark {
+  background: color-mix(in oklab, var(--warning) 32%, transparent);
+  border-radius: 0.2em;
+  color: inherit;
+  padding: 0.05em 0.15em;
+}
+
+/* Browsers size sup/sub by shrinking the line, which pushes the lines around
+   them apart. `line-height: 0` takes them out of the line box calculation, so a
+   footnote marker does not add a pixel of leading to the paragraph. */
+.rich-text .ProseMirror sub,
+.rich-text .ProseMirror sup {
+  font-size: 0.75em;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+
+.rich-text .ProseMirror sup {
+  top: -0.5em;
+}
+
+.rich-text .ProseMirror sub {
+  bottom: -0.25em;
+}
+
+/* Search matches. Decorations, not marks - nothing here is in the document, so
+   these classes only ever exist while the find bar is open.
+ *
+ * Two levels, because "4 of 30" is not an answer if all thirty look identical:
+ * every match gets a quiet tint, and the CURRENT one gets the accent plus a
+ * ring so the eye lands on it without hunting. */
+.rich-text .ProseMirror .rich-text-match {
+  background: color-mix(in oklab, var(--warning) 30%, transparent);
+  border-radius: 0.2em;
+}
+
+.rich-text .ProseMirror .rich-text-match--active {
+  background: color-mix(in oklab, var(--accent) 32%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 55%, transparent);
+}
+
+/* Images in a post.
+ *
+ * `height: auto` with a max-width is what stops a 4000px photo from setting the
+ * column width for every paragraph around it. The radius and border match the
+ * code block, so a figure reads as the same kind of inserted object rather than
+ * as a bare bitmap dropped into the prose.
+ */
+.rich-text .ProseMirror img {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: block;
+  height: auto;
+  max-width: 100%;
+}
+
+/* The selected image, while editing. Without this an image is the one node you
+   can select and get no feedback from - ProseMirror's own selection styling
+   does not reach a replaced element. */
+.rich-text .ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

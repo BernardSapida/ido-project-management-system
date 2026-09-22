@@ -6,7 +6,7 @@ import {
 	TAB_BAR_MAX_SLOTS,
 	type NavGroup as UiNavGroup,
 	type NavItem as UiNavItem,
-} from "@bernardsapida/web-ui";
+} from "@/components/web-ui";
 import { FileText, LayoutDashboard, Star, UserCircle, Users } from "lucide-react";
 import type { UserRole } from "@/utils/config";
 

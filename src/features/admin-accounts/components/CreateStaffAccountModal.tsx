@@ -1,4 +1,4 @@
-import { AppAlert, AppDrawer, AppInputGroup, AppPasswordField, AppSelect } from "@bernardsapida/web-ui";
+import { AppAlert, AppDrawer, AppInputGroup, AppPasswordField, AppSelect } from "@/components/web-ui";
 import { Info } from "lucide-react";
 import { useEffect } from "react";
 import type { DefaultValues } from "react-hook-form";

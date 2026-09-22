@@ -1,4 +1,4 @@
-import { AppButton, AppCard } from "@bernardsapida/web-ui";
+import { AppButton, AppCard } from "@/components/web-ui";
 import { Typography } from "@heroui/react";
 import { FileSignature, Hourglass } from "lucide-react";
 

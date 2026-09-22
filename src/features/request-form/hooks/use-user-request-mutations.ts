@@ -1,4 +1,4 @@
-import { AppToast, reason } from "@bernardsapida/web-ui";
+import { AppToast, reason } from "@/components/web-ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CircleAlert, FileText, Send } from "lucide-react";
 import { useCallback } from "react";

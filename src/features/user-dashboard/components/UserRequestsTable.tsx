@@ -7,7 +7,7 @@ import {
 	AppTableHighlight,
 	type ColumnDef,
 	type TableSortDescriptor,
-} from "@bernardsapida/web-ui";
+} from "@/components/web-ui";
 import { ListFilter } from "lucide-react";
 import { FILTER_OPTIONS } from "@/lib/status-maps/request-status";
 import type { RequestRow } from "../types";

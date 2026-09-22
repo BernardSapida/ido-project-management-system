@@ -13,7 +13,7 @@
  * shipped. Remove "--color-scheme" from FLAGS and both cases below fail.
  */
 
-import { createThemeDraftKit } from "@bernardsapida/web-ui/theme-customizer";
+import { createThemeDraftKit } from "@/components/web-ui/theme-customizer";
 import { describe, expect, it } from "vitest";
 import { PALETTE_PRESETS } from "@/config/theme/presets";
 import { THEME } from "@/config/theme.config";

@@ -1,5 +1,15 @@
 {
   "include": ["**/*.ts", "**/*.tsx"],
+  /* src/components/web-ui is a vendored, verbatim copy of the Component Labs
+     source (see src/components/web-ui/env.d.ts / index.ts). Its *.test.ts(x)
+     files are the library's OWN unit tests, type-checked upstream against
+     project-template's tsconfig - which splits lib vs. spec type-checking so
+     these never run through a single strict `tsc --noEmit` alongside a
+     literal-typed helper like `docWith` in rich-text-document.test.ts. This
+     project has one flat tsconfig, so excluding them here reproduces that
+     same boundary instead of type-checking test scaffolding this app never
+     runs. It does not affect any shipped component code or behavior. */
+  "exclude": ["src/components/web-ui/**/*.test.ts", "src/components/web-ui/**/*.test.tsx"],
   "compilerOptions": {
     "target": "ES2022",
     "jsx": "react-jsx",

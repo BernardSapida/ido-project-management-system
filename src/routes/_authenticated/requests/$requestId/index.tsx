@@ -1,4 +1,4 @@
-import { AppCard, AppChip, AppPageHeader } from "@bernardsapida/web-ui";
+import { AppCard, AppChip, AppPageHeader } from "@/components/web-ui";
 import { Typography } from "@heroui/react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { AppQueryError } from "@/components/project";

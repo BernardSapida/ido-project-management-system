@@ -1,4 +1,4 @@
-import { AppButton, AppPageHeader } from "@bernardsapida/web-ui";
+import { AppButton, AppPageHeader } from "@/components/web-ui";
 import { createFileRoute } from "@tanstack/react-router";
 import { UserPlus } from "lucide-react";
 import { useState } from "react";

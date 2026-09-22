@@ -1,4 +1,4 @@
-import { AppList, type ChipTone, type ListItem } from "@bernardsapida/web-ui";
+import { AppList, type ChipTone, type ListItem } from "@/components/web-ui";
 import { Card, Typography } from "@heroui/react";
 import type { LucideIcon } from "lucide-react";
 import { CircleCheck, CircleMinus, CircleSlash } from "lucide-react";

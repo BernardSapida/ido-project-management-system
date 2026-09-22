@@ -1,4 +1,4 @@
-import { AppInputGroup } from "@bernardsapida/web-ui";
+import { AppInputGroup } from "@/components/web-ui";
 import { Button, Card } from "@heroui/react";
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Layout, Mail } from "lucide-react";
